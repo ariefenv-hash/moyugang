@@ -14,17 +14,24 @@ import {
   CalligraphyCombo,
   WeatherEvent,
   BattleResultStats,
+  BlessingDef,
+  BlessingMults,
+  InkDragon,
+  InkTreasure,
 } from '../types/game';
 import {
   UNIT_CONFIGS,
   HERO_INITIAL_STATS,
   WEATHER_EFFECTS,
+  BLESSINGS,
 } from '../data/gameData';
 import { CanvasRenderer } from '../utils/canvasRenderer';
 import { sound } from '../utils/audio';
 import { GestureRecognizer, GestureResult } from '../utils/gestureRecognizer';
 import { Joystick } from './Joystick';
+import { FloatingJoystick } from './FloatingJoystick';
 import { PauseOverlay } from './PauseOverlay';
+import { BlessingModal } from './BlessingModal';
 import bgInkMountains from '../assets/images/bg_ink_mountains_1791652099827.jpg';
 import {
   Shield,
@@ -50,6 +57,8 @@ import {
   Pause,
   Infinity as InfinityIcon,
   X,
+  Hand,
+  Gem,
 } from 'lucide-react';
 
 interface BattleViewProps {
@@ -77,9 +86,39 @@ export const BattleView: React.FC<BattleViewProps> = ({
   // Sound Mute State
   const [isMuted, setIsMuted] = useState(sound.getMuted());
 
-  // Input Control Mode: 'GESTURE' (纯挥毫手势模式) vs 'CLASSIC' (经典摇杆按键模式)
-  const [controlMode, setControlMode] = useState<'GESTURE' | 'CLASSIC'>('GESTURE');
+  // Input Control Mode: 'GESTURE' 挥毫手势 | 'DUAL' 双区操控（浮动摇杆+手势） | 'CLASSIC' 经典摇杆按键
+  // 首次进入：触屏设备默认双区，桌面默认挥毫；选择持久化
+  const [controlMode, setControlModeState] = useState<'GESTURE' | 'DUAL' | 'CLASSIC'>(() => {
+    try {
+      const saved = localStorage.getItem('ink_steel_control_mode');
+      if (saved === 'GESTURE' || saved === 'DUAL' || saved === 'CLASSIC') return saved;
+    } catch {}
+    const isTouch =
+      typeof window !== 'undefined' &&
+      ('ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0);
+    return isTouch ? 'DUAL' : 'GESTURE';
+  });
+  const controlModeRef = useRef(controlMode);
+  const setControlMode = useCallback((m: 'GESTURE' | 'DUAL' | 'CLASSIC') => {
+    controlModeRef.current = m;
+    setControlModeState(m);
+    try {
+      localStorage.setItem('ink_steel_control_mode', m);
+    } catch {}
+  }, []);
   const [showGestureGuide, setShowGestureGuide] = useState(false);
+
+  // ===== 浮动摇杆状态（DUAL 模式：左半屏触点生成，多点触控安全） =====
+  const FLOAT_JOY_RADIUS = 60; // 底盘半径 px
+  const [floatJoy, setFloatJoy] = useState<{
+    active: boolean;
+    pointerId: number;
+    baseX: number;
+    baseY: number;
+    knobX: number;
+    knobY: number;
+  }>({ active: false, pointerId: -1, baseX: 0, baseY: 0, knobX: 0, knobY: 0 });
+  const floatJoyRef = useRef(floatJoy);
 
   // ===== 高频游戏状态：真相源在 ref，节流同步到 state（避免每帧 setState 性能灾难） =====
   const [ink, setInk] = useState(level.initialInk);
@@ -145,6 +184,56 @@ export const BattleView: React.FC<BattleViewProps> = ({
   const weatherRef = useRef<WeatherEvent | null>(null);
   const [activeWeather, setActiveWeather] = useState<WeatherEvent | null>(null);
 
+  // ===== 墨灵祝福（Roguelike 三选一，可叠加） =====
+  const activeBlessingsRef = useRef<Record<string, number>>({});
+  const [ownedBlessings, setOwnedBlessings] = useState<Record<string, number>>({});
+  const blessingMultsRef = useRef<BlessingMults>({
+    attack: 1,
+    speed: 1,
+    hp: 1,
+    inkGain: 1,
+    energyGain: 1,
+    comboTimer: 1,
+    cooldown: 1,
+  });
+  const [blessingOffer, setBlessingOffer] = useState<BlessingDef[] | null>(null);
+  const blessingOfferRef = useRef<BlessingDef[] | null>(null);
+  const nextBlessingTimeRef = useRef(45);
+  const citadelRegenRef = useRef(0);
+
+  // ===== 文房四宝收集 =====
+  const TREASURE_KINDS: InkTreasure['kind'][] = ['BRUSH', 'INK', 'PAPER', 'STONE'];
+  const TREASURE_CHAR: Record<InkTreasure['kind'], string> = {
+    BRUSH: '笔',
+    INK: '墨',
+    PAPER: '纸',
+    STONE: '砚',
+  };
+  const treasuresRef = useRef<InkTreasure[]>([]);
+  const collectedTreasuresRef = useRef<Record<InkTreasure['kind'], boolean>>({
+    BRUSH: false,
+    INK: false,
+    PAPER: false,
+    STONE: false,
+  });
+  const [treasureCollected, setTreasureCollected] = useState<Record<InkTreasure['kind'], boolean>>({
+    BRUSH: false,
+    INK: false,
+    PAPER: false,
+    STONE: false,
+  });
+
+  // ===== 墨龙卷（高连击奖励） =====
+  const inkDragonsRef = useRef<InkDragon[]>([]);
+  const dragonComboMarkRef = useRef(0);
+  const dragonCdRef = useRef(0);
+
+  // ===== 墨滞时刻（残血子弹时间，每场一次） =====
+  const INK_SLOW_DURATION = 3.0;
+  const inkSlowUsedRef = useRef(false);
+  const inkSlowTimerRef = useRef(0);
+  const [inkSlowLeft, setInkSlowLeft] = useState(0);
+
   // Stage announcement / verse banner
   const [stageBanner, setStageBanner] = useState<string | null>(level.poeticVerse);
   const [bossAnnounced, setBossAnnounced] = useState(false);
@@ -179,10 +268,11 @@ export const BattleView: React.FC<BattleViewProps> = ({
   const cdMult = Math.max(0.6, 1 - progress.heroUpgrades.cooldownLevel * 0.08);
   const resonanceMult = 1 + progress.heroUpgrades.resonanceLevel * 0.12;
 
-  // 技能冷却设置（统一应用冷却缩短加成）
+  // 技能冷却设置（统一应用冷却缩短加成：研习等级 + 祝福笔势如虹）
   const applySkillCd = useCallback(
     (key: string, baseCd: number) => {
-      skillCdsRef.current[key] = baseCd * cdMult;
+      skillCdsRef.current[key] =
+        baseCd * cdMult * blessingMultsRef.current.cooldown;
     },
     [cdMult]
   );
@@ -270,9 +360,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
   };
   triggerHitStopRef.current = triggerHitStop;
 
-  // ===== 暂停切换 =====
+  // ===== 暂停切换（祝福三选一凝滞期间不可打断） =====
   const togglePause = useCallback(() => {
-    if (isGameOverRef.current) return;
+    if (isGameOverRef.current || blessingOfferRef.current) return;
     isPausedRef.current = !isPausedRef.current;
     setPaused(isPausedRef.current);
   }, []);
@@ -433,6 +523,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
         LANE_MIN_Y.current + Math.random() * (LANE_MAX_Y.current - LANE_MIN_Y.current);
 
       const bossBase = isBoss && levelRef.current.boss ? levelRef.current.boss : null;
+      // 祝福加成：仅友军享受剑气纵横（攻击）/墨甲如山（生命）乘数
+      const blMult = blessingMultsRef.current;
       const newUnit: UnitInstance = {
         id: `unit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         type,
@@ -443,13 +535,13 @@ export const BattleView: React.FC<BattleViewProps> = ({
         vz: 0,
         hp: bossBase
           ? Math.round(bossBase.hp * statScale)
-          : Math.round(config.maxHp * (1 + upgradeBonus) * statScale),
+          : Math.round(config.maxHp * (1 + upgradeBonus) * statScale * (!isEnemy ? blMult.hp : 1)),
         maxHp: bossBase
           ? Math.round(bossBase.hp * statScale)
-          : Math.round(config.maxHp * (1 + upgradeBonus) * statScale),
+          : Math.round(config.maxHp * (1 + upgradeBonus) * statScale * (!isEnemy ? blMult.hp : 1)),
         attack: bossBase
           ? Math.round(bossBase.attack * statScale)
-          : Math.round(config.attack * (1 + upgradeBonus) * statScale),
+          : Math.round(config.attack * (1 + upgradeBonus) * statScale * (!isEnemy ? blMult.attack : 1)),
         attackRange: config.attackRange,
         attackCooldown: 0,
         speed: bossBase ? bossBase.speed : config.speed,
@@ -482,6 +574,37 @@ export const BattleView: React.FC<BattleViewProps> = ({
     inkRef.current -= config.cost;
     setInk(inkRef.current);
     spawnUnit(type, false, 130 + Math.random() * 40);
+  };
+
+  // 触觉反馈（移动端震动，桌面端无害跳过）
+  const triggerHaptic = (pattern: number | number[]) => {
+    try {
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate(pattern);
+      }
+    } catch {}
+  };
+
+  // 墨龙卷：连墨达「翰墨通神」（45）时自动召唤，横扫战场（内置冷却防频繁）
+  const spawnInkDragon = () => {
+    const hero = heroRef.current;
+    if (hero.state === 'DEAD') return;
+    const dir = hero.facing;
+    inkDragonsRef.current.push({
+      id: `dragon_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      x: hero.x + dir * 60,
+      y: hero.y,
+      vx: dir * 520,
+      life: 2.4,
+      maxLife: 2.4,
+      hitIds: new Set(),
+    });
+    sound.playUltimate();
+    triggerShake(10, 0.4);
+    triggerSealStamp(hero.x + dir * 130, hero.y - 60, '龍');
+    setStageBanner('墨龙卷 · 笔走龙蛇，横扫千军！');
+    safeTimeout(() => setStageBanner(null), 2600);
+    triggerHaptic(40);
   };
 
   // Add Hit to Calligraphy Combo Counter
@@ -518,11 +641,14 @@ export const BattleView: React.FC<BattleViewProps> = ({
       mult = 1.05;
     }
 
+    // 祝福「连墨永驻」：判定窗口延长
+    const comboMaxTimer = 2.8 * blessingMultsRef.current.comboTimer;
+
     const next: CalligraphyCombo = {
       count: nextCount,
       tier: nextTier,
-      timer: 2.8,
-      maxTimer: 2.8,
+      timer: comboMaxTimer,
+      maxTimer: comboMaxTimer,
       ratingText,
       inkBonusMultiplier: mult,
     };
@@ -535,6 +661,17 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     // 命中即时反馈（低频事件，直接同步 UI）
     setCombo(next);
+
+    // 墨龙卷：每次达到 45 连且间隔足够即触发
+    if (
+      nextCount >= 45 &&
+      nextCount - dragonComboMarkRef.current >= 40 &&
+      dragonCdRef.current <= 0
+    ) {
+      dragonComboMarkRef.current = nextCount;
+      dragonCdRef.current = 8;
+      spawnInkDragon();
+    }
 
     if (nextTier !== prev.tier) {
       sound.playComboEscalation(
@@ -577,6 +714,20 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
       hero.hp = Math.max(0, hero.hp - finalDmg);
       hero.flinchTimer = 0.2;
+
+      // 墨滞时刻：首次跌破三成气血，天地凝墨缓技喘息（每场一次）
+      if (
+        !inkSlowUsedRef.current &&
+        hero.hp > 0 &&
+        hero.hp <= hero.maxHp * 0.3
+      ) {
+        inkSlowUsedRef.current = true;
+        inkSlowTimerRef.current = INK_SLOW_DURATION;
+        setStageBanner('墨滞时刻 · 天地凝墨，剑仙独醒！');
+        safeTimeout(() => setStageBanner(null), 2600);
+        sound.playComboEscalation(4);
+        triggerHaptic([60, 40, 60]);
+      }
 
       damageNumbersRef.current.push({
         id: `dmg_${Math.random()}`,
@@ -706,7 +857,109 @@ export const BattleView: React.FC<BattleViewProps> = ({
       statsRef.current.kills += 1;
       heroEnergyRef.current = Math.min(100, heroEnergyRef.current + 10);
       inkRef.current += Math.round(14 * comboRef.current.inkBonusMultiplier);
+
+      // 文房四宝掉落：8% 概率，优先掉未收集的种类
+      if (Math.random() < 0.08) {
+        const missing = TREASURE_KINDS.filter((k) => !collectedTreasuresRef.current[k]);
+        const pickKind =
+          missing.length > 0
+            ? missing[Math.floor(Math.random() * missing.length)]
+            : TREASURE_KINDS[Math.floor(Math.random() * TREASURE_KINDS.length)];
+        treasuresRef.current.push({
+          id: `tre_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          kind: pickKind,
+          x: unit.x,
+          y: unit.y,
+          altitudeZ: 30,
+          vz: 170,
+          life: 12,
+          maxLife: 12,
+        });
+      }
     }
+  };
+
+  // ===== 墨灵祝福：三选一 / 应用效果 =====
+  const offerBlessings = () => {
+    const pool = [...BLESSINGS];
+    const picks: BlessingDef[] = [];
+    while (picks.length < 3 && pool.length > 0) {
+      const idx = Math.floor(Math.random() * pool.length);
+      picks.push(pool.splice(idx, 1)[0]);
+    }
+    if (picks.length === 0) return;
+    isPausedRef.current = true; // 战场凝滞，静心抉择
+    blessingOfferRef.current = picks;
+    setBlessingOffer(picks);
+    sound.playPluck(880, 0.9);
+    triggerHaptic(25);
+  };
+
+  const handlePickBlessing = (b: BlessingDef) => {
+    applyBlessing(b);
+    blessingOfferRef.current = null;
+    setBlessingOffer(null);
+    isPausedRef.current = false;
+    sound.playPluck(659.25, 0.5);
+  };
+
+  const applyBlessing = (b: BlessingDef) => {
+    activeBlessingsRef.current[b.id] = (activeBlessingsRef.current[b.id] || 0) + 1;
+    const M = blessingMultsRef.current;
+    const hero = heroRef.current;
+
+    switch (b.id) {
+      case 'sword_aura': {
+        // 全军攻击 +15%（含新招募单位，通过 spawnUnit 乘数生效）
+        M.attack *= 1.15;
+        unitsRef.current.forEach((u) => {
+          if (!u.isEnemy) u.attack = Math.round(u.attack * 1.15);
+        });
+        hero.attack = Math.round(hero.attack * 1.15);
+        break;
+      }
+      case 'wind_steps':
+        M.speed *= 1.18;
+        break;
+      case 'ink_armor': {
+        M.hp *= 1.2;
+        unitsRef.current.forEach((u) => {
+          if (!u.isEnemy) {
+            u.maxHp = Math.round(u.maxHp * 1.2);
+            u.hp = Math.min(u.maxHp, Math.round(u.hp + u.maxHp * 0.3));
+          }
+        });
+        break;
+      }
+      case 'gold_ink':
+        M.inkGain *= 1.35;
+        break;
+      case 'combo_steady':
+        M.comboTimer *= 1.45;
+        break;
+      case 'citadel_bless': {
+        playerBaseHpRef.current = Math.min(
+          playerBaseMaxHpRef.current,
+          Math.round(playerBaseHpRef.current + playerBaseMaxHpRef.current * 0.25)
+        );
+        setPlayerBaseHp(playerBaseHpRef.current);
+        citadelRegenRef.current += playerBaseMaxHpRef.current * 0.008; // 每秒缓慢自愈
+        break;
+      }
+      case 'swift_skill':
+        M.cooldown = Math.max(0.4, M.cooldown * 0.78);
+        break;
+      case 'star_siphon':
+        M.energyGain *= 1.55;
+        break;
+    }
+
+    setOwnedBlessings({ ...activeBlessingsRef.current });
+    triggerSealStamp(hero.x, hero.y - 66, '祝');
+    sound.playVictory();
+    triggerShake(6, 0.3);
+    setStageBanner(`墨灵祝福 · ${b.name}（${b.description}）`);
+    safeTimeout(() => setStageBanner(null), 3000);
   };
 
   // Hero Attack Action (3-hit Combo or Aerial Plunge)
@@ -978,7 +1231,11 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
   };
 
-  // --- UNIFIED CALLIGRAPHY GESTURE HANDLERS (Screen-as-Canvas) ---
+  // --- UNIFIED CALLIGRAPHY GESTURE & TOUCH HANDLERS (Screen-as-Canvas) ---
+  // 指针路由策略：
+  //  · DUAL 模式 + 触屏 + 左 45% 区域 → 浮动摇杆（可移动，多点触控安全）
+  //  · 其余指针 → 挥毫手势（点按/横竖提/画圆/折线/拖动）
+  //  · 右半屏 + 技能按钮（DOM 层，不穿透到画布）
   const handlePointerDown = (e: React.PointerEvent) => {
     // Canvas client bounds
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -986,15 +1243,57 @@ export const BattleView: React.FC<BattleViewProps> = ({
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
 
+    // DUAL 双区模式：左半屏触点生成浮动摇杆（一次只允许一个摇杆实例）
+    if (
+      controlModeRef.current === 'DUAL' &&
+      e.pointerType === 'touch' &&
+      clientX < rect.width * 0.45 &&
+      !floatJoyRef.current.active
+    ) {
+      const next = {
+        active: true,
+        pointerId: e.pointerId,
+        baseX: clientX,
+        baseY: clientY,
+        knobX: 0,
+        knobY: 0,
+      };
+      floatJoyRef.current = next;
+      setFloatJoy(next);
+      heroTargetMove.current = null; // 切入手动操控，停止自动寻路
+      return;
+    }
+
     gestureRecognizer.current.startStroke(clientX, clientY);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!gestureRecognizer.current.getIsTracing()) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
+
+    // 浮动摇杆跟踪：以按下点为圆心，摇杆帽钳制在底盘半径内
+    const joy = floatJoyRef.current;
+    if (joy.active && e.pointerId === joy.pointerId) {
+      let dx = clientX - joy.baseX;
+      let dy = clientY - joy.baseY;
+      const dist = Math.hypot(dx, dy);
+      if (dist > FLOAT_JOY_RADIUS) {
+        dx = (dx / dist) * FLOAT_JOY_RADIUS;
+        dy = (dy / dist) * FLOAT_JOY_RADIUS;
+      }
+      const next = { ...joy, knobX: dx, knobY: dy };
+      floatJoyRef.current = next;
+      setFloatJoy(next);
+      joystickVector.current = {
+        x: dx / FLOAT_JOY_RADIUS,
+        y: dy / FLOAT_JOY_RADIUS,
+      };
+      return;
+    }
+
+    if (!gestureRecognizer.current.getIsTracing()) return;
 
     gestureRecognizer.current.addPoint(clientX, clientY);
 
@@ -1008,8 +1307,27 @@ export const BattleView: React.FC<BattleViewProps> = ({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    // 浮动摇杆释放：归零输入并隐藏
+    const joy = floatJoyRef.current;
+    if (joy.active && e.pointerId === joy.pointerId) {
+      const cleared = {
+        active: false,
+        pointerId: -1,
+        baseX: 0,
+        baseY: 0,
+        knobX: 0,
+        knobY: 0,
+      };
+      floatJoyRef.current = cleared;
+      setFloatJoy(cleared);
+      joystickVector.current = { x: 0, y: 0 };
+      return;
+    }
+
     const gesture = gestureRecognizer.current.endStroke();
     if (!gesture) return;
+    // 识别成功触觉反馈（轻震）
+    if (gesture.type !== 'DRAG') triggerHaptic(12);
 
     const worldStartX = gesture.startX + cameraX.current;
     const worldEndX = gesture.endX + cameraX.current;
@@ -1112,9 +1430,16 @@ export const BattleView: React.FC<BattleViewProps> = ({
       if (hitStopTimerRef.current > 0) {
         hitStopTimerRef.current -= dt;
       } else if (!isPausedRef.current) {
-        gameTimeRef.current += dt;
-        if (!isGameOverRef.current) {
-          updateSimulationRef.current(dt);
+        // 墨滞时刻：世界减速至 0.45x（剑仙在 updateSimulation 内速度补偿），计时走真实秒
+        if (inkSlowTimerRef.current > 0) {
+          inkSlowTimerRef.current -= dt;
+          gameTimeRef.current += dt * 0.45;
+          updateSimulationRef.current(dt * 0.45);
+        } else {
+          gameTimeRef.current += dt;
+          if (!isGameOverRef.current) {
+            updateSimulationRef.current(dt);
+          }
         }
       }
 
@@ -1149,7 +1474,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
           wellsRef.current,
           gameTimeRef.current,
           screenShakeRef.current.x,
-          screenShakeRef.current.y
+          screenShakeRef.current.y,
+          inkDragonsRef.current,
+          treasuresRef.current,
+          inkSlowTimerRef.current > 0 ? inkSlowTimerRef.current / INK_SLOW_DURATION : 0
         );
 
         // Render Real-time Calligraphy Brush Trail on screen
@@ -1178,8 +1506,34 @@ export const BattleView: React.FC<BattleViewProps> = ({
       (2.5 + progress.citadelUpgrades.gatherSpeedLevel * 0.6) *
       comboRef.current.inkBonusMultiplier *
       weatherMult *
+      blessingMultsRef.current.inkGain *
       dt;
-    heroEnergyRef.current = Math.min(100, heroEnergyRef.current + 2.8 * dt);
+    heroEnergyRef.current = Math.min(
+      100,
+      heroEnergyRef.current + 2.8 * blessingMultsRef.current.energyGain * dt
+    );
+
+    // 墨龙卷冷却
+    if (dragonCdRef.current > 0) dragonCdRef.current -= dt;
+
+    // 文光护阁：墨阁持续缓慢自愈
+    if (citadelRegenRef.current > 0 && playerBaseHpRef.current > 0) {
+      playerBaseHpRef.current = Math.min(
+        playerBaseMaxHpRef.current,
+        playerBaseHpRef.current + citadelRegenRef.current * dt
+      );
+    }
+
+    // 墨灵祝福：普通关卡按节奏提供三选一（无尽在波次逻辑中触发）
+    if (
+      !lv.endless &&
+      !blessingOfferRef.current &&
+      !isGameOverRef.current &&
+      now >= nextBlessingTimeRef.current
+    ) {
+      nextBlessingTimeRef.current = now + 55;
+      offerBlessings();
+    }
 
     // Skill Cooldowns（ref 直减，HUD 节流同步）
     const cds = skillCdsRef.current;
@@ -1316,7 +1670,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
 
       const speedBonus = weatherRef.current?.type === 'POETIC_BREEZE' ? 1.35 : 1.0;
-      const effectiveHeroSpeed = hero.speed * speedBonus;
+      // 墨滞时刻：世界减速，剑仙几乎全速行动（主角时间）
+      const inkSlowBoost = inkSlowTimerRef.current > 0 ? 2.1 : 1.0;
+      const effectiveHeroSpeed = hero.speed * speedBonus * inkSlowBoost * blessingMultsRef.current.speed;
 
       if (!hero.state.startsWith('ATTACK_') && hero.state !== 'SKILL_DASH') {
         if (inputMag > 0.15) {
@@ -1396,6 +1752,11 @@ export const BattleView: React.FC<BattleViewProps> = ({
         const diff = 1 + waveNo * 0.07;
         const count = Math.min(7, 2 + Math.floor(waveNo / 3));
 
+        // 每 2 波墨灵赐福（波次越高，战斗越艰，祝福是活下去的关键）
+        if (waveNo >= 2 && waveNo % 2 === 0 && !blessingOfferRef.current && !isGameOverRef.current) {
+          offerBlessings();
+        }
+
         // 兵种池随波次扩展
         const pool: UnitType[] = ['SWORD'];
         if (waveNo >= 3) pool.push('ARCHER');
@@ -1446,6 +1807,135 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
       if (trap.duration <= 0) {
         lotusTrapsRef.current.splice(i, 1);
+      }
+    }
+
+    // ===== 文房四宝：下落弹跳 / 超时消散 / 剑仙拾取 / 集齐触发「文光焕彩」 =====
+    for (let i = treasuresRef.current.length - 1; i >= 0; i--) {
+      const tr = treasuresRef.current[i];
+      tr.life -= dt;
+
+      // 落地弹跳
+      if (tr.altitudeZ > 0 || tr.vz !== 0) {
+        tr.vz -= 700 * dt;
+        tr.altitudeZ += tr.vz * dt;
+        if (tr.altitudeZ <= 0) {
+          tr.altitudeZ = 0;
+          tr.vz = 0;
+        }
+      }
+
+      // 拾取判定
+      if (hero.state !== 'DEAD' && Math.hypot(hero.x - tr.x, hero.y - tr.y) < 60) {
+        collectedTreasuresRef.current[tr.kind] = true;
+        treasuresRef.current.splice(i, 1);
+        sound.playGather();
+        triggerSealStamp(hero.x, hero.y - 58, TREASURE_CHAR[tr.kind]);
+        triggerHaptic(18);
+        setTreasureCollected({ ...collectedTreasuresRef.current });
+
+        // 集齐四宝 → 文光焕彩：绝意充满 + 全军治愈 + 墨韵大增
+        if (TREASURE_KINDS.every((k) => collectedTreasuresRef.current[k])) {
+          TREASURE_KINDS.forEach((k) => {
+            collectedTreasuresRef.current[k] = false;
+          });
+          setTreasureCollected({ BRUSH: false, INK: false, PAPER: false, STONE: false });
+
+          heroEnergyRef.current = 100;
+          setHeroEnergy(100);
+          inkRef.current += 120;
+          setInk(inkRef.current);
+
+          unitsRef.current.forEach((u) => {
+            if (!u.isEnemy) {
+              u.hp = Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.35));
+              damageNumbersRef.current.push({
+                id: `wenguang_${Math.random()}`,
+                x: u.x,
+                y: u.y - 70,
+                text: '文光焕彩！',
+                color: '#facc15',
+                alpha: 1,
+                scale: 1.15,
+                life: 1.1,
+              });
+            }
+          });
+
+          setStageBanner('文光焕彩 · 四宝归一，绝意盈胸！');
+          safeTimeout(() => setStageBanner(null), 2800);
+          sound.playUltimate();
+          triggerShake(8, 0.35);
+          triggerHaptic([30, 30, 30]);
+
+          for (let pi = 0; pi < 32; pi++) {
+            particlesRef.current.push({
+              id: `wg_${pi}_${Math.random()}`,
+              x: hero.x + (Math.random() - 0.5) * 260,
+              y: hero.y + (Math.random() - 0.5) * 60,
+              altitudeZ: Math.random() * 130,
+              vx: (Math.random() - 0.5) * 150,
+              vy: (Math.random() - 0.5) * 60,
+              vz: Math.random() * 150,
+              color: pi % 3 === 0 ? '#facc15' : pi % 3 === 1 ? '#38bdf8' : '#fef08a',
+              size: Math.random() * 4 + 2,
+              alpha: 1,
+              life: 1.2,
+              maxLife: 1.2,
+              type: 'STAR',
+            });
+          }
+        }
+        continue;
+      }
+
+      if (tr.life <= 0) {
+        treasuresRef.current.splice(i, 1);
+      }
+    }
+
+    // ===== 墨龙卷：推进 + 尾迹 + 沿途横扫 =====
+    for (let i = inkDragonsRef.current.length - 1; i >= 0; i--) {
+      const dragon = inkDragonsRef.current[i];
+      dragon.x += dragon.vx * dt;
+      dragon.life -= dt;
+
+      // 墨色尾迹
+      if (Math.random() < 0.6) {
+        particlesRef.current.push({
+          id: `dk_${Math.random()}`,
+          x: dragon.x - Math.sign(dragon.vx) * 20,
+          y: dragon.y,
+          altitudeZ: 30 + Math.random() * 45,
+          vx: -dragon.vx * 0.08,
+          vy: (Math.random() - 0.5) * 30,
+          vz: 40 + Math.random() * 40,
+          color: '#09090b',
+          size: Math.random() * 4 + 2,
+          alpha: 1,
+          life: 0.5,
+          maxLife: 0.5,
+          type: 'INK',
+        });
+      }
+
+      // 命中判定：每只敌军仅吃一次伤害 + 击退
+      units.forEach((u) => {
+        if (
+          u.isEnemy &&
+          u.hp > 0 &&
+          !dragon.hitIds.has(u.id) &&
+          Math.abs(u.x - dragon.x) < 72 &&
+          Math.abs(u.y - dragon.y) < 55
+        ) {
+          dragon.hitIds.add(u.id);
+          applyDamage(u, hero.attack * 2.2, true, dragon.x, dragon.y);
+          u.x += Math.sign(dragon.vx) * 45;
+        }
+      });
+
+      if (dragon.life <= 0) {
+        inkDragonsRef.current.splice(i, 1);
       }
     }
 
@@ -1747,6 +2237,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       setPlayerBaseHp(playerBaseHpRef.current);
       setEnemyBaseHp(enemyBaseHpRef.current);
       setEndlessWave(endlessWaveRef.current);
+      setInkSlowLeft(inkSlowTimerRef.current > 0 ? inkSlowTimerRef.current : 0);
     }, 130);
     return () => clearInterval(hudTimer);
   }, []);
@@ -1838,7 +2329,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
             <Pause className="w-4 h-4" />
           </button>
 
-          {/* Mode Switcher: 挥毫手势 vs 经典按键 */}
+          {/* Mode Switcher: 挥毫手势 / 双区操控 / 经典按键 */}
           <div className="flex items-center bg-stone-900 border border-stone-800 rounded-lg p-0.5">
             <button
               onClick={() => setControlMode('GESTURE')}
@@ -1847,10 +2338,22 @@ export const BattleView: React.FC<BattleViewProps> = ({
                   ? 'bg-cyan-900/80 text-cyan-200 font-bold'
                   : 'text-stone-400 hover:text-stone-200'
               }`}
-              title="切换到纯挥毫手势模式 (以笔驭剑)"
+              title="全屏挥毫手势：以笔驭剑（桌面鼠标友好）"
             >
               <PenTool className="w-3 h-3 text-cyan-400" />
               <span>挥毫</span>
+            </button>
+            <button
+              onClick={() => setControlMode('DUAL')}
+              className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md transition-colors cursor-pointer ${
+                controlMode === 'DUAL'
+                  ? 'bg-emerald-900/80 text-emerald-200 font-bold'
+                  : 'text-stone-400 hover:text-stone-200'
+              }`}
+              title="双区操控：左手浮动摇杆移动 + 右手手势/技能（触屏推荐）"
+            >
+              <Hand className="w-3 h-3 text-emerald-400" />
+              <span>双区</span>
             </button>
             <button
               onClick={() => setControlMode('CLASSIC')}
@@ -1859,10 +2362,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
                   ? 'bg-stone-800 text-stone-100 font-bold'
                   : 'text-stone-400 hover:text-stone-200'
               }`}
-              title="切换到传统虚拟摇杆+按键模式"
+              title="传统虚拟摇杆+按键模式"
             >
               <Gamepad2 className="w-3 h-3 text-amber-400" />
-              <span>按键</span>
+              <span>经典</span>
             </button>
           </div>
 
@@ -1900,9 +2403,68 @@ export const BattleView: React.FC<BattleViewProps> = ({
         className="w-full h-full block touch-none cursor-crosshair"
       />
 
+      {/* 浮动摇杆（双区模式：触点处浮现，松手即隐） */}
+      {controlMode === 'DUAL' && floatJoy.active && (
+        <FloatingJoystick
+          baseX={floatJoy.baseX}
+          baseY={floatJoy.baseY}
+          knobX={floatJoy.knobX}
+          knobY={floatJoy.knobY}
+          size={FLOAT_JOY_RADIUS * 2}
+        />
+      )}
+
+      {/* 文房四宝收集进度 + 已获墨灵祝福 */}
+      <div className="absolute left-4 md:left-6 top-28 z-30 pointer-events-none flex flex-col gap-1.5">
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-stone-950/80 border border-amber-800/50 rounded-xl backdrop-blur-sm shadow-xl">
+          <Gem className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+          {TREASURE_KINDS.map((k) => (
+            <span
+              key={k}
+              className={`w-6 h-6 flex items-center justify-center rounded-md text-xs font-serif font-bold border transition-all ${
+                treasureCollected[k]
+                  ? 'bg-amber-400/90 border-amber-300 text-stone-950 shadow-[0_0_8px_rgba(250,204,21,0.7)] scale-110'
+                  : 'bg-stone-900 border-stone-700 text-stone-600'
+              }`}
+            >
+              {TREASURE_CHAR[k]}
+            </span>
+          ))}
+        </div>
+        {Object.keys(ownedBlessings).length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 max-w-[230px]">
+            {BLESSINGS.filter((b) => ownedBlessings[b.id]).map((b) => (
+              <span
+                key={b.id}
+                className="px-1.5 py-0.5 text-[10px] font-serif rounded-md bg-emerald-950/80 border border-emerald-700/50 text-emerald-200 backdrop-blur-sm"
+              >
+                {b.name} ×{ownedBlessings[b.id]}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 墨滞时刻倒计时指示 */}
+      {inkSlowLeft > 0 && (
+        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-fade-in">
+          <div className="px-4 py-1.5 bg-purple-950/85 border border-purple-500/60 rounded-xl backdrop-blur-md shadow-2xl text-center">
+            <p className="text-xs font-serif font-bold text-purple-200 tracking-widest">
+              墨滞时刻 · 天地凝墨
+            </p>
+            <div className="mt-1 w-32 h-1 bg-stone-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-purple-400 transition-all duration-100"
+                style={{ width: `${Math.max(0, (inkSlowLeft / INK_SLOW_DURATION) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Floating Gesture Recognition Badge */}
       {gestureBadge && (
-        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-bounce">
+        <div className="absolute top-44 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-bounce">
           <div className="px-5 py-2 bg-stone-950/90 border border-cyan-500/70 rounded-2xl backdrop-blur-md shadow-2xl flex items-center gap-2">
             <span className="text-lg font-bold font-serif text-cyan-300">{gestureBadge.text}</span>
             <span className="text-xs font-serif text-stone-200">{gestureBadge.sub}</span>
@@ -1912,9 +2474,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
       {/* Gesture Quick Guide Overlay Modal */}
       {showGestureGuide && (
-        <div className="absolute top-16 right-6 z-40 max-w-xs p-4 bg-stone-900/95 border border-stone-700 rounded-2xl shadow-2xl backdrop-blur-md text-xs text-stone-300 space-y-2 animate-fade-in font-sans">
+        <div className="absolute top-16 right-4 md:right-6 z-40 max-w-xs p-4 bg-stone-900/95 border border-stone-700 rounded-2xl shadow-2xl backdrop-blur-md text-xs text-stone-300 space-y-2 animate-fade-in font-sans max-h-[75vh] overflow-y-auto">
           <div className="flex items-center justify-between font-serif font-bold text-amber-200 border-b border-stone-800 pb-1.5">
-            <span>以笔驭剑 · 手势心诀</span>
+            <span>操控心诀 · 三式任选</span>
             <button
               onClick={() => setShowGestureGuide(false)}
               className="text-stone-400 hover:text-white"
@@ -1922,6 +2484,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
               ✕
             </button>
           </div>
+          <p className="text-[11px] font-bold text-emerald-300">
+            【双区操控 · 触屏推荐】左半屏任意处按住浮现摇杆移动；右半屏点按/手势施法；右下技能按钮随时可点，双手齐用！
+          </p>
           <p><strong className="text-cyan-300">轻点地面：</strong>剑仙踏墨巡行至该位置</p>
           <p><strong className="text-cyan-300">轻点敌军：</strong>施展落墨三式剑招</p>
           <p><strong className="text-cyan-300">「横」划：</strong>化身墨影疾驰【断水斩】</p>
@@ -1929,9 +2494,12 @@ export const BattleView: React.FC<BattleViewProps> = ({
           <p><strong className="text-cyan-300">「提」划（向上）：</strong>轻功腾跃跳起</p>
           <p><strong className="text-cyan-300">「画圆」⭕：</strong>释放【竹影墨盾 / 墨荷灵阵】</p>
           <p><strong className="text-cyan-300">「折」划（Z型）：</strong>万毫齐发【星河笔阵】</p>
-          <p className="text-[10px] text-stone-400 pt-1 border-t border-stone-800">
-            * 电脑端键盘按键（WASD/J/Q/W/E/R/Space）全程原生支持！
-          </p>
+          <div className="pt-1 border-t border-stone-800 text-[10px] text-stone-400 space-y-1">
+            <p>* 电脑端键盘（WASD/J/Q/W/E/R/Space）全程原生支持！</p>
+            <p className="text-amber-300/80">
+              ★ 连墨 45 触发「墨龙卷」· 集齐文房四宝触发「文光焕彩」· 残血自动入「墨滞时刻」
+            </p>
+          </div>
         </div>
       )}
 
@@ -2131,6 +2699,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
             <div className="text-[11px] font-serif text-stone-400 bg-stone-950/70 border border-stone-800 px-3 py-1 rounded-lg">
               ✨ 挥毫手势模式：点击点地漫步 · 横划破水 · 竖划震天 · 画圆起盾
             </div>
+          ) : controlMode === 'DUAL' ? (
+            <div className="text-[11px] font-serif text-emerald-300/90 bg-stone-950/70 border border-emerald-800/50 px-3 py-1 rounded-lg">
+              🖐 双区操控：左半屏按住浮现摇杆移动 · 右半屏点按/手势施法 · 技能常驻右下
+            </div>
           ) : (
             /* Classic Joystick on Bottom Left when in Classic Mode */
             <div className="mt-2">
@@ -2147,9 +2719,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
           )}
         </div>
 
-        {/* Right: Ultimate Seal & Action Cluster (If in Classic mode, show buttons; if in Gesture mode, show elegant Luminous Ultimate Button) */}
+        {/* Right: Ultimate Seal & Action Cluster (双区/经典模式都显示实体技能键，挥毫模式仅保留绝技印) */}
         <div className="pointer-events-auto flex items-center gap-2">
-          {controlMode === 'CLASSIC' && (
+          {controlMode !== 'GESTURE' && (
             <div className="flex items-center gap-1.5 p-2 bg-stone-950/90 backdrop-blur-md border border-stone-800 rounded-2xl shadow-2xl">
               <button
                 onClick={triggerHeroJump}
@@ -2236,8 +2808,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
                 （顶栏「采墨 50」）→ 他们会自动汲取墨韵运回墨阁
               </li>
               <li>
-                <strong className="text-emerald-300">招募折柳剑客</strong>
-                ，或直接<span className="text-cyan-300">点击敌军</span>操控剑仙亲斩
+                <strong className="text-emerald-300">触屏推荐双区模式</strong>
+                ：左半屏按住浮现摇杆移动，右手点敌攻击或划手势施法；电脑端 WASD + J 攻击
               </li>
               <li>
                 <strong className="text-amber-300">横划屏幕</strong>
@@ -2247,10 +2819,19 @@ export const BattleView: React.FC<BattleViewProps> = ({
               </li>
             </ol>
             <p className="mt-2 pt-2 border-t border-stone-800 text-[10px] text-stone-500">
-              提示：ESC / P 可随时暂停 · 电脑端 WASD 移动 / J 攻击 / QWER 施法全程可用
+              提示：ESC / P 可随时暂停 · 连墨45召墨龙 · 集齐文房四宝获「文光焕彩」· 残血自动触发墨滞时刻
             </p>
           </div>
         </div>
+      )}
+
+      {/* ===== 墨灵祝福三选一（战场凝滞中抉择） ===== */}
+      {blessingOffer && (
+        <BlessingModal
+          offerings={blessingOffer}
+          ownedCounts={ownedBlessings}
+          onPick={handlePickBlessing}
+        />
       )}
 
       {/* ===== 暂停遮罩 ===== */}

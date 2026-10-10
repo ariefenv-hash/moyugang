@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Shield, Zap, Sparkles, Feather, Scroll, ArrowUp, Flame, Move } from 'lucide-react';
+import { X, Shield, Zap, Sparkles, Feather, Scroll, ArrowUp, Flame, Move, Hand, Gem } from 'lucide-react';
 
 interface LoreModalProps {
   onClose: () => void;
@@ -38,7 +38,8 @@ export const LoreModal: React.FC<LoreModalProps> = ({ onClose }) => {
                 突破传统平移束缚，引入 2.5D 走道纵深与真实多关节火柴人骨骼物理：
               </p>
               <ul className="mt-2 space-y-1.5 list-disc list-inside text-stone-400">
-                <li><strong className="text-stone-200">2.5D 自由漫步：</strong>支持 W/S/A/D（或左下角 360° 触控虚拟摇杆）上下走道穿行，利用纵深走位闪避箭矢与敌方冲锋。</li>
+                <li><strong className="text-stone-200">三式操控任选：</strong>「挥毫」（全屏手势）、「双区」（触屏推荐：左手浮动摇杆移动，右手点按/手势/技能键）与「经典」（固定摇杆+按键）三种模式，顶栏一键切换且自动记忆。</li>
+                <li><strong className="text-stone-200">2.5D 自由漫步：</strong>支持 WASD / 虚拟摇杆上下走道穿行，利用纵深走位闪避箭矢与敌方冲锋。</li>
                 <li><strong className="text-stone-200">轻功腾跃与凌空斩 (Space)：</strong>起跳后在空中施展落墨凌空斩，如鹰击长空般俯冲大地，引爆范围地震波！</li>
                 <li><strong className="text-stone-200">多关节骨骼与飘逸绸带：</strong>头颈、脊椎、双节手足与多节点物理披风随风飘拂，受击顿挫回弹感十足。</li>
               </ul>
@@ -116,6 +117,32 @@ export const LoreModal: React.FC<LoreModalProps> = ({ onClose }) => {
                 <li>
                   <strong className="text-purple-200">首领二阶段：</strong>
                   首领血量跌破五成将进入「暗墨狂姿」——攻速移速大增、气势全开，务必留绝技应对！
+                </li>
+              </ul>
+            </div>
+
+            {/* New: 墨灵祝福 / 文房四宝 / 墨龙卷 / 墨滞时刻 */}
+            <div className="p-4 bg-stone-950/60 border border-amber-800/40 rounded-2xl">
+              <h3 className="text-sm font-serif font-bold text-amber-200 mb-2 flex items-center gap-1.5">
+                <Gem className="w-4 h-4 text-amber-400" />
+                趣味机制：墨灵祝福 · 文房四宝 · 墨龙卷 · 墨滞时刻
+              </h3>
+              <ul className="mt-2 space-y-1.5 list-disc list-inside text-stone-400">
+                <li>
+                  <strong className="text-amber-200">墨灵祝福（三选一）：</strong>
+                  普通关卡每约 55 秒、无尽试炼每两波，战场凝滞片刻，墨灵呈上三道祝福供君抉择——剑气纵横、疾风诗步、墨甲如山、点墨成金、连墨永驻、文光护阁、笔势如虹、星辉汲取，可叠加愈战愈强！
+                </li>
+                <li>
+                  <strong className="text-amber-200">文房四宝：</strong>
+                  击杀敌军有几率掉落「笔 / 墨 / 纸 / 砚」宝物，剑仙拾取后集齐四宝即引「文光焕彩」：绝意瞬间充满、全军治愈三成五、墨韵大增！
+                </li>
+                <li>
+                  <strong className="text-amber-200">墨龙卷：</strong>
+                  连墨达「翰墨通神」（45 连）时自动召唤墨龙横扫战场，沿途敌军尽数重创击飞——高连击的最佳犒赏！
+                </li>
+                <li>
+                  <strong className="text-amber-200">墨滞时刻：</strong>
+                  剑仙气血首次跌破三成，天地凝墨入子弹时间，万物迟缓而剑仙独醒，给尔翻盘喘息（每场一次）。
                 </li>
               </ul>
             </div>

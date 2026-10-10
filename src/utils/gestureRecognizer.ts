@@ -77,7 +77,7 @@ export class GestureRecognizer {
     }
 
     // 1. Single Tap or Very Short Click
-    if (pathLength < 18 && duration < 350) {
+    if (pathLength < 24 && duration < 350) {
       return {
         type: 'TAP',
         name: '点',
@@ -89,11 +89,11 @@ export class GestureRecognizer {
       };
     }
 
-    // 2. Check for Circle Gesture (圆 - 墨韵周天 / 竹影盾)
-    if (pathLength > 150 && len >= 8) {
+    // 2. Check for Circle Gesture (圆 - 墨韵周天 / 竹影盾) —— 判定放宽，战斗中更易施出
+    if (pathLength > 120 && len >= 8) {
       // Circle check: start and end are close, but path is substantial
       const startEndDist = Math.hypot(end.x - start.x, end.y - start.y);
-      if (startEndDist < pathLength * 0.35) {
+      if (startEndDist < pathLength * 0.45) {
         // Calculate bounding box
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         pts.forEach(p => {
@@ -105,7 +105,7 @@ export class GestureRecognizer {
         const boxW = maxX - minX;
         const boxH = maxY - minY;
         const aspect = boxW / Math.max(1, boxH);
-        if (aspect >= 0.45 && aspect <= 2.2 && boxW > 40 && boxH > 40) {
+        if (aspect >= 0.35 && aspect <= 2.8 && boxW > 32 && boxH > 32) {
           return {
             type: 'CIRCLE',
             name: '圆',
@@ -119,13 +119,13 @@ export class GestureRecognizer {
       }
     }
 
-    // 3. Check for Zigzag (撇捺折 - 星河笔阵)
-    if (len >= 12 && pathLength > 180) {
+    // 3. Check for Zigzag (撇捺折 - 星河笔阵) —— 判定放宽
+    if (len >= 10 && pathLength > 150) {
       let directionChanges = 0;
       for (let i = 2; i < len - 1; i++) {
         const v1x = pts[i].x - pts[i - 1].x;
         const v2x = pts[i + 1].x - pts[i].x;
-        if (v1x * v2x < -15) {
+        if (v1x * v2x < -4) {
           directionChanges++;
         }
       }
@@ -142,10 +142,13 @@ export class GestureRecognizer {
       }
     }
 
-    // 4. Directional Swipes (Fast stroke < 650ms, length > 45px)
-    if (pathLength > 45 && duration < 650) {
+    // 4. Directional Swipes —— 快速轻扫 flick 支持高速短轨迹，慢划则要求更长路径
+    const flickFast = duration < 220;
+    const minSwipeLen = flickFast ? 30 : 45;
+    if (pathLength > minSwipeLen && duration < 650) {
       const absDx = Math.abs(totalDx);
       const absDy = Math.abs(totalDy);
+      const dirThresh = flickFast ? 30 : 40;
 
       // Horizontal swipe (横 - 断水斩)
       if (absDx > absDy * 1.35) {
@@ -162,7 +165,7 @@ export class GestureRecognizer {
       }
 
       // Vertical Down swipe (竖 - 笔落惊风 / 凌空斩)
-      if (totalDy > absDx * 1.35 && totalDy > 40) {
+      if (totalDy > absDx * 1.35 && totalDy > dirThresh) {
         return {
           type: 'SWIPE_DOWN',
           name: '竖',
@@ -176,7 +179,7 @@ export class GestureRecognizer {
       }
 
       // Vertical Up swipe (提 - 轻功腾跃)
-      if (totalDy < -absDx * 1.35 && totalDy < -40) {
+      if (totalDy < -absDx * 1.35 && totalDy < -dirThresh) {
         return {
           type: 'SWIPE_UP',
           name: '提',

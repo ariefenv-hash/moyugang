@@ -7,6 +7,8 @@ import {
   LevelConfig,
   InkLotusTrap,
   SealStamp,
+  InkDragon,
+  InkTreasure,
 } from '../types/game';
 
 export class CanvasRenderer {
@@ -64,7 +66,10 @@ export class CanvasRenderer {
     wells: { x: number; y: number; inkRemaining: number }[],
     gameTime: number,
     shakeX: number = 0,
-    shakeY: number = 0
+    shakeY: number = 0,
+    inkDragons: InkDragon[] = [],
+    treasures: InkTreasure[] = [],
+    inkSlowProgress: number = 0
   ) {
     const ctx = this.ctx;
     // 每帧重置基准变换到逻辑坐标系（物理分辨率由 dpr 缩放）
@@ -82,6 +87,11 @@ export class CanvasRenderer {
     // 3. Ground Lotus Traps / Runes
     lotusTraps.forEach((trap) => {
       this.drawInkLotus(trap, cameraX, laneMinY, laneMaxY, gameTime);
+    });
+
+    // 3.5 文房四宝掉落物（地面发光物）
+    treasures.forEach((t) => {
+      this.drawInkTreasure(t, cameraX, gameTime);
     });
 
     // 4. Ink Wells
@@ -130,6 +140,11 @@ export class CanvasRenderer {
       }
     });
 
+    // 7.5 墨龙卷（高连击奖励，飞在最上层）
+    inkDragons.forEach((dragon) => {
+      this.drawInkDragon(dragon, cameraX, laneMinY, laneMaxY, gameTime);
+    });
+
     // 8. Projectiles in 2.5D space
     projectiles.forEach((proj) => {
       this.drawProjectile(proj, cameraX, laneMinY, laneMaxY);
@@ -150,6 +165,244 @@ export class CanvasRenderer {
       this.drawDamageNumber(d, cameraX);
     });
 
+    ctx.restore();
+
+    // 12. 墨滞时刻全屏滤镜（屏幕空间，不受镜头/震动影响）
+    if (inkSlowProgress > 0) {
+      this.drawInkSlowVignette(inkSlowProgress, gameTime);
+    }
+  }
+
+  /** 墨龙卷：蛇形大笔触游走的墨龙 */
+  private drawInkDragon(
+    dragon: InkDragon,
+    cameraX: number,
+    laneMinY: number,
+    laneMaxY: number,
+    gameTime: number
+  ) {
+    const screenX = dragon.x - cameraX;
+    if (screenX < -260 || screenX > this.width + 260) return;
+
+    const ctx = this.ctx;
+    const scale = this.getDepthScale(dragon.y, laneMinY, laneMaxY);
+    const t = gameTime * 9;
+    const dir = dragon.vx >= 0 ? 1 : -1;
+
+    ctx.save();
+    ctx.translate(screenX, dragon.y - 46 * scale);
+
+    // 龙身：多段蛇形波浪笔触（越靠尾部越细）
+    const segs = 9;
+    for (let i = 0; i < segs; i++) {
+      const tt = t - i * 0.55;
+      const sx = -dir * i * 26 * scale;
+      const sy = Math.sin(tt) * 14 * scale;
+      const segSize = (20 - i * 1.7) * scale;
+      if (segSize <= 1) continue;
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.fillStyle = `rgba(9, 9, 11, ${0.92 - i * 0.07})`;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, segSize * 1.5, segSize * 0.85, Math.sin(tt) * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // 金墨描边灵光
+      ctx.strokeStyle = `rgba(250, 204, 21, ${0.5 - i * 0.05})`;
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 龙首：张口吐墨 + 龙角 + 龙须
+    const headSway = Math.sin(t) * 6 * scale;
+    ctx.save();
+    ctx.translate(dir * 10 * scale, headSway);
+    ctx.scale(dir, 1);
+
+    // 头颅
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.ellipse(6 * scale, 0, 15 * scale, 10 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 吻部
+    ctx.beginPath();
+    ctx.moveTo(12 * scale, -4 * scale);
+    ctx.lineTo(30 * scale, -2 * scale);
+    ctx.lineTo(12 * scale, 6 * scale);
+    ctx.closePath();
+    ctx.fill();
+    // 双角
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(0, -8 * scale);
+    ctx.quadraticCurveTo(-6 * scale, -20 * scale, 4 * scale, -24 * scale);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-6 * scale, -7 * scale);
+    ctx.quadraticCurveTo(-14 * scale, -17 * scale, -6 * scale, -21 * scale);
+    ctx.stroke();
+    // 龙目
+    ctx.fillStyle = '#facc15';
+    ctx.shadowColor = '#facc15';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(10 * scale, -3 * scale, 2.6 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // 龙须
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(-8 * scale, 2 * scale);
+    ctx.quadraticCurveTo(-24 * scale, 8 * scale + Math.sin(t * 1.3) * 5, -36 * scale, 2 * scale);
+    ctx.stroke();
+
+    ctx.restore();
+    ctx.restore();
+
+    // 地面掠过阴影
+    ctx.save();
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.ellipse(screenX, dragon.y + 6, 60 * scale, 14 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** 文房四宝掉落物：毛笔 / 墨锭 / 纸卷 / 砚台，附光柱提示 */
+  private drawInkTreasure(t: InkTreasure, cameraX: number, gameTime: number) {
+    const screenX = t.x - cameraX;
+    if (screenX < -60 || screenX > this.width + 60) return;
+
+    const ctx = this.ctx;
+    const bob = Math.sin(gameTime * 3.2 + t.x * 0.01) * 4;
+    const y = t.y - t.altitudeZ - 14 + bob;
+
+    // 光柱（即将消失时闪烁）
+    const fading = t.life < 3 ? 0.4 + Math.sin(gameTime * 10) * 0.3 : 0.85;
+    const pillarGrad = ctx.createLinearGradient(screenX, y, screenX, y - 90);
+    pillarGrad.addColorStop(0, `rgba(250, 204, 21, ${0.35 * fading})`);
+    pillarGrad.addColorStop(1, 'rgba(250, 204, 21, 0)');
+    ctx.save();
+    ctx.fillStyle = pillarGrad;
+    ctx.fillRect(screenX - 13, y - 90, 26, 90);
+
+    // 底部光环
+    ctx.strokeStyle = `rgba(250, 204, 21, ${0.55 * fading})`;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.ellipse(screenX, t.y + 2, 20, 7, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.translate(screenX, y);
+    ctx.rotate(Math.sin(gameTime * 2) * 0.12);
+
+    if (t.kind === 'BRUSH') {
+      // 毛笔：笔杆 + 笔锋
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 3.4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-7, 9);
+      ctx.lineTo(6, -8);
+      ctx.stroke();
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.moveTo(6, -8);
+      ctx.quadraticCurveTo(13, -14, 11, -4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(-7, 9, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (t.kind === 'INK') {
+      // 墨锭
+      ctx.fillStyle = '#18181b';
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.roundRect(-8, -6, 16, 12, 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#facc15';
+      ctx.font = 'bold 9px "Noto Serif SC", serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('墨', 0, 0.5);
+    } else if (t.kind === 'PAPER') {
+      // 纸卷
+      ctx.save();
+      ctx.rotate(-0.5);
+      ctx.fillStyle = '#f5f0e6';
+      ctx.strokeStyle = '#a8a29e';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(-10, -5, 20, 10, 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#78716c';
+      ctx.beginPath();
+      ctx.moveTo(-6, -1.5);
+      ctx.lineTo(6, -1.5);
+      ctx.moveTo(-6, 2);
+      ctx.lineTo(2, 2);
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      // 砚台
+      ctx.fillStyle = '#292524';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 11, 6.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.ellipse(0, -1, 6.5, 3.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  /** 墨滞时刻：屏幕边缘墨紫晕影 + 飘落时之墨点 */
+  private drawInkSlowVignette(progress: number, gameTime: number) {
+    const ctx = this.ctx;
+    const strength = Math.min(1, progress * 1.6);
+
+    // 四周墨紫晕影
+    const vg = ctx.createRadialGradient(
+      this.width / 2,
+      this.height / 2,
+      Math.min(this.width, this.height) * 0.32,
+      this.width / 2,
+      this.height / 2,
+      Math.max(this.width, this.height) * 0.72
+    );
+    vg.addColorStop(0, 'rgba(76, 29, 149, 0)');
+    vg.addColorStop(0.7, `rgba(76, 29, 149, ${0.22 * strength})`);
+    vg.addColorStop(1, `rgba(9, 9, 11, ${0.55 * strength})`);
+    ctx.save();
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    // 缓落时之墨点
+    const dots = 14;
+    for (let i = 0; i < dots; i++) {
+      const seed = i * 97.13;
+      const dx = (Math.sin(seed) * 0.5 + 0.5) * this.width;
+      const dy = ((gameTime * 26 + seed * 13) % (this.height + 60)) - 30;
+      ctx.globalAlpha = 0.3 * strength;
+      ctx.fillStyle = '#c4b5fd';
+      ctx.beginPath();
+      ctx.arc(dx, dy, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -184,13 +437,31 @@ export class CanvasRenderer {
     ctx.fillStyle = skyGrad;
     ctx.fillRect(0, 0, this.width, laneMinY + 40);
 
-    // Background Image Art
-    if (this.bgImage) {
+    // Background Image Art（等比 cover 绘制：窄屏/宽屏均不拉伸变形，底部对齐地平线，横向平铺视差）
+    if (this.bgImage && this.bgImage.naturalWidth > 0) {
       ctx.save();
       ctx.globalAlpha = 0.25;
-      const bgOffset = -(cameraX * 0.15) % this.width;
-      ctx.drawImage(this.bgImage, bgOffset, 0, this.width, laneMinY + 60);
-      ctx.drawImage(this.bgImage, bgOffset + this.width, 0, this.width, laneMinY + 60);
+      const img = this.bgImage;
+      const skyH = laneMinY + 60;
+      const imgAR = img.naturalWidth / img.naturalHeight;
+      const targetAR = this.width / Math.max(1, skyH);
+      // cover 逻辑：铺满目标区域所需的最小等比缩放
+      let drawW: number, drawH: number;
+      if (imgAR > targetAR) {
+        drawH = skyH;
+        drawW = skyH * imgAR;
+      } else {
+        drawW = this.width;
+        drawH = this.width / imgAR;
+      }
+      // 底部对齐地平线（山景根部贴地），超高部分向天空裁切
+      const drawY = skyH - drawH;
+      // 横向平铺 + 视差滚动
+      const tileW = drawW;
+      const bgOffset = -((cameraX * 0.15) % tileW);
+      for (let x = bgOffset; x < this.width; x += tileW) {
+        ctx.drawImage(img, x, drawY, tileW, drawH);
+      }
       ctx.restore();
     }
 

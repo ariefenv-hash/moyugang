@@ -276,3 +276,52 @@ export interface AchievementDef {
   description: string;
   icon: 'TROPHY' | 'STAR' | 'FLAME' | 'SWORD' | 'SHIELD' | 'INFINITE' | 'CROWN' | 'FEATHER';
 }
+
+/* ============================================================
+   趣味机制扩展：墨灵祝福 / 文房四宝 / 墨龙卷 / 墨滞时刻
+   ============================================================ */
+
+/** 墨灵祝福定义（Roguelike 三选一） */
+export interface BlessingDef {
+  id: string;
+  name: string;
+  verse: string;
+  description: string;
+  icon: 'SWORD' | 'SHIELD' | 'WIND' | 'FLAME' | 'COINS' | 'HEART' | 'ZAP' | 'STAR';
+  rarity: 'COMMON' | 'RARE' | 'EPIC';
+}
+
+/** 战斗内祝福加成乘数集合（可叠加） */
+export interface BlessingMults {
+  attack: number;
+  speed: number;
+  hp: number;
+  inkGain: number;
+  energyGain: number;
+  comboTimer: number;
+  cooldown: number;
+}
+
+/** 文房四宝掉落物 */
+export interface InkTreasure {
+  id: string;
+  kind: 'BRUSH' | 'INK' | 'PAPER' | 'STONE';
+  x: number;
+  y: number;
+  altitudeZ: number;
+  vz: number;
+  life: number;
+  maxLife: number;
+}
+
+/** 墨龙卷（高连击奖励：横扫战场的墨龙） */
+export interface InkDragon {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  life: number;
+  maxLife: number;
+  /** 已命中单位 id，防重复伤害 */
+  hitIds: Set<string>;
+}

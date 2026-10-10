@@ -1,0 +1,2002 @@
+     1→import React, { useEffect, useRef, useState, useCallback } from 'react';
+     2→import {
+     3→  LevelConfig,
+     4→  UnitInstance,
+     5→  HeroInstance,
+     6→  Projectile,
+     7→  Particle,
+     8→  DamageNumber,
+     9→  ArmyCommand,
+    10→  UnitType,
+    11→  PlayerProgress,
+    12→  InkLotusTrap,
+    13→  SealStamp,
+    14→  CalligraphyCombo,
+    15→  WeatherEvent,
+    16→  BattleResultStats,
+    17→} from '../types/game';
+    18→import {
+    19→  UNIT_CONFIGS,
+    20→  HERO_INITIAL_STATS,
+    21→  WEATHER_EFFECTS,
+    22→} from '../data/gameData';
+    23→import { CanvasRenderer } from '../utils/canvasRenderer';
+    24→import { sound } from '../utils/audio';
+    25→import { GestureRecognizer, GestureResult } from '../utils/gestureRecognizer';
+    26→import { Joystick } from './Joystick';
+    27→import { PauseOverlay } from './PauseOverlay';
+    28→import bgInkMountains from '../assets/images/bg_ink_mountains_1791652099827.jpg';
+    29→import {
+    30→  Shield,
+    31→  Zap,
+    32→  Sparkles,
+    33→  Scroll,
+    34→  Sword,
+    35→  Crosshair,
+    36→  Music,
+    37→  Feather,
+    38→  Volume2,
+    39→  VolumeX,
+    40→  Flag,
+    41→  ChevronLeft,
+    42→  ArrowUp,
+    43→  Flame,
+    44→  CloudRain,
+    45→  Wind,
+    46→  Moon,
+    47→  PenTool,
+    48→  Gamepad2,
+    49→  HelpCircle,
+    50→  Pause,
+    51→  Infinity as InfinityIcon,
+    52→  X,
+    53→} from 'lucide-react';
+    54→
+    55→interface BattleViewProps {
+    56→  level: LevelConfig;
+    57→  progress: PlayerProgress;
+    58→  onVictory: (stats: BattleResultStats) => void;
+    59→  onDefeat: (stats: BattleResultStats) => void;
+    60→  onExit: () => void;
+    61→  onRestart: () => void;
+    62→  onTutorialDone: () => void;
+    63→}
+    64→
+    65→export const BattleView: React.FC<BattleViewProps> = ({
+    66→  level,
+    67→  progress,
+    68→  onVictory,
+    69→  onDefeat,
+    70→  onExit,
+    71→  onRestart,
+    72→  onTutorialDone,
+    73→}) => {
+    74→  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    75→  const rendererRef = useRef<CanvasRenderer | null>(null);
+    76→
+    77→  // Sound Mute State
+    78→  const [isMuted, setIsMuted] = useState(sound.getMuted());
+    79→
+    80→  // Input Control Mode: 'GESTURE' (纯挥毫手势模式) vs 'CLASSIC' (经典摇杆按键模式)
+    81→  const [controlMode, setControlMode] = useState<'GESTURE' | 'CLASSIC'>('GESTURE');
+    82→  const [showGestureGuide, setShowGestureGuide] = useState(false);
+    83→
+    84→  // ===== 高频游戏状态：真相源在 ref，节流同步到 state（避免每帧 setState 性能灾难） =====
+    85→  const [ink, setInk] = useState(level.initialInk);
+    86→  const inkRef = useRef(level.initialInk);
+    87→  const [armyCommand, setArmyCommandState] = useState<ArmyCommand>('ATTACK');
+    88→  const armyCommandRef = useRef<ArmyCommand>('ATTACK');
+    89→  const playerBaseHpRef = useRef(level.playerBaseHp + (progress.citadelUpgrades.baseHpLevel * 300));
+    90→  const [playerBaseHp, setPlayerBaseHp] = useState(playerBaseHpRef.current);
+    91→  const playerBaseMaxHpRef = useRef(level.playerBaseHp + (progress.citadelUpgrades.baseHpLevel * 300));
+    92→  const enemyBaseHpRef = useRef(level.enemyBaseHp);
+    93→  const [enemyBaseHp, setEnemyBaseHp] = useState(level.enemyBaseHp);
+    94→  const enemyBaseMaxHpRef = useRef(level.enemyBaseHp);
+    95→  const armyCountRef = useRef(0);
+    96→  const [armyCount, setArmyCount] = useState(0);
+    97→  const [maxArmy] = useState(25);
+    98→
+    99→  // ===== 暂停系统 =====
+   100→  const isPausedRef = useRef(false);
+   101→  const [paused, setPaused] = useState(false);
+   102→
+   103→  // ===== 战斗统计（击杀 / 最高连击） =====
+   104→  const statsRef = useRef({ kills: 0, maxCombo: 0 });
+   105→
+   106→  // ===== 无尽试炼波次 =====
+   107→  const endlessWaveRef = useRef(1);
+   108→  const [endlessWave, setEndlessWave] = useState(1);
+   109→
+   110→  // ===== 首战教学 =====
+   111→  const [showTutorial, setShowTutorial] = useState(
+   112→    !progress.tutorialDone && !level.endless && level.id === 1
+   113→  );
+   114→
+   115→  // Hero Cooldowns（真相源 skillCdsRef）
+   116→  const skillCdsRef = useRef<{ [key: string]: number }>({
+   117→    dash_slash: 0,
+   118→    bamboo_shield: 0,
+   119→    starlight_barrage: 0,
+   120→    lotus_trap: 0,
+   121→    ultimate_landscape: 0,
+   122→  });
+   123→  const [skillCds, setSkillCds] = useState<{ [key: string]: number }>(skillCdsRef.current);
+   124→  const heroEnergyRef = useRef(60);
+   125→  const [heroEnergy, setHeroEnergy] = useState(60);
+   126→  const [heroHp, setHeroHp] = useState(HERO_INITIAL_STATS.maxHp);
+   127→  const [heroMaxHp] = useState(
+   128→    HERO_INITIAL_STATS.maxHp + (progress.heroUpgrades.hpLevel * 60)
+   129→  );
+   130→  const [heroReviving, setHeroReviving] = useState(false);
+   131→  const [heroReviveTimer, setHeroReviveTimer] = useState(0);
+   132→
+   133→  // Calligraphy Combo state（真相源 comboRef，命中时即时同步，衰减走节流）
+   134→  const comboRef = useRef<CalligraphyCombo>({
+   135→    count: 0,
+   136→    tier: 'NONE',
+   137→    timer: 0,
+   138→    maxTimer: 2.8,
+   139→    ratingText: '',
+   140→    inkBonusMultiplier: 1.0,
+   141→  });
+   142→  const [combo, setCombo] = useState<CalligraphyCombo>(comboRef.current);
+   143→
+   144→  // Dynamic Weather Event（真相源 weatherRef）
+   145→  const weatherRef = useRef<WeatherEvent | null>(null);
+   146→  const [activeWeather, setActiveWeather] = useState<WeatherEvent | null>(null);
+   147→
+   148→  // Stage announcement / verse banner
+   149→  const [stageBanner, setStageBanner] = useState<string | null>(level.poeticVerse);
+   150→  const [bossAnnounced, setBossAnnounced] = useState(false);
+   151→
+   152→  // Recent Recognized Calligraphy Gesture Badge (e.g. 「横 · 断水东流」)
+   153→  const [gestureBadge, setGestureBadge] = useState<{ text: string; sub: string } | null>(null);
+   154→
+   155→  // 2.5D Arena Geometry
+   156→  const WORLD_WIDTH = 2600;
+   157→  const LANE_MIN_Y = useRef(390);
+   158→  const LANE_MAX_Y = useRef(520);
+   159→  const viewWRef = useRef(1280);
+   160→  const viewHRef = useRef(720);
+   161→  const cameraX = useRef(0);
+   162→
+   163→  // level 快照：game loop 依赖数组清空后，内部改读 levelRef
+   164→  const levelRef = useRef(level);
+   165→  levelRef.current = level;
+   166→
+   167→  // ===== 可靠清理的 setTimeout 登记（卸载后不再执行，防泄漏） =====
+   168→  const timeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+   169→  const safeTimeout = useCallback((fn: () => void, ms: number) => {
+   170→    const id = setTimeout(() => {
+   171→      timeoutsRef.current.delete(id);
+   172→      fn();
+   173→    }, ms);
+   174→    timeoutsRef.current.add(id);
+   175→    return id;
+   176→  }, []);
+   177→
+   178→  // ===== 升级效果实装：冷却缩短（每级 -8%，上限5级）与风雅领域共鸣增幅 =====
+   179→  const cdMult = Math.max(0.6, 1 - progress.heroUpgrades.cooldownLevel * 0.08);
+   180→  const resonanceMult = 1 + progress.heroUpgrades.resonanceLevel * 0.12;
+   181→
+   182→  // 技能冷却设置（统一应用冷却缩短加成）
+   183→  const applySkillCd = useCallback(
+   184→    (key: string, baseCd: number) => {
+   185→      skillCdsRef.current[key] = baseCd * cdMult;
+   186→    },
+   187→    [cdMult]
+   188→  );
+   189→
+   190→  // 屏幕震动 / Hit Stop 触发器（供非 React 闭包调用）
+   191→  const triggerShakeRef = useRef<(i: number, d?: number) => void>(() => {});
+   192→  const triggerHitStopRef = useRef<(d?: number) => void>(() => {});
+   193→
+   194→  // Screen Shake & Hitstop Refs
+   195→  const screenShakeRef = useRef({ x: 0, y: 0, intensity: 0, duration: 0 });
+   196→  const hitStopTimerRef = useRef(0);
+   197→
+   198→  // Joystick Input Vector (for Classic mode)
+   199→  const joystickVector = useRef({ x: 0, y: 0 });
+   200→
+   201→  // Unified Gesture Recognizer Ref
+   202→  const gestureRecognizer = useRef(new GestureRecognizer());
+   203→
+   204→  // Keyboard keys pressed tracking (Preserved for PC experience)
+   205→  const keysPressed = useRef<{ [key: string]: boolean }>({});
+   206→
+   207→  // Target navigation destination for Tap-to-move
+   208→  const heroTargetMove = useRef<{ x: number; y: number } | null>(null);
+   209→
+   210→  // Core Simulation Entities Refs
+   211→  const heroRef = useRef<HeroInstance>({
+   212→    x: 240,
+   213→    y: 450,
+   214→    altitudeZ: 0,
+   215→    vz: 0,
+   216→    hp: HERO_INITIAL_STATS.maxHp + (progress.heroUpgrades.hpLevel * 60),
+   217→    maxHp: HERO_INITIAL_STATS.maxHp + (progress.heroUpgrades.hpLevel * 60),
+   218→    energy: 60,
+   219→    maxEnergy: 100,
+   220→    attack: HERO_INITIAL_STATS.attack + (progress.heroUpgrades.attackLevel * 10),
+   221→    speed: HERO_INITIAL_STATS.speed,
+   222→    facing: 1,
+   223→    state: 'IDLE',
+   224→    stateTime: 0,
+   225→    isInvulnerable: false,
+   226→    shieldHp: 0,
+   227→    shieldTimer: 0,
+   228→    reviveTimer: 0,
+   229→    comboIndex: 0,
+   230→    comboResetTimer: 0,
+   231→    isGrounded: true,
+   232→    capeSegments: [],
+   233→    flinchTimer: 0,
+   234→  });
+   235→
+   236→  const unitsRef = useRef<UnitInstance[]>([]);
+   237→  const lotusTrapsRef = useRef<InkLotusTrap[]>([]);
+   238→  const projectilesRef = useRef<Projectile[]>([]);
+   239→  const particlesRef = useRef<Particle[]>([]);
+   240→  const damageNumbersRef = useRef<DamageNumber[]>([]);
+   241→  const sealStampsRef = useRef<SealStamp[]>([]);
+   242→  const wellsRef = useRef([
+   243→    { x: 550, y: 440, inkRemaining: 9999 },
+   244→    { x: 1100, y: 460, inkRemaining: 9999 },
+   245→    { x: 1750, y: 430, inkRemaining: 9999 },
+   246→  ]);
+   247→
+   248→  const gameTimeRef = useRef(0);
+   249→  const lastTimeRef = useRef(performance.now());
+   250→  const spawnedWavesRef = useRef<Set<number>>(new Set());
+   251→  const nextEnemyWaveTimeRef = useRef(level.enemyWaveInterval);
+   252→  const nextWeatherEventTimeRef = useRef(25);
+   253→  const isGameOverRef = useRef(false);
+   254→  const bossSpawnedRef = useRef(false);
+   255→
+   256→  // Trigger Screen Shake
+   257→  const triggerShake = (intensity: number, duration: number = 0.2) => {
+   258→    screenShakeRef.current = {
+   259→      x: (Math.random() - 0.5) * intensity,
+   260→      y: (Math.random() - 0.5) * intensity,
+   261→      intensity,
+   262→      duration,
+   263→    };
+   264→  };
+   265→  triggerShakeRef.current = triggerShake;
+   266→
+   267→  // Trigger Hit Stop
+   268→  const triggerHitStop = (duration: number = 0.04) => {
+   269→    hitStopTimerRef.current = duration;
+   270→  };
+   271→  triggerHitStopRef.current = triggerHitStop;
+   272→
+   273→  // ===== 暂停切换 =====
+   274→  const togglePause = useCallback(() => {
+   275→    if (isGameOverRef.current) return;
+   276→    isPausedRef.current = !isPausedRef.current;
+   277→    setPaused(isPausedRef.current);
+   278→  }, []);
+   279→
+   280→  const setArmyCommand = useCallback((cmd: ArmyCommand) => {
+   281→    armyCommandRef.current = cmd;
+   282→    setArmyCommandState(cmd);
+   283→  }, []);
+   284→
+   285→  // Add Calligraphy Stamp on Critical Hits
+   286→  const triggerSealStamp = (x: number, y: number, text: string = '绝') => {
+   287→    sound.playStampSeal();
+   288→    sealStampsRef.current.push({
+   289→      id: `seal_${Math.random()}`,
+   290→      x,
+   291→      y,
+   292→      text,
+   293→      color: '#ef4444',
+   294→      alpha: 1,
+   295→      scale: 1.25,
+   296→      life: 0.8,
+   297→      maxLife: 0.8,
+   298→    });
+   299→  };
+   300→
+   301→  // Dismiss stage banner
+   302→  useEffect(() => {
+   303→    const timer = safeTimeout(() => {
+   304→      setStageBanner(null);
+   305→    }, 4500);
+   306→    return () => clearTimeout(timer);
+   307→  }, [safeTimeout]);
+   308→
+   309→  // Keyboard Event Listeners (PC experience fully preserved)
+   310→  useEffect(() => {
+   311→    const handleKeyDown = (e: KeyboardEvent) => {
+   312→      const code = e.key.toLowerCase();
+   313→      keysPressed.current[code] = true;
+   314→
+   315→      // ESC / P 暂停切换
+   316→      if (code === 'escape' || code === 'p') {
+   317→        e.preventDefault();
+   318→        togglePause();
+   319→        return;
+   320→      }
+   321→
+   322→      // 暂停时忽略操作键
+   323→      if (isPausedRef.current) return;
+   324→
+   325→      // Reset auto-pathing if keyboard input is received
+   326→      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(code)) {
+   327→        heroTargetMove.current = null;
+   328→      }
+   329→
+   330→      if (code === 'j') {
+   331→        triggerHeroAttack();
+   332→      } else if (code === ' ' || e.code === 'Space') {
+   333→        e.preventDefault();
+   334→        triggerHeroJump();
+   335→      } else if (code === 'q' || code === 'k') {
+   336→        triggerSkillDashSlash();
+   337→      } else if (code === 'l') {
+   338→        triggerSkillBambooShield();
+   339→      } else if (code === 'e' || code === 'u') {
+   340→        triggerSkillStarlightBarrage();
+   341→      } else if (code === 't' || code === 'o') {
+   342→        triggerSkillInkLotus();
+   343→      } else if (code === 'r' || code === 'i') {
+   344→        triggerSkillUltimate();
+   345→      } else if (code === '1') {
+   346→        setArmyCommand('DEFEND');
+   347→      } else if (code === '2') {
+   348→        setArmyCommand('HOLD');
+   349→      } else if (code === '3') {
+   350→        setArmyCommand('FOLLOW_HERO');
+   351→      } else if (code === '4') {
+   352→        setArmyCommand('ATTACK');
+   353→      }
+   354→    };
+   355→
+   356→    const handleKeyUp = (e: KeyboardEvent) => {
+   357→      keysPressed.current[e.key.toLowerCase()] = false;
+   358→    };
+   359→
+   360→    window.addEventListener('keydown', handleKeyDown);
+   361→    window.addEventListener('keyup', handleKeyUp);
+   362→
+   363→    return () => {
+   364→      window.removeEventListener('keydown', handleKeyDown);
+   365→      window.removeEventListener('keyup', handleKeyUp);
+   366→    };
+   367→  }, []);
+   368→
+   369→  // Setup Canvas and Renderer（含 devicePixelRatio 高分屏适配）
+   370→  useEffect(() => {
+   371→    const canvas = canvasRef.current;
+   372→    if (!canvas) return;
+   373→
+   374→    const ctx = canvas.getContext('2d');
+   375→    if (!ctx) return;
+   376→
+   377→    const handleResize = () => {
+   378→      const parent = canvas.parentElement;
+   379→      if (!parent) return;
+   380→      const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+   381→      const logicalW = parent.clientWidth;
+   382→      const logicalH = parent.clientHeight;
+   383→      canvas.width = Math.round(logicalW * dpr);
+   384→      canvas.height = Math.round(logicalH * dpr);
+   385→      viewWRef.current = logicalW;
+   386→      viewHRef.current = logicalH;
+   387→      LANE_MIN_Y.current = logicalH - 180;
+   388→      LANE_MAX_Y.current = logicalH - 60;
+   389→      heroRef.current.y = (LANE_MIN_Y.current + LANE_MAX_Y.current) * 0.5;
+   390→
+   391→      if (rendererRef.current) {
+   392→        rendererRef.current.resize(logicalW, logicalH, dpr);
+   393→      }
+   394→    };
+   395→
+   396→    handleResize();
+   397→    window.addEventListener('resize', handleResize);
+   398→
+   399→    rendererRef.current = new CanvasRenderer(
+   400→      ctx,
+   401→      viewWRef.current,
+   402→      viewHRef.current,
+   403→      bgInkMountains
+   404→    );
+   405→
+   406→    // Initial units
+   407→    spawnUnit('SCRIBE', false, 140, LANE_MIN_Y.current + 30);
+   408→    spawnUnit('SWORD', false, 180, LANE_MIN_Y.current + 60);
+   409→
+   410→    // 卸载清理：超时登记 + BGM 停止
+   411→    return () => {
+   412→      window.removeEventListener('resize', handleResize);
+   413→      timeoutsRef.current.forEach((id) => clearTimeout(id));
+   414→      timeoutsRef.current.clear();
+   415→      sound.stopBGM();
+   416→    };
+   417→  }, []);
+   418→
+   419→  // Helper to spawn unit with 2.5D lane depth
+   420→  const spawnUnit = useCallback(
+   421→    (
+   422→      type: UnitType,
+   423→      isEnemy: boolean,
+   424→      spawnX: number,
+   425→      customY?: number,
+   426→      isBoss: boolean = false,
+   427→      statScale: number = 1
+   428→    ) => {
+   429→      const config = UNIT_CONFIGS[type];
+   430→      const upgradeBonus = !isEnemy && progress.unitUpgrades[type] ? progress.unitUpgrades[type]! * 0.15 : 0;
+   431→      const laneY =
+   432→        customY ||
+   433→        LANE_MIN_Y.current + Math.random() * (LANE_MAX_Y.current - LANE_MIN_Y.current);
+   434→
+   435→      const bossBase = isBoss && levelRef.current.boss ? levelRef.current.boss : null;
+   436→      const newUnit: UnitInstance = {
+   437→        id: `unit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+   438→        type,
+   439→        isEnemy,
+   440→        x: spawnX,
+   441→        y: laneY,
+   442→        altitudeZ: 0,
+   443→        vz: 0,
+   444→        hp: bossBase
+   445→          ? Math.round(bossBase.hp * statScale)
+   446→          : Math.round(config.maxHp * (1 + upgradeBonus) * statScale),
+   447→        maxHp: bossBase
+   448→          ? Math.round(bossBase.hp * statScale)
+   449→          : Math.round(config.maxHp * (1 + upgradeBonus) * statScale),
+   450→        attack: bossBase
+   451→          ? Math.round(bossBase.attack * statScale)
+   452→          : Math.round(config.attack * (1 + upgradeBonus) * statScale),
+   453→        attackRange: config.attackRange,
+   454→        attackCooldown: 0,
+   455→        speed: bossBase ? bossBase.speed : config.speed,
+   456→        facing: isEnemy ? -1 : 1,
+   457→        state: 'WALK',
+   458→        stateTime: 0,
+   459→        carriedInk: 0,
+   460→        limbPhase: Math.random() * Math.PI,
+   461→        capeWave: [0, 0, 0],
+   462→        flinchTimer: 0,
+   463→        isBoss,
+   464→        enraged: false,
+   465→      };
+   466→
+   467→      unitsRef.current.push(newUnit);
+   468→      if (!isEnemy) {
+   469→        sound.playPluck(523.25, 0.4);
+   470→      }
+   471→    },
+   472→    [progress]
+   473→  );
+   474→
+   475→  // Trigger Recruit Unit
+   476→  const recruitUnit = (type: UnitType) => {
+   477→    const config = UNIT_CONFIGS[type];
+   478→    if (inkRef.current < config.cost) return;
+   479→    const currentAllies = unitsRef.current.filter((u) => !u.isEnemy).length;
+   480→    if (currentAllies >= maxArmy) return;
+   481→
+   482→    inkRef.current -= config.cost;
+   483→    setInk(inkRef.current);
+   484→    spawnUnit(type, false, 130 + Math.random() * 40);
+   485→  };
+   486→
+   487→  // Add Hit to Calligraphy Combo Counter
+   488→  const registerHit = (isCritical = false) => {
+   489→    const prev = comboRef.current;
+   490→    const nextCount = prev.count + 1;
+   491→    let nextTier = prev.tier;
+   492→    let ratingText = prev.ratingText;
+   493→    let mult = 1.0;
+   494→
+   495→    if (nextCount >= 45) {
+   496→      nextTier = 'TRANSCEND';
+   497→      ratingText = '翰墨通神';
+   498→      mult = 2.0;
+   499→    } else if (nextCount >= 30) {
+   500→      nextTier = 'DIVINE';
+   501→      ratingText = '出神入化';
+   502→      mult = 1.6;
+   503→    } else if (nextCount >= 20) {
+   504→      nextTier = 'DRAGON';
+   505→      ratingText = '笔走龙蛇';
+   506→      mult = 1.4;
+   507→    } else if (nextCount >= 12) {
+   508→      nextTier = 'FLOW';
+   509→      ratingText = '行云流水';
+   510→      mult = 1.25;
+   511→    } else if (nextCount >= 7) {
+   512→      nextTier = 'PROGRESS';
+   513→      ratingText = '渐入佳境';
+   514→      mult = 1.15;
+   515→    } else if (nextCount >= 3) {
+   516→      nextTier = 'ENTRY';
+   517→      ratingText = '初窥门径';
+   518→      mult = 1.05;
+   519→    }
+   520→
+   521→    const next: CalligraphyCombo = {
+   522→      count: nextCount,
+   523→      tier: nextTier,
+   524→      timer: 2.8,
+   525→      maxTimer: 2.8,
+   526→      ratingText,
+   527→      inkBonusMultiplier: mult,
+   528→    };
+   529→    comboRef.current = next;
+   530→
+   531→    // 统计最高连击
+   532→    if (nextCount > statsRef.current.maxCombo) {
+   533→      statsRef.current.maxCombo = nextCount;
+   534→    }
+   535→
+   536→    // 命中即时反馈（低频事件，直接同步 UI）
+   537→    setCombo(next);
+   538→
+   539→    if (nextTier !== prev.tier) {
+   540→      sound.playComboEscalation(
+   541→        ['ENTRY', 'PROGRESS', 'FLOW', 'DRAGON', 'DIVINE', 'TRANSCEND'].indexOf(nextTier)
+   542→      );
+   543→    }
+   544→  };
+   545→
+   546→  // Combat Damage Calculation with Hitstop, Screen Shake & Ink Splatters
+   547→  const applyDamage = (
+   548→    target: UnitInstance | 'HERO' | 'PLAYER_BASE' | 'ENEMY_BASE',
+   549→    dmg: number,
+   550→    isCritical = false,
+   551→    sourceX?: number,
+   552→    sourceY?: number
+   553→  ) => {
+   554→    sound.playInkHit(isCritical || dmg > 80, isCritical);
+   555→
+   556→    if (isCritical || dmg > 80) {
+   557→      triggerShake(6, 0.22);
+   558→      triggerHitStop(0.05);
+   559→    } else {
+   560→      triggerShake(2.5, 0.12);
+   561→    }
+   562→
+   563→    if (target === 'HERO') {
+   564→      const hero = heroRef.current;
+   565→      if (hero.isInvulnerable || hero.state === 'DEAD') return;
+   566→
+   567→      let finalDmg = dmg;
+   568→      if (hero.shieldHp > 0) {
+   569→        if (hero.shieldHp >= finalDmg) {
+   570→          hero.shieldHp -= finalDmg;
+   571→          finalDmg = 0;
+   572→        } else {
+   573→          finalDmg -= hero.shieldHp;
+   574→          hero.shieldHp = 0;
+   575→        }
+   576→      }
+   577→
+   578→      hero.hp = Math.max(0, hero.hp - finalDmg);
+   579→      hero.flinchTimer = 0.2;
+   580→
+   581→      damageNumbersRef.current.push({
+   582→        id: `dmg_${Math.random()}`,
+   583→        x: hero.x,
+   584→        y: hero.y - hero.altitudeZ - 75,
+   585→        text: `-${Math.round(dmg)}`,
+   586→        color: '#f87171',
+   587→        alpha: 1,
+   588→        scale: isCritical ? 1.4 : 1,
+   589→        life: 0.8,
+   590→      });
+   591→
+   592→      if (hero.hp <= 0) {
+   593→        hero.state = 'DEAD';
+   594→        hero.reviveTimer = HERO_INITIAL_STATS.reviveDuration;
+   595→        setHeroReviving(true);
+   596→        setHeroReviveTimer(HERO_INITIAL_STATS.reviveDuration);
+   597→        sound.playDefeat();
+   598→      }
+   599→      return;
+   600→    }
+   601→
+   602→    if (target === 'PLAYER_BASE') {
+   603→      if (isGameOverRef.current) return;
+   604→      playerBaseHpRef.current = Math.max(0, playerBaseHpRef.current - dmg);
+   605→      setPlayerBaseHp(playerBaseHpRef.current);
+   606→      damageNumbersRef.current.push({
+   607→        id: `dmg_${Math.random()}`,
+   608→        x: 100,
+   609→        y: LANE_MIN_Y.current - 120,
+   610→        text: `-${Math.round(dmg)}`,
+   611→        color: '#ef4444',
+   612→        alpha: 1,
+   613→        scale: 1.2,
+   614→        life: 0.9,
+   615→      });
+   616→      if (playerBaseHpRef.current <= 0) {
+   617→        isGameOverRef.current = true;
+   618→        sound.playDefeat();
+   619→        // 无尽模式：坚守失败结算；普通模式：败北
+   620→        onDefeat({
+   621→          stars: 0,
+   622→          jadeEarned: 0,
+   623→          kills: statsRef.current.kills,
+   624→          maxCombo: statsRef.current.maxCombo,
+   625→          durationSec: Math.round(gameTimeRef.current),
+   626→          baseHpPct: 0,
+   627→          endlessWave: levelRef.current.endless ? endlessWaveRef.current - 1 : undefined,
+   628→        });
+   629→      }
+   630→      return;
+   631→    }
+   632→
+   633→    if (target === 'ENEMY_BASE') {
+   634→      // 无尽试炼：敌阵不可摧毁，坚守到底
+   635→      if (levelRef.current.endless || isGameOverRef.current) return;
+   636→      enemyBaseHpRef.current = Math.max(0, enemyBaseHpRef.current - dmg);
+   637→      setEnemyBaseHp(enemyBaseHpRef.current);
+   638→      damageNumbersRef.current.push({
+   639→        id: `dmg_${Math.random()}`,
+   640→        x: WORLD_WIDTH - 100,
+   641→        y: LANE_MIN_Y.current - 130,
+   642→        text: `-${Math.round(dmg)}`,
+   643→        color: '#38bdf8',
+   644→        alpha: 1,
+   645→        scale: 1.2,
+   646→        life: 0.9,
+   647→      });
+   648→      if (enemyBaseHpRef.current <= 0) {
+   649→        isGameOverRef.current = true;
+   650→        sound.playVictory();
+   651→        // 真实星级评价：守护墨阁越完好，星级越高
+   652→        const baseHpPct =
+   653→          playerBaseHpRef.current / Math.max(1, playerBaseMaxHpRef.current);
+   654→        const stars = baseHpPct >= 0.7 ? 3 : baseHpPct >= 0.35 ? 2 : 1;
+   655→        onVictory({
+   656→          stars,
+   657→          jadeEarned: Math.round(levelRef.current.rewardJade * (0.6 + 0.2 * stars)),
+   658→          kills: statsRef.current.kills,
+   659→          maxCombo: statsRef.current.maxCombo,
+   660→          durationSec: Math.round(gameTimeRef.current),
+   661→          baseHpPct,
+   662→        });
+   663→      }
+   664→      return;
+   665→    }
+   666→
+   667→    const unit = target;
+   668→    unit.hp -= dmg;
+   669→    unit.flinchTimer = 0.2;
+   670→    registerHit(isCritical);
+   671→
+   672→    if (isCritical) {
+   673→      triggerSealStamp(unit.x, unit.y - 45, '斩');
+   674→    }
+   675→
+   676→    damageNumbersRef.current.push({
+   677→      id: `dmg_${Math.random()}`,
+   678→      x: unit.x,
+   679→      y: unit.y - unit.altitudeZ - 55,
+   680→      text: isCritical ? `暴击 -${Math.round(dmg)}` : `-${Math.round(dmg)}`,
+   681→      color: unit.isEnemy ? (isCritical ? '#facc15' : '#ffffff') : '#ef4444',
+   682→      alpha: 1,
+   683→      scale: isCritical ? 1.4 : 1.0,
+   684→      life: 0.75,
+   685→    });
+   686→
+   687→    for (let i = 0; i < (isCritical ? 8 : 4); i++) {
+   688→      particlesRef.current.push({
+   689→        id: `p_${Math.random()}`,
+   690→        x: unit.x,
+   691→        y: unit.y,
+   692→        altitudeZ: unit.altitudeZ + 25,
+   693→        vx: (Math.random() - 0.5) * 160,
+   694→        vy: (Math.random() - 0.5) * 60,
+   695→        vz: Math.random() * 90 + 40,
+   696→        color: unit.isEnemy ? '#09090b' : '#38bdf8',
+   697→        size: Math.random() * 3.5 + 2,
+   698→        alpha: 1,
+   699→        life: 0.6,
+   700→        maxLife: 0.6,
+   701→        type: 'INK',
+   702→      });
+   703→    }
+   704→
+   705→    if (unit.hp <= 0 && unit.isEnemy) {
+   706→      statsRef.current.kills += 1;
+   707→      heroEnergyRef.current = Math.min(100, heroEnergyRef.current + 10);
+   708→      inkRef.current += Math.round(14 * comboRef.current.inkBonusMultiplier);
+   709→    }
+   710→  };
+   711→
+   712→  // Hero Attack Action (3-hit Combo or Aerial Plunge)
+   713→  const triggerHeroAttack = (targetWorldX?: number, targetWorldY?: number) => {
+   714→    const hero = heroRef.current;
+   715→    if (hero.state === 'DEAD') return;
+   716→    if (hero.state.startsWith('SKILL_') && hero.stateTime < 0.25) return;
+   717→
+   718→    if (targetWorldX !== undefined) {
+   719→      hero.facing = targetWorldX >= hero.x ? 1 : -1;
+   720→    }
+   721→
+   722→    if (!hero.isGrounded) {
+   723→      hero.state = 'ATTACK_AERIAL';
+   724→      hero.vz = -480;
+   725→      sound.playSlash(true);
+   726→      return;
+   727→    }
+   728→
+   729→    sound.playSlash(hero.comboIndex === 2);
+   730→
+   731→    hero.comboIndex = (hero.comboIndex + 1) % 3;
+   732→    hero.state = (`ATTACK_${hero.comboIndex + 1}` as any);
+   733→    hero.stateTime = 0;
+   734→    hero.comboResetTimer = 1.0;
+   735→
+   736→    const reachX = 90;
+   737→    const reachDepth = 48;
+   738→    const isHeavy = hero.comboIndex === 2;
+   739→    // 暴击系统：残月生辉大幅提升暴击率（1.6倍伤害 + 朱印刻章）
+   740→    const critChance = weatherRef.current?.type === 'LUNAR_GLOW' ? 0.35 : 0.18;
+   741→    const isCrit = Math.random() < critChance;
+   742→    const attackDmg = hero.attack * (isHeavy ? 1.85 : 1.0) * (isCrit ? 1.6 : 1);
+   743→
+   744→    unitsRef.current.forEach((u) => {
+   745→      if (u.isEnemy && u.hp > 0) {
+   746→        const dx = (u.x - hero.x) * hero.facing;
+   747→        const dy = Math.abs(u.y - hero.y);
+   748→        if (dx >= -10 && dx <= reachX && dy <= reachDepth) {
+   749→          applyDamage(u, attackDmg, isCrit || isHeavy, hero.x, hero.y);
+   750→          if (isHeavy) {
+   751→            u.x += hero.facing * 40;
+   752→          }
+   753→        }
+   754→      }
+   755→    });
+   756→
+   757→    const baseDist = (WORLD_WIDTH - 100 - hero.x) * hero.facing;
+   758→    if (baseDist >= 0 && baseDist <= reachX && Math.abs(hero.y - (LANE_MIN_Y.current + LANE_MAX_Y.current) * 0.5) <= 60) {
+   759→      applyDamage('ENEMY_BASE', attackDmg);
+   760→    }
+   761→  };
+   762→
+   763→  // Hero Jump (Space or Up swipe)
+   764→  const triggerHeroJump = () => {
+   765→    const hero = heroRef.current;
+   766→    if (hero.state === 'DEAD' || !hero.isGrounded) return;
+   767→
+   768→    hero.isGrounded = false;
+   769→    hero.vz = 340;
+   770→    hero.state = 'JUMP';
+   771→    hero.stateTime = 0;
+   772→    sound.playPluck(659.25, 0.4);
+   773→  };
+   774→
+   775→  // Skill 1: Dash Slash (Q or Horizontal Swipe 「横」)
+   776→  const triggerSkillDashSlash = (forceDirection?: 'LEFT' | 'RIGHT') => {
+   777→    const hero = heroRef.current;
+   778→    if (hero.state === 'DEAD' || skillCdsRef.current.dash_slash > 0 || isPausedRef.current) return;
+   779→
+   780→    if (forceDirection) {
+   781→      hero.facing = forceDirection === 'RIGHT' ? 1 : -1;
+   782→    }
+   783→
+   784→    sound.playDash();
+   785→    sound.playSlash(true);
+   786→    triggerSealStamp(hero.x + 80 * hero.facing, hero.y - 30, '断');
+   787→
+   788→    hero.state = 'SKILL_DASH';
+   789→    hero.stateTime = 0;
+   790→    hero.isInvulnerable = true;
+   791→
+   792→    const dashDist = 220 * hero.facing;
+   793→    const startX = hero.x;
+   794→    const endX = Math.max(100, Math.min(WORLD_WIDTH - 120, hero.x + dashDist));
+   795→    hero.x = endX;
+   796→
+   797→    applySkillCd('dash_slash', 4.0);
+   798→
+   799→    const minX = Math.min(startX, endX) - 25;
+   800→    const maxX = Math.max(startX, endX) + 25;
+   801→
+   802→    unitsRef.current.forEach((u) => {
+   803→      if (u.isEnemy && u.hp > 0 && u.x >= minX && u.x <= maxX && Math.abs(u.y - hero.y) <= 50) {
+   804→        applyDamage(u, hero.attack * 2.8, true, hero.x, hero.y);
+   805→      }
+   806→    });
+   807→
+   808→    // 剑势呼应：前方友军移速提升（以短暂加速体现）
+   809→    unitsRef.current.forEach((u) => {
+   810→      if (!u.isEnemy && (hero.facing === 1 ? u.x > hero.x : u.x < hero.x) && Math.abs(u.y - hero.y) <= 60) {
+   811→        u.x += hero.facing * 24;
+   812→      }
+   813→    });
+   814→
+   815→    safeTimeout(() => {
+   816→      hero.isInvulnerable = false;
+   817→    }, 350);
+   818→  };
+   819→
+   820→  // Skill 2: Bamboo Shield (W / L or Circle Gesture 「圆」)
+   821→  const triggerSkillBambooShield = () => {
+   822→    const hero = heroRef.current;
+   823→    if (hero.state === 'DEAD' || skillCdsRef.current.bamboo_shield > 0 || isPausedRef.current) return;
+   824→
+   825→    sound.playShield();
+   826→    triggerSealStamp(hero.x, hero.y - 40, '阵');
+   827→    hero.state = 'SKILL_SHIELD';
+   828→    hero.stateTime = 0;
+   829→    // 风雅领域共鸣增幅：护盾厚度随共鸣等级提升
+   830→    hero.shieldHp = Math.round(280 * resonanceMult);
+   831→    hero.shieldTimer = 7.0;
+   832→
+   833→    applySkillCd('bamboo_shield', 8.0);
+   834→
+   835→    unitsRef.current.forEach((u) => {
+   836→      if (!u.isEnemy && Math.hypot(u.x - hero.x, u.y - hero.y) <= 240) {
+   837→        u.shieldHp = Math.round(200 * resonanceMult);
+   838→        damageNumbersRef.current.push({
+   839→          id: `shield_${Math.random()}`,
+   840→          x: u.x,
+   841→          y: u.y - 65,
+   842→          text: '竹影护体',
+   843→          color: '#38bdf8',
+   844→          alpha: 1,
+   845→          scale: 1.1,
+   846→          life: 0.9,
+   847→        });
+   848→      }
+   849→    });
+   850→  };
+   851→
+   852→  // Skill 3: Starlight Barrage (E / U or Zigzag Gesture 「折」)
+   853→  const triggerSkillStarlightBarrage = () => {
+   854→    const hero = heroRef.current;
+   855→    if (hero.state === 'DEAD' || skillCdsRef.current.starlight_barrage > 0 || isPausedRef.current) return;
+   856→
+   857→    sound.playArrow();
+   858→    hero.state = 'SKILL_BARRAGE';
+   859→    hero.stateTime = 0;
+   860→
+   861→    applySkillCd('starlight_barrage', 7.0);
+   862→
+   863→    for (let i = 0; i < 8; i++) {
+   864→      safeTimeout(() => {
+   865→        if (!heroRef.current) return;
+   866→        const spreadAngle = (i - 3.5) * 0.08;
+   867→        const speed = 480;
+   868→        projectilesRef.current.push({
+   869→          id: `quill_${Date.now()}_${i}`,
+   870→          x: heroRef.current.x + 20 * heroRef.current.facing,
+   871→          y: heroRef.current.y,
+   872→          altitudeZ: heroRef.current.altitudeZ + 25 + (i - 3.5) * 4,
+   873→          targetX: heroRef.current.x + 600 * heroRef.current.facing,
+   874→          targetY: heroRef.current.y,
+   875→          vx: Math.cos(spreadAngle) * speed * heroRef.current.facing,
+   876→          vy: Math.sin(spreadAngle) * (speed * 0.2),
+   877→          vz: 0,
+   878→          damage: hero.attack * 0.95,
+   879→          isEnemy: false,
+   880→          type: 'QUILL',
+   881→          pierce: true,
+   882→          duration: 0,
+   883→          maxDuration: 1.6,
+   884→        });
+   885→      }, i * 35);
+   886→    }
+   887→  };
+   888→
+   889→  // Skill 4: Ink Lotus Trap (T)
+   890→  const triggerSkillInkLotus = (customX?: number, customY?: number) => {
+   891→    const hero = heroRef.current;
+   892→    if (hero.state === 'DEAD' || skillCdsRef.current.lotus_trap > 0 || isPausedRef.current) return;
+   893→
+   894→    sound.playLotusBloom();
+   895→    const spawnX = customX !== undefined ? customX : hero.x;
+   896→    const spawnY = customY !== undefined ? customY : hero.y;
+   897→
+   898→    triggerSealStamp(spawnX, spawnY - 20, '妙');
+   899→    applySkillCd('lotus_trap', 10.0);
+   900→
+   901→    lotusTrapsRef.current.push({
+   902→      id: `lotus_${Date.now()}`,
+   903→      x: spawnX,
+   904→      y: spawnY,
+   905→      radius: 80,
+   906→      isEnemy: false,
+   907→      duration: 12.0,
+   908→      maxDuration: 12.0,
+   909→      isBloomed: false,
+   910→    });
+   911→  };
+   912→
+   913→  // Ultimate Skill: River Immortal (R / Space)
+   914→  const triggerSkillUltimate = () => {
+   915→    const hero = heroRef.current;
+   916→    if (
+   917→      hero.state === 'DEAD' ||
+   918→      heroEnergyRef.current < 100 ||
+   919→      skillCdsRef.current.ultimate_landscape > 0 ||
+   920→      isPausedRef.current
+   921→    )
+   922→      return;
+   923→
+   924→    sound.playUltimate();
+   925→    triggerShake(14, 0.6);
+   926→    triggerSealStamp(hero.x, hero.y - 50, '绝');
+   927→
+   928→    hero.state = 'SKILL_ULTIMATE';
+   929→    hero.stateTime = 0;
+   930→    heroEnergyRef.current = 0;
+   931→    setHeroEnergy(0);
+   932→    applySkillCd('ultimate_landscape', 28.0);
+   933→
+   934→    setStageBanner('临江仙 · 水墨山河天地开');
+   935→    safeTimeout(() => setStageBanner(null), 3000);
+   936→
+   937→    unitsRef.current.forEach((u) => {
+   938→      if (u.isEnemy && u.hp > 0) {
+   939→        applyDamage(u, hero.attack * 4.8, true, hero.x, hero.y);
+   940→        u.x += 50;
+   941→      }
+   942→    });
+   943→
+   944→    applyDamage('ENEMY_BASE', hero.attack * 3.5);
+   945→
+   946→    unitsRef.current.forEach((u) => {
+   947→      if (!u.isEnemy) {
+   948→        u.hp = Math.min(u.maxHp, u.hp + Math.round(140 * resonanceMult));
+   949→        damageNumbersRef.current.push({
+   950→          id: `buff_${Math.random()}`,
+   951→          x: u.x,
+   952→          y: u.y - 70,
+   953→          text: '诗韵凌霄！',
+   954→          color: '#facc15',
+   955→          alpha: 1,
+   956→          scale: 1.25,
+   957→          life: 1.2,
+   958→        });
+   959→      }
+   960→    });
+   961→
+   962→    for (let i = 0; i < 45; i++) {
+   963→      particlesRef.current.push({
+   964→        id: `p_ult_${i}`,
+   965→        x: hero.x + (Math.random() - 0.5) * 500,
+   966→        y: hero.y + (Math.random() - 0.5) * 80,
+   967→        altitudeZ: Math.random() * 150,
+   968→        vx: (Math.random() - 0.5) * 220,
+   969→        vy: (Math.random() - 0.5) * 80,
+   970→        vz: Math.random() * 180,
+   971→        color: i % 2 === 0 ? '#38bdf8' : '#facc15',
+   972→        size: Math.random() * 5 + 3,
+   973→        alpha: 1,
+   974→        life: 1.6,
+   975→        maxLife: 1.6,
+   976→        type: 'STAR',
+   977→      });
+   978→    }
+   979→  };
+   980→
+   981→  // --- UNIFIED CALLIGRAPHY GESTURE HANDLERS (Screen-as-Canvas) ---
+   982→  const handlePointerDown = (e: React.PointerEvent) => {
+   983→    // Canvas client bounds
+   984→    const rect = canvasRef.current?.getBoundingClientRect();
+   985→    if (!rect) return;
+   986→    const clientX = e.clientX - rect.left;
+   987→    const clientY = e.clientY - rect.top;
+   988→
+   989→    gestureRecognizer.current.startStroke(clientX, clientY);
+   990→  };
+   991→
+   992→  const handlePointerMove = (e: React.PointerEvent) => {
+   993→    if (!gestureRecognizer.current.getIsTracing()) return;
+   994→    const rect = canvasRef.current?.getBoundingClientRect();
+   995→    if (!rect) return;
+   996→    const clientX = e.clientX - rect.left;
+   997→    const clientY = e.clientY - rect.top;
+   998→
+   999→    gestureRecognizer.current.addPoint(clientX, clientY);
+  1000→
+  1001→    // If dragging slowly in gesture mode, continuously lead the hero!
+  1002→    const pts = gestureRecognizer.current.getPoints();
+  1003→    if (pts.length > 5) {
+  1004→      const worldX = clientX + cameraX.current;
+  1005→      const clampedY = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, clientY));
+  1006→      heroTargetMove.current = { x: worldX, y: clampedY };
+  1007→    }
+  1008→  };
+  1009→
+  1010→  const handlePointerUp = (e: React.PointerEvent) => {
+  1011→    const gesture = gestureRecognizer.current.endStroke();
+  1012→    if (!gesture) return;
+  1013→
+  1014→    const worldStartX = gesture.startX + cameraX.current;
+  1015→    const worldEndX = gesture.endX + cameraX.current;
+  1016→    const worldY = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, gesture.endY));
+  1017→
+  1018→    // Execute actions based on recognized gesture
+  1019→    switch (gesture.type) {
+  1020→      case 'TAP': {
+  1021→        // Check if tap hit near enemy -> Attack!
+  1022→        let hitEnemy = false;
+  1023→        unitsRef.current.forEach((u) => {
+  1024→          if (u.isEnemy && Math.hypot(u.x - worldEndX, u.y - worldY) <= 75) {
+  1025→            hitEnemy = true;
+  1026→          }
+  1027→        });
+  1028→
+  1029→        if (hitEnemy) {
+  1030→          triggerHeroAttack(worldEndX, worldY);
+  1031→          setGestureBadge({ text: '「点」', sub: '落墨点煞' });
+  1032→        } else {
+  1033→          // Tap ground -> Glide move to position
+  1034→          heroTargetMove.current = { x: worldEndX, y: worldY };
+  1035→          setGestureBadge({ text: '「行」', sub: '步移景从' });
+  1036→          sound.playPluck(523.25, 0.3);
+  1037→        }
+  1038→        break;
+  1039→      }
+  1040→
+  1041→      case 'SWIPE_HORIZONTAL': {
+  1042→        // 「横」- 断水斩 (Dash Slash)
+  1043→        triggerSkillDashSlash(gesture.direction as any);
+  1044→        setGestureBadge({ text: '「横」', sub: gesture.poeticCalligraphy });
+  1045→        break;
+  1046→      }
+  1047→
+  1048→      case 'SWIPE_DOWN': {
+  1049→        // 「竖」- 笔落惊风 (Aerial Plunge / Slam)
+  1050→        if (heroRef.current.isGrounded) {
+  1051→          heroRef.current.altitudeZ = 20;
+  1052→          heroRef.current.vz = 260;
+  1053→          heroRef.current.isGrounded = false;
+  1054→          safeTimeout(() => {
+  1055→            triggerHeroAttack();
+  1056→          }, 120);
+  1057→        } else {
+  1058→          triggerHeroAttack();
+  1059→        }
+  1060→        setGestureBadge({ text: '「竖」', sub: '笔落惊风' });
+  1061→        break;
+  1062→      }
+  1063→
+  1064→      case 'SWIPE_UP': {
+  1065→        // 「提」- 轻功揽月 (Jump Leap)
+  1066→        triggerHeroJump();
+  1067→        setGestureBadge({ text: '「提」', sub: '轻功揽月' });
+  1068→        break;
+  1069→      }
+  1070→
+  1071→      case 'CIRCLE': {
+  1072→        // 「圆」- 竹影墨盾 or 墨荷灵阵
+  1073→        if (skillCds.bamboo_shield <= 0) {
+  1074→          triggerSkillBambooShield();
+  1075→          setGestureBadge({ text: '「圆」', sub: '竹影护体' });
+  1076→        } else {
+  1077→          triggerSkillInkLotus(worldStartX, worldY);
+  1078→          setGestureBadge({ text: '「周」', sub: '墨荷灵阵' });
+  1079→        }
+  1080→        break;
+  1081→      }
+  1082→
+  1083→      case 'ZIGZAG': {
+  1084→        // 「折 / 撇捺」- 星河引毫 (Starlight Quill Barrage)
+  1085→        triggerSkillStarlightBarrage();
+  1086→        setGestureBadge({ text: '「折」', sub: '星河引毫' });
+  1087→        break;
+  1088→      }
+  1089→
+  1090→      case 'DRAG': {
+  1091→        heroTargetMove.current = { x: worldEndX, y: worldY };
+  1092→        break;
+  1093→      }
+  1094→    }
+  1095→
+  1096→    // Clear gesture badge after 1.8s
+  1097→    safeTimeout(() => {
+  1098→      setGestureBadge((prev) => (prev?.text === gesture.name ? null : prev));
+  1099→    }, 1800);
+  1100→  };
+  1101→
+  1102→  // Main 60FPS Game Loop（依赖清空：内部全部读 ref，不再因状态变化销毁重建）
+  1103→  // updateSimulation 通过 ref 晚绑定（定义于本 effect 之后）
+  1104→  const updateSimulationRef = useRef<(dt: number) => void>(() => {});
+  1105→  useEffect(() => {
+  1106→    let animId: number;
+  1107→
+  1108→    const gameLoop = (timestamp: number) => {
+  1109→      const dt = Math.min(0.1, (timestamp - lastTimeRef.current) / 1000);
+  1110→      lastTimeRef.current = timestamp;
+  1111→
+  1112→      if (hitStopTimerRef.current > 0) {
+  1113→        hitStopTimerRef.current -= dt;
+  1114→      } else if (!isPausedRef.current) {
+  1115→        gameTimeRef.current += dt;
+  1116→        if (!isGameOverRef.current) {
+  1117→          updateSimulationRef.current(dt);
+  1118→        }
+  1119→      }
+  1120→
+  1121→      if (screenShakeRef.current.duration > 0) {
+  1122→        screenShakeRef.current.duration -= dt;
+  1123→        screenShakeRef.current.x = (Math.random() - 0.5) * screenShakeRef.current.intensity;
+  1124→        screenShakeRef.current.y = (Math.random() - 0.5) * screenShakeRef.current.intensity;
+  1125→        screenShakeRef.current.intensity *= 0.88;
+  1126→      } else {
+  1127→        screenShakeRef.current = { x: 0, y: 0, intensity: 0, duration: 0 };
+  1128→      }
+  1129→
+  1130→      // Render 2.5D Scene（暂停时仍渲染，但画面静止）
+  1131→      if (rendererRef.current && canvasRef.current) {
+  1132→        rendererRef.current.render(
+  1133→          cameraX.current,
+  1134→          levelRef.current,
+  1135→          WORLD_WIDTH,
+  1136→          LANE_MIN_Y.current,
+  1137→          LANE_MAX_Y.current,
+  1138→          playerBaseHpRef.current,
+  1139→          playerBaseMaxHpRef.current,
+  1140→          levelRef.current.endless ? enemyBaseMaxHpRef.current : enemyBaseHpRef.current,
+  1141→          enemyBaseMaxHpRef.current,
+  1142→          heroRef.current,
+  1143→          unitsRef.current,
+  1144→          lotusTrapsRef.current,
+  1145→          projectilesRef.current,
+  1146→          particlesRef.current,
+  1147→          damageNumbersRef.current,
+  1148→          sealStampsRef.current,
+  1149→          wellsRef.current,
+  1150→          gameTimeRef.current,
+  1151→          screenShakeRef.current.x,
+  1152→          screenShakeRef.current.y
+  1153→        );
+  1154→
+  1155→        // Render Real-time Calligraphy Brush Trail on screen
+  1156→        const ctx = canvasRef.current.getContext('2d');
+  1157→        if (ctx) {
+  1158→          gestureRecognizer.current.drawBrushTrail(ctx);
+  1159→        }
+  1160→      }
+  1161→
+  1162→      animId = requestAnimationFrame(gameLoop);
+  1163→    };
+  1164→
+  1165→    animId = requestAnimationFrame(gameLoop);
+  1166→    return () => cancelAnimationFrame(animId);
+  1167→  }, []);
+  1168→
+  1169→  // Update Simulation Physics in 2.5D（纯 ref 运算，不直接触发 setState）
+  1170→  const updateSimulation = (dt: number) => {
+  1171→    const hero = heroRef.current;
+  1172→    const units = unitsRef.current;
+  1173→    const now = gameTimeRef.current;
+  1174→    const lv = levelRef.current;
+  1175→
+  1176→    const weatherMult = weatherRef.current?.type === 'INK_RAIN' ? 3.0 : 1.0;
+  1177→    inkRef.current +=
+  1178→      (2.5 + progress.citadelUpgrades.gatherSpeedLevel * 0.6) *
+  1179→      comboRef.current.inkBonusMultiplier *
+  1180→      weatherMult *
+  1181→      dt;
+  1182→    heroEnergyRef.current = Math.min(100, heroEnergyRef.current + 2.8 * dt);
+  1183→
+  1184→    // Skill Cooldowns（ref 直减，HUD 节流同步）
+  1185→    const cds = skillCdsRef.current;
+  1186→    for (const k in cds) {
+  1187→      if (cds[k] > 0) {
+  1188→        cds[k] = Math.max(0, cds[k] - dt);
+  1189→      }
+  1190→    }
+  1191→
+  1192→    // Combo Decay（ref 衰减，命中时即时同步）
+  1193→    const cb = comboRef.current;
+  1194→    if (cb.timer > 0) {
+  1195→      cb.timer -= dt;
+  1196→      if (cb.timer <= 0) {
+  1197→        cb.count = 0;
+  1198→        cb.tier = 'NONE';
+  1199→        cb.timer = 0;
+  1200→        cb.ratingText = '';
+  1201→        cb.inkBonusMultiplier = 1.0;
+  1202→      }
+  1203→    }
+  1204→
+  1205→    // Weather Events
+  1206→    if (now >= nextWeatherEventTimeRef.current) {
+  1207→      nextWeatherEventTimeRef.current = now + 40;
+  1208→      const weatherTypes: WeatherEvent['type'][] = lv.endless
+  1209→        ? ['INK_RAIN', 'POETIC_BREEZE', 'LUNAR_GLOW', 'CRIMSON_ECLIPSE']
+  1210→        : ['INK_RAIN', 'POETIC_BREEZE', 'LUNAR_GLOW'];
+  1211→      const pick = weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
+  1212→
+  1213→      weatherRef.current = {
+  1214→        type: pick,
+  1215→        name: WEATHER_EFFECTS[pick].name,
+  1216→        description: WEATHER_EFFECTS[pick].desc,
+  1217→        duration: 15,
+  1218→        timeRemaining: 15,
+  1219→      };
+  1220→      setActiveWeather(weatherRef.current);
+  1221→      sound.playPluck(880, 1.2);
+  1222→    }
+  1223→
+  1224→    if (weatherRef.current) {
+  1225→      if (weatherRef.current.timeRemaining > dt) {
+  1226→        weatherRef.current.timeRemaining -= dt;
+  1227→      } else {
+  1228→        weatherRef.current = null;
+  1229→        setActiveWeather(null);
+  1230→      }
+  1231→    }
+  1232→
+  1233→    // Hero 2.5D Movement & Auto-Pathing
+  1234→    if (hero.state === 'DEAD') {
+  1235→      hero.reviveTimer -= dt;
+  1236→      setHeroReviveTimer(Math.ceil(hero.reviveTimer));
+  1237→      if (hero.reviveTimer <= 0) {
+  1238→        hero.state = 'IDLE';
+  1239→        hero.hp = hero.maxHp;
+  1240→        hero.x = 220;
+  1241→        hero.y = (LANE_MIN_Y.current + LANE_MAX_Y.current) * 0.5;
+  1242→        setHeroReviving(false);
+  1243→      }
+  1244→    } else {
+  1245→      if (hero.flinchTimer > 0) hero.flinchTimer -= dt;
+  1246→      if (hero.shieldTimer > 0) {
+  1247→        hero.shieldTimer -= dt;
+  1248→        if (hero.shieldTimer <= 0) hero.shieldHp = 0;
+  1249→      }
+  1250→      if (hero.comboResetTimer > 0) {
+  1251→        hero.comboResetTimer -= dt;
+  1252→        if (hero.comboResetTimer <= 0) hero.comboIndex = 0;
+  1253→      }
+  1254→
+  1255→      // Jump Physics
+  1256→      if (!hero.isGrounded) {
+  1257→        hero.vz -= 850 * dt;
+  1258→        hero.altitudeZ += hero.vz * dt;
+  1259→
+  1260→        if (hero.altitudeZ <= 0) {
+  1261→          hero.altitudeZ = 0;
+  1262→          hero.vz = 0;
+  1263→          hero.isGrounded = true;
+  1264→
+  1265→          if (hero.state === 'ATTACK_AERIAL') {
+  1266→            sound.playPlunge();
+  1267→            triggerShake(8, 0.25);
+  1268→            triggerSealStamp(hero.x, hero.y - 10, '灭');
+  1269→
+  1270→            unitsRef.current.forEach((u) => {
+  1271→              if (u.isEnemy && Math.hypot(u.x - hero.x, u.y - hero.y) <= 120) {
+  1272→                applyDamage(u, hero.attack * 2.2, true, hero.x, hero.y);
+  1273→                u.altitudeZ = 35;
+  1274→                u.vz = 220;
+  1275→              }
+  1276→            });
+  1277→            hero.state = 'IDLE';
+  1278→          } else if (hero.state === 'JUMP') {
+  1279→            hero.state = 'IDLE';
+  1280→          }
+  1281→        }
+  1282→      }
+  1283→
+  1284→      // Check input sources (Keyboard + Joystick + Tap-to-move pathing)
+  1285→      let inputX = 0;
+  1286→      let inputY = 0;
+  1287→
+  1288→      if (keysPressed.current['a'] || keysPressed.current['arrowleft']) inputX -= 1;
+  1289→      if (keysPressed.current['d'] || keysPressed.current['arrowright']) inputX += 1;
+  1290→      if (keysPressed.current['w'] || keysPressed.current['arrowup']) inputY -= 1;
+  1291→      if (keysPressed.current['s'] || keysPressed.current['arrowdown']) inputY += 1;
+  1292→
+  1293→      if (Math.hypot(joystickVector.current.x, joystickVector.current.y) > 0.1) {
+  1294→        inputX += joystickVector.current.x;
+  1295→        inputY += joystickVector.current.y;
+  1296→      }
+  1297→
+  1298→      // Handle Tap/Drag Gesture Target Move
+  1299→      if (heroTargetMove.current && inputX === 0 && inputY === 0) {
+  1300→        const dx = heroTargetMove.current.x - hero.x;
+  1301→        const dy = heroTargetMove.current.y - hero.y;
+  1302→        const dist = Math.hypot(dx, dy);
+  1303→
+  1304→        if (dist > 15) {
+  1305→          inputX = dx / dist;
+  1306→          inputY = dy / dist;
+  1307→        } else {
+  1308→          heroTargetMove.current = null;
+  1309→        }
+  1310→      }
+  1311→
+  1312→      const inputMag = Math.hypot(inputX, inputY);
+  1313→      if (inputMag > 1) {
+  1314→        inputX /= inputMag;
+  1315→        inputY /= inputMag;
+  1316→      }
+  1317→
+  1318→      const speedBonus = weatherRef.current?.type === 'POETIC_BREEZE' ? 1.35 : 1.0;
+  1319→      const effectiveHeroSpeed = hero.speed * speedBonus;
+  1320→
+  1321→      if (!hero.state.startsWith('ATTACK_') && hero.state !== 'SKILL_DASH') {
+  1322→        if (inputMag > 0.15) {
+  1323→          hero.x = Math.max(120, Math.min(WORLD_WIDTH - 120, hero.x + inputX * effectiveHeroSpeed * dt));
+  1324→          hero.y = Math.max(
+  1325→            LANE_MIN_Y.current,
+  1326→            Math.min(LANE_MAX_Y.current, hero.y + inputY * (effectiveHeroSpeed * 0.7) * dt)
+  1327→          );
+  1328→
+  1329→          if (inputX !== 0) {
+  1330→            hero.facing = inputX > 0 ? 1 : -1;
+  1331→          }
+  1332→
+  1333→          if (hero.isGrounded) {
+  1334→            hero.state = 'WALK';
+  1335→          }
+  1336→          hero.stateTime += dt;
+  1337→        } else {
+  1338→          if (hero.isGrounded && hero.state === 'WALK') {
+  1339→            hero.state = 'IDLE';
+  1340→          }
+  1341→          hero.stateTime += dt;
+  1342→        }
+  1343→      } else {
+  1344→        hero.stateTime += dt;
+  1345→        if (hero.stateTime > 0.35 && !hero.state.startsWith('SKILL_') && hero.isGrounded) {
+  1346→          hero.state = 'IDLE';
+  1347→        }
+  1348→      }
+  1349→    }
+  1350→
+  1351→    // Camera follow hero（逻辑视宽，兼容高分屏）
+  1352→    const viewW = viewWRef.current;
+  1353→    const targetCamX = hero.x - viewW * 0.4;
+  1354→    const clampedCamX = Math.max(0, Math.min(WORLD_WIDTH - viewW, targetCamX));
+  1355→    cameraX.current += (clampedCamX - cameraX.current) * 0.12;
+  1356→
+  1357→    // Wave Progression（剧本波次：普通关卡）
+  1358→    if (!lv.endless) {
+  1359→      lv.enemySpawns.forEach((spawn, idx) => {
+  1360→        if (now >= spawn.time && !spawnedWavesRef.current.has(idx)) {
+  1361→          spawnedWavesRef.current.add(idx);
+  1362→          for (let i = 0; i < spawn.count; i++) {
+  1363→            safeTimeout(() => {
+  1364→              spawnUnit(spawn.unitType, true, WORLD_WIDTH - 140 - Math.random() * 60);
+  1365→            }, i * 380);
+  1366→          }
+  1367→        }
+  1368→      });
+  1369→
+  1370→      if (now >= nextEnemyWaveTimeRef.current) {
+  1371→        nextEnemyWaveTimeRef.current = now + lv.enemyWaveInterval;
+  1372→        spawnUnit('SWORD', true, WORLD_WIDTH - 140);
+  1373→        if (lv.id >= 2) spawnUnit('ARCHER', true, WORLD_WIDTH - 160);
+  1374→        if (lv.id >= 3) spawnUnit('GUARDIAN', true, WORLD_WIDTH - 150);
+  1375→      }
+  1376→
+  1377→      if (lv.boss && !bossSpawnedRef.current) {
+  1378→        const baseDamaged = enemyBaseHpRef.current < enemyBaseMaxHpRef.current * 0.85;
+  1379→        const timeThreshold = now >= (lv.id === 5 ? 25 : 45);
+  1380→
+  1381→        if (baseDamaged || timeThreshold) {
+  1382→          bossSpawnedRef.current = true;
+  1383→          setBossAnnounced(true);
+  1384→          safeTimeout(() => setBossAnnounced(false), 4500);
+  1385→
+  1386→          sound.playUltimate();
+  1387→          triggerSealStamp(WORLD_WIDTH - 200, (LANE_MIN_Y.current + LANE_MAX_Y.current) * 0.5, '尊');
+  1388→          spawnUnit(lv.id === 5 ? 'GUARDIAN' : 'SWORD', true, WORLD_WIDTH - 200, undefined, true);
+  1389→        }
+  1390→      }
+  1391→    } else {
+  1392→      // ===== 无尽试炼：波次无限递进，难度逐波攀升 =====
+  1393→      if (now >= nextEnemyWaveTimeRef.current) {
+  1394→        const waveNo = endlessWaveRef.current;
+  1395→        nextEnemyWaveTimeRef.current = now + Math.max(5.5, lv.enemyWaveInterval - waveNo * 0.15);
+  1396→        const diff = 1 + waveNo * 0.07;
+  1397→        const count = Math.min(7, 2 + Math.floor(waveNo / 3));
+  1398→
+  1399→        // 兵种池随波次扩展
+  1400→        const pool: UnitType[] = ['SWORD'];
+  1401→        if (waveNo >= 3) pool.push('ARCHER');
+  1402→        if (waveNo >= 5) pool.push('GUARDIAN');
+  1403→        if (waveNo >= 7) pool.push('HARPIST');
+  1404→
+  1405→        for (let i = 0; i < count; i++) {
+  1406→          const pick = pool[Math.floor(Math.random() * pool.length)];
+  1407→          safeTimeout(
+  1408→            () => spawnUnit(pick, true, WORLD_WIDTH - 140 - Math.random() * 60, undefined, false, diff),
+  1409→            i * 380
+  1410→          );
+  1411→        }
+  1412→
+  1413→        // 每 5 波玄墨霸主压阵
+  1414→        if (waveNo % 5 === 0 && lv.boss) {
+  1415→          safeTimeout(() => {
+  1416→            spawnUnit('GUARDIAN', true, WORLD_WIDTH - 200, undefined, true, diff);
+  1417→            setBossAnnounced(true);
+  1418→            safeTimeout(() => setBossAnnounced(false), 4500);
+  1419→            sound.playUltimate();
+  1420→          }, count * 380);
+  1421→        }
+  1422→
+  1423→        endlessWaveRef.current += 1;
+  1424→      }
+  1425→    }
+  1426→
+  1427→    // Update Lotus Traps（减速改为状态计算，不再永久污染单位速度）
+  1428→    for (let i = lotusTrapsRef.current.length - 1; i >= 0; i--) {
+  1429→      const trap = lotusTrapsRef.current[i];
+  1430→      trap.duration -= dt;
+  1431→
+  1432→      units.forEach((u) => {
+  1433→        const d = Math.hypot(u.x - trap.x, u.y - trap.y);
+  1434→        if (d <= trap.radius) {
+  1435→          if (u.isEnemy) {
+  1436→            u.hp -= 15 * dt;
+  1437→          } else {
+  1438→            if (!trap.isBloomed) {
+  1439→              trap.isBloomed = true;
+  1440→              u.hp = Math.min(u.maxHp, u.hp + 90);
+  1441→              sound.playLotusBloom();
+  1442→            }
+  1443→          }
+  1444→        }
+  1445→      });
+  1446→
+  1447→      if (trap.duration <= 0) {
+  1448→        lotusTrapsRef.current.splice(i, 1);
+  1449→      }
+  1450→    }
+  1451→
+  1452→    // Update Units
+  1453→    for (let i = units.length - 1; i >= 0; i--) {
+  1454→      const unit = units[i];
+  1455→
+  1456→      if (unit.hp <= 0) {
+  1457→        units.splice(i, 1);
+  1458→        continue;
+  1459→      }
+  1460→
+  1461→      if (unit.flinchTimer > 0) unit.flinchTimer -= dt;
+  1462→      unit.stateTime += dt;
+  1463→      if (unit.attackCooldown > 0) unit.attackCooldown -= dt;
+  1464→
+  1465→      if (unit.altitudeZ > 0 || unit.vz !== 0) {
+  1466→        unit.vz -= 800 * dt;
+  1467→        unit.altitudeZ += unit.vz * dt;
+  1468→        if (unit.altitudeZ <= 0) {
+  1469→          unit.altitudeZ = 0;
+  1470→          unit.vz = 0;
+  1471→        }
+  1472→      }
+  1473→
+  1474→      const distToHero = Math.hypot(unit.x - hero.x, unit.y - hero.y);
+  1475→      const isBuffedByHero = !unit.isEnemy && hero.state !== 'DEAD' && distToHero <= 230;
+  1476→      const inSlowZone =
+  1477→        unit.isEnemy &&
+  1478→        lotusTrapsRef.current.some(
+  1479→          (t) => Math.hypot(unit.x - t.x, unit.y - t.y) <= t.radius
+  1480→        );
+  1481→      const speedMult =
+  1482→        (isBuffedByHero ? 1.25 : 1.0) *
+  1483→        (weatherRef.current?.type === 'POETIC_BREEZE' && !unit.isEnemy ? 1.35 : 1.0) *
+  1484→        (weatherRef.current?.type === 'CRIMSON_ECLIPSE' && unit.isEnemy ? 1.15 : 1.0) *
+  1485→        (inSlowZone ? 0.55 : 1.0);
+  1486→      const effectiveSpeed = unit.speed * speedMult;
+  1487→
+  1488→      // Boss 二阶段狂暴：血量跌破五成触发「暗墨狂姿」
+  1489→      if (unit.isBoss && !unit.enraged && unit.hp < unit.maxHp * 0.5) {
+  1490→        unit.enraged = true;
+  1491→        unit.attack = Math.round(unit.attack * 1.25);
+  1492→        unit.speed = unit.speed * 1.35;
+  1493→        sound.playUltimate();
+  1494→        triggerShake(12, 0.5);
+  1495→        triggerSealStamp(unit.x, unit.y - 60, '狂');
+  1496→        setStageBanner(`${unit.type === 'GUARDIAN' ? '玄墨狂姿 · 破阵' : '残红狂姿 · 破阵'}：敌首陷入暗墨狂暴！`);
+  1497→        safeTimeout(() => setStageBanner(null), 3000);
+  1498→      }
+  1499→
+  1500→      if (unit.type === 'SCRIBE' && !unit.isEnemy) {
+  1501→        if ((unit.carriedInk || 0) >= 15) {
+  1502→          unit.facing = -1;
+  1503→          unit.x -= effectiveSpeed * dt;
+  1504→          unit.state = 'RETREAT';
+  1505→          if (unit.x <= 130) {
+  1506→            inkRef.current += (unit.carriedInk || 15) * comboRef.current.inkBonusMultiplier;
+  1507→            unit.carriedInk = 0;
+  1508→            sound.playGather();
+  1509→          }
+  1510→        } else {
+  1511→          const targetWell = wellsRef.current[0];
+  1512→          if (Math.abs(unit.x - targetWell.x) > 20) {
+  1513→            unit.facing = 1;
+  1514→            unit.x += effectiveSpeed * dt;
+  1515→            unit.y += (targetWell.y - unit.y) * 0.05;
+  1516→            unit.state = 'WALK';
+  1517→          } else {
+  1518→            unit.state = 'MINE';
+  1519→            unit.miningTimer = (unit.miningTimer || 0) + dt;
+  1520→            if (unit.miningTimer >= 2.0) {
+  1521→              unit.carriedInk = 15;
+  1522→              unit.miningTimer = 0;
+  1523→            }
+  1524→          }
+  1525→        }
+  1526→        continue;
+  1527→      }
+  1528→
+  1529→      if (!unit.isEnemy) {
+  1530→        if (armyCommandRef.current === 'DEFEND') {
+  1531→          if (unit.x > 180) {
+  1532→            unit.facing = -1;
+  1533→            unit.x -= effectiveSpeed * dt;
+  1534→            unit.state = 'RETREAT';
+  1535→          }
+  1536→        } else if (armyCommandRef.current === 'FOLLOW_HERO') {
+  1537→          const targetX = hero.x + (Math.sin(unit.limbPhase) * 60);
+  1538→          const targetY = hero.y + (Math.cos(unit.limbPhase) * 35);
+  1539→          if (Math.hypot(unit.x - targetX, unit.y - targetY) > 35) {
+  1540→            unit.facing = unit.x < targetX ? 1 : -1;
+  1541→            unit.x += (targetX - unit.x) * 0.08;
+  1542→            unit.y += (targetY - unit.y) * 0.08;
+  1543→            unit.state = 'WALK';
+  1544→          }
+  1545→        }
+  1546→      }
+  1547→
+  1548→      let nearestTarget: UnitInstance | 'BASE' | 'HERO' | null = null;
+  1549→      let minDistance = 9999;
+  1550→
+  1551→      if (!unit.isEnemy) {
+  1552→        units.forEach((other) => {
+  1553→          if (other.isEnemy && other.hp > 0) {
+  1554→            const d = Math.hypot(other.x - unit.x, (other.y - unit.y) * 1.5);
+  1555→            if (other.x > unit.x && d < minDistance) {
+  1556→              minDistance = d;
+  1557→              nearestTarget = other;
+  1558→            }
+  1559→          }
+  1560→        });
+  1561→
+  1562→        const distToBase = WORLD_WIDTH - 100 - unit.x;
+  1563→        if (distToBase > 0 && distToBase < minDistance) {
+  1564→          minDistance = distToBase;
+  1565→          nearestTarget = 'BASE';
+  1566→        }
+  1567→      } else {
+  1568→        if (hero.state !== 'DEAD') {
+  1569→          const dHero = Math.hypot(unit.x - hero.x, (unit.y - hero.y) * 1.5);
+  1570→          if (unit.x > hero.x && dHero < minDistance) {
+  1571→            minDistance = dHero;
+  1572→            nearestTarget = 'HERO';
+  1573→          }
+  1574→        }
+  1575→
+  1576→        units.forEach((other) => {
+  1577→          if (!other.isEnemy && other.hp > 0) {
+  1578→            const d = Math.hypot(unit.x - other.x, (unit.y - other.y) * 1.5);
+  1579→            if (unit.x > other.x && d < minDistance) {
+  1580→              minDistance = d;
+  1581→              nearestTarget = other;
+  1582→            }
+  1583→          }
+  1584→        });
+  1585→
+  1586→        const distToBase = unit.x - 100;
+  1587→        if (distToBase > 0 && distToBase < minDistance) {
+  1588→          minDistance = distToBase;
+  1589→          nearestTarget = 'BASE';
+  1590→        }
+  1591→      }
+  1592→
+  1593→      if (nearestTarget && minDistance <= unit.attackRange) {
+  1594→        unit.state = 'ATTACK';
+  1595→        if (unit.attackCooldown <= 0) {
+  1596→          unit.attackCooldown = 1 / UNIT_CONFIGS[unit.type].attackSpeed;
+  1597→
+  1598→          if (unit.type === 'ARCHER') {
+  1599→            sound.playArrow();
+  1600→            projectilesRef.current.push({
+  1601→              id: `arrow_${Date.now()}_${Math.random()}`,
+  1602→              x: unit.x,
+  1603→              y: unit.y,
+  1604→              altitudeZ: 28,
+  1605→              targetX: unit.x + unit.facing * 350,
+  1606→              targetY: unit.y,
+  1607→              vx: unit.facing * 440,
+  1608→              vy: 0,
+  1609→              vz: 0,
+  1610→              damage: unit.attack,
+  1611→              isEnemy: unit.isEnemy,
+  1612→              type: 'ARROW',
+  1613→              duration: 0,
+  1614→              maxDuration: 1.2,
+  1615→            });
+  1616→          } else if (unit.type === 'HARPIST') {
+  1617→            sound.playPluck(392, 0.6);
+  1618→            projectilesRef.current.push({
+  1619→              id: `wave_${Date.now()}_${Math.random()}`,
+  1620→              x: unit.x,
+  1621→              y: unit.y,
+  1622→              altitudeZ: 22,
+  1623→              targetX: unit.x + unit.facing * 280,
+  1624→              targetY: unit.y,
+  1625→              vx: unit.facing * 260,
+  1626→              vy: 0,
+  1627→              vz: 0,
+  1628→              damage: unit.attack,
+  1629→              isEnemy: unit.isEnemy,
+  1630→              type: 'SOUNDWAVE',
+  1631→              duration: 0,
+  1632→              maxDuration: 1.1,
+  1633→            });
+  1634→
+  1635→            units.forEach((ally) => {
+  1636→              if (ally.isEnemy === unit.isEnemy && Math.hypot(ally.x - unit.x, ally.y - unit.y) <= 220) {
+  1637→                ally.hp = Math.min(ally.maxHp, ally.hp + 20);
+  1638→              }
+  1639→            });
+  1640→          } else {
+  1641→            sound.playSlash(false);
+  1642→            if (nearestTarget === 'BASE') {
+  1643→              applyDamage(unit.isEnemy ? 'PLAYER_BASE' : 'ENEMY_BASE', unit.attack);
+  1644→            } else if (nearestTarget === 'HERO') {
+  1645→              applyDamage('HERO', unit.attack, false, unit.x, unit.y);
+  1646→            } else {
+  1647→              applyDamage(nearestTarget, unit.attack, false, unit.x, unit.y);
+  1648→            }
+  1649→          }
+  1650→        }
+  1651→      } else {
+  1652→        if (armyCommandRef.current !== 'DEFEND' || unit.isEnemy) {
+  1653→          unit.state = 'WALK';
+  1654→          unit.facing = unit.isEnemy ? -1 : 1;
+  1655→          unit.x += unit.facing * effectiveSpeed * dt;
+  1656→        }
+  1657→      }
+  1658→    }
+  1659→
+  1660→    // Update Projectiles
+  1661→    for (let i = projectilesRef.current.length - 1; i >= 0; i--) {
+  1662→      const proj = projectilesRef.current[i];
+  1663→      proj.x += proj.vx * dt;
+  1664→      proj.y += proj.vy * dt;
+  1665→      proj.duration += dt;
+  1666→
+  1667→      if (proj.duration >= proj.maxDuration) {
+  1668→        projectilesRef.current.splice(i, 1);
+  1669→        continue;
+  1670→      }
+  1671→
+  1672→      let hit = false;
+  1673→      units.forEach((u) => {
+  1674→        if (u.isEnemy !== proj.isEnemy && u.hp > 0) {
+  1675→          if (Math.abs(u.x - proj.x) < 26 && Math.abs(u.y - proj.y) < 32) {
+  1676→            applyDamage(u, proj.damage, false, proj.x, proj.y);
+  1677→            hit = true;
+  1678→          }
+  1679→        }
+  1680→      });
+  1681→
+  1682→      if (proj.isEnemy && hero.state !== 'DEAD') {
+  1683→        if (Math.abs(hero.x - proj.x) < 26 && Math.abs(hero.y - proj.y) < 35) {
+  1684→          applyDamage('HERO', proj.damage, false, proj.x, proj.y);
+  1685→          hit = true;
+  1686→        }
+  1687→      }
+  1688→
+  1689→      if (hit && !proj.pierce) {
+  1690→        projectilesRef.current.splice(i, 1);
+  1691→      }
+  1692→    }
+  1693→
+  1694→    // Update Seals
+  1695→    for (let i = sealStampsRef.current.length - 1; i >= 0; i--) {
+  1696→      const stamp = sealStampsRef.current[i];
+  1697→      stamp.life -= dt;
+  1698→      stamp.alpha = stamp.life / stamp.maxLife;
+  1699→      if (stamp.life <= 0) {
+  1700→        sealStampsRef.current.splice(i, 1);
+  1701→      }
+  1702→    }
+  1703→
+  1704→    // Update Particles
+  1705→    for (let i = particlesRef.current.length - 1; i >= 0; i--) {
+  1706→      const p = particlesRef.current[i];
+  1707→      p.x += p.vx * dt;
+  1708→      p.y += p.vy * dt;
+  1709→      if (p.altitudeZ !== undefined) {
+  1710→        p.altitudeZ += (p.vz || 0) * dt;
+  1711→      }
+  1712→      p.life -= dt;
+  1713→      p.alpha = p.life / p.maxLife;
+  1714→      if (p.vRot) p.rotation = (p.rotation || 0) + p.vRot * dt;
+  1715→
+  1716→      if (p.life <= 0) {
+  1717→        particlesRef.current.splice(i, 1);
+  1718→      }
+  1719→    }
+  1720→
+  1721→    // Update Damage Numbers
+  1722→    for (let i = damageNumbersRef.current.length - 1; i >= 0; i--) {
+  1723→      const d = damageNumbersRef.current[i];
+  1724→      d.y -= 26 * dt;
+  1725→      d.life -= dt;
+  1726→      d.alpha = Math.max(0, d.life / 0.75);
+  1727→      if (d.life <= 0) {
+  1728→        damageNumbersRef.current.splice(i, 1);
+  1729→      }
+  1730→    }
+  1731→
+  1732→    armyCountRef.current = units.filter((u) => !u.isEnemy).length;
+  1733→  };
+  1734→
+  1735→  // 将 updateSimulation 晚绑定到游戏循环（避免循环 effect 依赖函数引用）
+  1736→  updateSimulationRef.current = updateSimulation;
+  1737→
+  1738→  // ===== HUD 节流同步：每 130ms 批量把 ref 真相同步到 React state（替代每帧 setState） =====
+  1739→  useEffect(() => {
+  1740→    const hudTimer = setInterval(() => {
+  1741→      setInk(inkRef.current);
+  1742→      setHeroHp(heroRef.current.hp);
+  1743→      setHeroEnergy(heroEnergyRef.current);
+  1744→      setSkillCds({ ...skillCdsRef.current });
+  1745→      setCombo({ ...comboRef.current });
+  1746→      setArmyCount(armyCountRef.current);
+  1747→      setPlayerBaseHp(playerBaseHpRef.current);
+  1748→      setEnemyBaseHp(enemyBaseHpRef.current);
+  1749→      setEndlessWave(endlessWaveRef.current);
+  1750→    }, 130);
+  1751→    return () => clearInterval(hudTimer);
+  1752→  }, []);
+  1753→
+  1754→  const toggleSound = () => {
+  1755→    const muted = sound.toggleMute();
+  1756→    setIsMuted(muted);
+  1757→  };
+  1758→
+  1759→  return (
+  1760→    <div className="relative w-full h-screen bg-stone-950 select-none overflow-hidden font-sans">
+  1761→      {/* Top Bar Header */}
+  1762→      <header className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between gap-4 px-4 md:px-6 py-2.5 bg-stone-950/85 backdrop-blur-md border-b border-stone-800">
+  1763→        <div className="flex items-center gap-3">
+  1764→          <button
+  1765→            onClick={onExit}
+  1766→            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-stone-300 hover:text-white bg-stone-900 border border-stone-800 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+  1767→          >
+  1768→            <ChevronLeft className="w-3.5 h-3.5" />
+  1769→            <span className="hidden sm:inline">退出</span>
+  1770→          </button>
+  1771→          <span className="text-sm md:text-base font-bold tracking-wide text-stone-100 font-serif whitespace-nowrap shrink-0">
+  1772→            {level.endless && (
+  1773→              <span className="inline-flex items-center gap-1 mr-2 px-2 py-0.5 align-middle rounded-md bg-purple-950/80 border border-purple-700/60 text-[10px] font-bold text-purple-200">
+  1774→                <InfinityIcon className="w-3 h-3" />
+  1775→                第 {endlessWave} 波
+  1776→              </span>
+  1777→            )}
+  1778→            {level.chapter} · {level.title}
+  1779→          </span>
+  1780→        </div>
+  1781→
+  1782→        {/* Army Commands Toolbar */}
+  1783→        <div className="flex items-center gap-1.5 p-1 bg-stone-900/90 border border-stone-800 rounded-lg overflow-x-auto max-w-sm md:max-w-none">
+  1784→          <button
+  1785→            onClick={() => setArmyCommand('DEFEND')}
+  1786→            className={`px-2 md:px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1 ${
+  1787→              armyCommand === 'DEFEND'
+  1788→                ? 'bg-amber-700 text-amber-50 shadow-sm'
+  1789→                : 'text-stone-400 hover:text-stone-200'
+  1790→            }`}
+  1791→          >
+  1792→            <Shield className="w-3.5 h-3.5" />
+  1793→            <span className="hidden sm:inline">坚守</span>墨阁
+  1794→          </button>
+  1795→          <button
+  1796→            onClick={() => setArmyCommand('HOLD')}
+  1797→            className={`px-2 md:px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1 ${
+  1798→              armyCommand === 'HOLD'
+  1799→                ? 'bg-stone-700 text-stone-50 shadow-sm'
+  1800→                : 'text-stone-400 hover:text-stone-200'
+  1801→            }`}
+  1802→          >
+  1803→            <Flag className="w-3.5 h-3.5" />
+  1804→            <span className="hidden sm:inline">就地</span>御敌
+  1805→          </button>
+  1806→          <button
+  1807→            onClick={() => setArmyCommand('FOLLOW_HERO')}
+  1808→            className={`px-2 md:px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1 ${
+  1809→              armyCommand === 'FOLLOW_HERO'
+  1810→                ? 'bg-cyan-700 text-cyan-50 shadow-sm'
+  1811→                : 'text-stone-400 hover:text-stone-200'
+  1812→            }`}
+  1813→          >
+  1814→            <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+  1815→            随君冲锋
+  1816→          </button>
+  1817→          <button
+  1818→            onClick={() => setArmyCommand('ATTACK')}
+  1819→            className={`px-2 md:px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1 ${
+  1820→              armyCommand === 'ATTACK'
+  1821→                ? 'bg-rose-800 text-rose-50 shadow-sm'
+  1822→                : 'text-stone-400 hover:text-stone-200'
+  1823→            }`}
+  1824→          >
+  1825→            <Sword className="w-3.5 h-3.5" />
+  1826→            全军破阵
+  1827→          </button>
+  1828→        </div>
+  1829→
+  1830→        {/* Resources, Input Mode Switcher & Sound Action */}
+  1831→        <div className="flex items-center gap-2 md:gap-3 shrink-0">
+  1832→          {/* 暂停按钮 */}
+  1833→          <button
+  1834→            onClick={togglePause}
+  1835→            className="p-2 text-stone-300 hover:text-white bg-stone-900 border border-stone-800 rounded-lg transition-colors cursor-pointer"
+  1836→            title="暂停 (ESC / P)"
+  1837→          >
+  1838→            <Pause className="w-4 h-4" />
+  1839→          </button>
+  1840→
+  1841→          {/* Mode Switcher: 挥毫手势 vs 经典按键 */}
+  1842→          <div className="flex items-center bg-stone-900 border border-stone-800 rounded-lg p-0.5">
+  1843→            <button
+  1844→              onClick={() => setControlMode('GESTURE')}
+  1845→              className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md transition-colors cursor-pointer ${
+  1846→                controlMode === 'GESTURE'
+  1847→                  ? 'bg-cyan-900/80 text-cyan-200 font-bold'
+  1848→                  : 'text-stone-400 hover:text-stone-200'
+  1849→              }`}
+  1850→              title="切换到纯挥毫手势模式 (以笔驭剑)"
+  1851→            >
+  1852→              <PenTool className="w-3 h-3 text-cyan-400" />
+  1853→              <span>挥毫</span>
+  1854→            </button>
+  1855→            <button
+  1856→              onClick={() => setControlMode('CLASSIC')}
+  1857→              className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md transition-colors cursor-pointer ${
+  1858→                controlMode === 'CLASSIC'
+  1859→                  ? 'bg-stone-800 text-stone-100 font-bold'
+  1860→                  : 'text-stone-400 hover:text-stone-200'
+  1861→              }`}
+  1862→              title="切换到传统虚拟摇杆+按键模式"
+  1863→            >
+  1864→              <Gamepad2 className="w-3 h-3 text-amber-400" />
+  1865→              <span>按键</span>
+  1866→            </button>
+  1867→          </div>
+  1868→
+  1869→          <button
+  1870→            onClick={() => setShowGestureGuide((prev) => !prev)}
+  1871→            className="p-1.5 text-stone-400 hover:text-stone-100 bg-stone-900 border border-stone-800 rounded-lg transition-colors cursor-pointer"
+  1872→            title="手势指南"
+  1873→          >
+  1874→            <HelpCircle className="w-3.5 h-3.5 text-cyan-300" />
+  1875→          </button>
+  1876→
+  1877→          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 border border-stone-800 rounded-lg">
+  1878→            <span className="text-[11px] text-stone-400">墨韵</span>
+  1879→            <span className="text-xs md:text-sm font-bold text-cyan-400 font-mono tabular-nums">
+  1880→              {Math.floor(ink)}
+  1881→            </span>
+  1882→          </div>
+  1883→
+  1884→          <button
+  1885→            onClick={toggleSound}
+  1886→            className="p-1.5 text-stone-400 hover:text-stone-100 bg-stone-900 border border-stone-800 rounded-lg transition-colors cursor-pointer"
+  1887→          >
+  1888→            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+  1889→          </button>
+  1890→        </div>
+  1891→      </header>
+  1892→
+  1893→      {/* Full-Screen Unified Calligraphy Gesture Canvas */}
+  1894→      <canvas
+  1895→        ref={canvasRef}
+  1896→        onPointerDown={handlePointerDown}
+  1897→        onPointerMove={handlePointerMove}
+  1898→        onPointerUp={handlePointerUp}
+  1899→        onPointerCancel={handlePointerUp}
+  1900→        className="w-full h-full block touch-none cursor-crosshair"
+  1901→      />
+  1902→
+  1903→      {/* Floating Gesture Recognition Badge */}
+  1904→      {gestureBadge && (
+  1905→        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-bounce">
+  1906→          <div className="px-5 py-2 bg-stone-950/90 border border-cyan-500/70 rounded-2xl backdrop-blur-md shadow-2xl flex items-center gap-2">
+  1907→            <span className="text-lg font-bold font-serif text-cyan-300">{gestureBadge.text}</span>
+  1908→            <span className="text-xs font-serif text-stone-200">{gestureBadge.sub}</span>
+  1909→          </div>
+  1910→        </div>
+  1911→      )}
+  1912→
+  1913→      {/* Gesture Quick Guide Overlay Modal */}
+  1914→      {showGestureGuide && (
+  1915→        <div className="absolute top-16 right-6 z-40 max-w-xs p-4 bg-stone-900/95 border border-stone-700 rounded-2xl shadow-2xl backdrop-blur-md text-xs text-stone-300 space-y-2 animate-fade-in font-sans">
+  1916→          <div className="flex items-center justify-between font-serif font-bold text-amber-200 border-b border-stone-800 pb-1.5">
+  1917→            <span>以笔驭剑 · 手势心诀</span>
+  1918→            <button
+  1919→              onClick={() => setShowGestureGuide(false)}
+  1920→              className="text-stone-400 hover:text-white"
+  1921→            >
+  1922→              ✕
+  1923→            </button>
+  1924→          </div>
+  1925→          <p><strong className="text-cyan-300">轻点地面：</strong>剑仙踏墨巡行至该位置</p>
+  1926→          <p><strong className="text-cyan-300">轻点敌军：</strong>施展落墨三式剑招</p>
+  1927→          <p><strong className="text-cyan-300">「横」划：</strong>化身墨影疾驰【断水斩】</p>
+  1928→          <p><strong className="text-cyan-300">「竖」划：</strong>凌空暴扣【笔落惊风俯冲斩】</p>
+  1929→          <p><strong className="text-cyan-300">「提」划（向上）：</strong>轻功腾跃跳起</p>
+  1930→          <p><strong className="text-cyan-300">「画圆」⭕：</strong>释放【竹影墨盾 / 墨荷灵阵】</p>
+  1931→          <p><strong className="text-cyan-300">「折」划（Z型）：</strong>万毫齐发【星河笔阵】</p>
+  1932→          <p className="text-[10px] text-stone-400 pt-1 border-t border-stone-800">
+  1933→            * 电脑端键盘按键（WASD/J/Q/W/E/R/Space）全程原生支持！
+  1934→          </p>
+  1935→        </div>
+  1936→      )}
+  1937→
+  1938→      {/* Active Calligraphy Combo Rating HUD */}
+  1939→      {combo.count >= 3 && (
+  1940→        <div className="absolute top-14 right-6 z-30 pointer-events-none flex flex-col items-end animate-fade-in">
+  1941→          <div className="flex items-center gap-2 px-3 py-1 bg-stone-950/80 border border-amber-600/60 rounded-xl backdrop-blur-sm shadow-xl">
+  1942→            <Flame className="w-4 h-4 text-amber-400 animate-pulse" />
+  1943→            <span className="text-sm font-bold font-mono text-amber-300">
+  1944→              {combo.count} 连墨
+  1945→            </span>
+  1946→            <span className="text-xs font-serif font-bold text-amber-100">
+  1947→              【{combo.ratingText}】
+  1948→            </span>
+  1949→          </div>
+  1950→          <div className="w-24 h-1 bg-stone-800 rounded-full mt-1 overflow-hidden">
+  1951→            <div
+  1952→              className="h-full bg-amber-400 transition-all duration-75"
+  1953→              style={{ width: `${(combo.timer / combo.maxTimer) * 100}%` }}
+  1954→            />
+  1955→          </div>
+  1956→        </div>
+  1957→      )}
+  1958→
+  1959→      {/* Dynamic Weather Event Indicator */}
+  1960→      {activeWeather && (
+  1961→        <div className="absolute top-14 left-6 z-30 pointer-events-none flex items-center gap-2 px-3 py-1.5 bg-stone-950/80 border border-cyan-800/60 rounded-xl backdrop-blur-sm shadow-xl">
+  1962→          {activeWeather.type === 'INK_RAIN' && <CloudRain className="w-4 h-4 text-cyan-400" />}
+  1963→          {activeWeather.type === 'POETIC_BREEZE' && <Wind className="w-4 h-4 text-emerald-400" />}
+  1964→          {activeWeather.type === 'LUNAR_GLOW' && <Moon className="w-4 h-4 text-amber-300" />}
+  1965→          <div>
+  1966→            <p className="text-xs font-serif font-bold text-stone-100">
+  1967→              异象 · {activeWeather.name}
+  1968→            </p>
+  1969→            <p className="text-[10px] text-stone-400 font-serif">
+  1970→              {activeWeather.description} ({Math.ceil(activeWeather.timeRemaining)}s)
+  1971→            </p>
+  1972→          </div>
+  1973→        </div>
+  1974→      )}
+  1975→
+  1976→      {/* Poetic Verse Announcement Banner */}
+  1977→      {stageBanner && (
+  1978→        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 pointer-events-none text-center animate-fade-in max-w-sm md:max-w-md w-full px-4">
+  1979→          <div className="px-6 py-3.5 bg-stone-950/90 border border-stone-800 rounded-2xl backdrop-blur-md shadow-2xl">
+  1980→            <p className="text-base md:text-lg font-serif font-semibold tracking-widest text-amber-100">
+  1981→              {stageBanner}
+  1982→            </p>
+  1983→            <p className="mt-1 text-[11px] text-stone-400 font-serif tracking-wider">
+  1984→              {level.poeticAuthor}
+  1985→            </p>
+  1986→          </div>
+  1987→        </div>
+  1988→      )}
+  1989→
+  1990→      {/* Boss Announcement Banner */}
+  1991→      {bossAnnounced && level.boss && (
+  1992→        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 pointer-events-none text-center">
+  1993→          <div className="px-6 py-2.5 bg-rose-950/90 border border-rose-800 rounded-xl backdrop-blur-md shadow-2xl">
+  1994→            <p className="text-xs text-rose-300 font-mono tracking-widest">警告 · 敌阵宿敌降临</p>
+  1995→            <p className="text-base md:text-lg font-serif font-bold text-rose-100 tracking-wider">
+  1996→              {level.boss.name} · {level.boss.title}
+  1997→            </p>
+  1998→          </div>
+  1999→        </div>
+  2000→      )}
+
+[showing lines 1-2000 of 2269; use offset=2001 with limit to continue reading]

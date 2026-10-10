@@ -33,3 +33,25 @@ Stage Summary:
 - 验证截图 7 张：menu/select/battle/pause/gesture/ult/achv/mobile_battle
 - 架构保持 Vite+React19+TS+Tailwind4，未做任何 Next.js 迁移（遵照用户强制要求）
 - dev 服务器运行于 3000 端口，预览可用
+
+---
+Task ID: 3
+Agent: main (Super Z)
+Task: 图片拉伸修复 + 触控机制重构 + 四大趣味机制新增（保持 Vite 架构，未迁移 Next.js）
+
+Work Log:
+- 修复 canvas 背景拉伸根因：canvasRenderer.drawSkyAndParallax 原先 drawImage 强制填满全宽，改为等比 cover 绘制（imgAR vs targetAR 比较、底对齐地平线、横向平铺视差滚动），窄屏/超宽屏均不再变形
+- 触控重构三模式：GESTURE 挥毫（全屏手势，桌面默认）/ DUAL 双区（触屏默认：左45%屏触点生成 FloatingJoystick 浮动摇杆 + 右半屏手势/按钮）/ CLASSIC 经典固定摇杆；模式持久化 localStorage('ink_steel_control_mode')，顶栏三键切换
+- 新建 FloatingJoystick.tsx（触点浮现、pointerId 跟踪、多点触控安全、摇杆帽钳制底盘半径）；BattleView 指针路由重构（DUAL+touch+左半屏→摇杆，其余→手势），手势与摇杆可同时输入
+- 手势识别放宽：circle（pathLength>120、startEnd<0.45*len、box>32、aspect 0.35-2.8）、zigzag（10点/150px/阈值-4）、flick 快速轻扫（<220ms 时 30px 即触发）；识别成功 navigator.vibrate 触觉反馈
+- 趣味机制①墨灵祝福：BLESSINGS 8 种（剑气纵横/疾风诗步/墨甲如山/点墨成金/连墨永驻/文光护阁/笔势如虹/星辉汲取），普通关 45s 起每 55s、无尽每 2 波触发 BlessingModal 三选一（战场凝滞）；效果经 blessingMultsRef 乘数系统实装（攻击/速度/血量/墨韵/绝意/连击窗/冷却/墨阁自愈），spawnUnit 对新兵应用
+- 趣味机制②文房四宝：击杀 8% 掉落（笔/墨/纸/砚，优先未集种类），剑仙拾取集齐触发「文光焕彩」（绝意充满+全军回 35%+墨韵 120+金粒子）；HUD 四格进度
+- 趣味机制③墨龙卷：连墨 45 且间隔≥40 连/8s 冷却自动召唤，蛇形墨龙横扫（hero.attack*2.2 必暴+击退+尾迹粒子），renderer.drawInkDragon 绘制龙身/龙首/龙角/龙须
+- 趣味机制④墨滞时刻：首次气血<30% 触发 3s 子弹时间（世界 dt*0.45、剑仙速度补偿 2.1x、每场一次），renderer 全屏墨紫晕影+飘墨滤镜，HUD 倒计时条
+- 渲染器 render() 扩展 inkDragons/treasures/inkSlowProgress 三参；BattleView HUD 新增四宝格/祝福 chips/墨滞条/gestureBadge 下移避让；暂停在祝福弹窗期间锁定；教学卡/手势指南/LoreModal/主菜单文案全面同步
+- 验证：tsc --noEmit 零错误；vite build 成功；agent-browser 全链路冒烟（菜单→选折→战斗→双区切换→键盘施法→ESC 暂停→390x844 窄屏等比→1720x760 超宽等比→左半屏 touch 拖拽浮动摇杆 JOY_ACTIVE/RELEASED），页面零错误
+
+Stage Summary:
+- 交付新包：/home/z/my-project/download/ink_and_steel_v2.zip；验证截图 8 张（verify2_*.png）
+- 新增文件：FloatingJoystick.tsx / BlessingModal.tsx；修改 7 文件
+- 架构保持 Vite+React19+TS+Tailwind4，未做任何 Next.js 迁移（遵照用户强制要求）

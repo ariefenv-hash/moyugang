@@ -1,4 +1,4 @@
-import { LevelConfig, UnitConfig, HeroSkill, AchievementDef, WeatherEvent } from '../types/game';
+import { LevelConfig, UnitConfig, HeroSkill, AchievementDef, WeatherEvent, BlessingDef } from '../types/game';
 
 export const HERO_INITIAL_STATS = {
   maxHp: 420,
@@ -15,6 +15,74 @@ export const WEATHER_EFFECTS: Record<WeatherEvent['type'], { name: string; desc:
   LUNAR_GLOW: { name: '残月生辉', desc: '月华如水，剑仙暴击几率大幅提升' },
   CRIMSON_ECLIPSE: { name: '玄墨蚀月', desc: '暗影躁动，敌军步伐狂乱加快' },
 };
+
+/** 墨灵祝福全集（战斗内 Roguelike 三选一，可叠加） */
+export const BLESSINGS: BlessingDef[] = [
+  {
+    id: 'sword_aura',
+    name: '剑气纵横',
+    verse: '十步杀一人，千里不留行',
+    description: '全军攻击提升 15%',
+    icon: 'SWORD',
+    rarity: 'COMMON',
+  },
+  {
+    id: 'wind_steps',
+    name: '疾风诗步',
+    verse: '春风得意马蹄疾，一日看尽长安花',
+    description: '全军移动速度提升 18%',
+    icon: 'WIND',
+    rarity: 'COMMON',
+  },
+  {
+    id: 'ink_armor',
+    name: '墨甲如山',
+    verse: '黑云压城城欲摧，甲光向日金鳞开',
+    description: '全军生命上限提升 20% 并立即回复三成',
+    icon: 'SHIELD',
+    rarity: 'COMMON',
+  },
+  {
+    id: 'gold_ink',
+    name: '点墨成金',
+    verse: '问渠那得清如许，为有源头活水来',
+    description: '墨韵汲取速度提升 35%',
+    icon: 'COINS',
+    rarity: 'RARE',
+  },
+  {
+    id: 'combo_steady',
+    name: '连墨永驻',
+    verse: '笔落惊风雨，诗成泣鬼神',
+    description: '连墨判定时间延长 45%',
+    icon: 'FLAME',
+    rarity: 'RARE',
+  },
+  {
+    id: 'citadel_bless',
+    name: '文光护阁',
+    verse: '安得广厦千万间，大庇天下寒士俱欢颜',
+    description: '墨阁立即回复 25% 气血，此后缓慢自愈',
+    icon: 'HEART',
+    rarity: 'RARE',
+  },
+  {
+    id: 'swift_skill',
+    name: '笔势如虹',
+    verse: '笔走龙蛇，势拔山河',
+    description: '剑仙技能冷却缩短 22%',
+    icon: 'ZAP',
+    rarity: 'EPIC',
+  },
+  {
+    id: 'star_siphon',
+    name: '星辉汲取',
+    verse: '危楼高百尺，手可摘星辰',
+    description: '绝意充能速度提升 55%',
+    icon: 'STAR',
+    rarity: 'EPIC',
+  },
+];
 
 /** 成就全集 */
 export const ACHIEVEMENTS: AchievementDef[] = [
