@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/* ===== 主题字体栈：中文优先，避免 Google Fonts 未加载时回退到不协调的系统字体 ===== */
+@theme {
+  --font-sans: "Plus Jakarta Sans", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-serif: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
+}
+
+/* ===== 自定义动画：原代码引用了 animate-fade-in 但从未定义，此处补全 ===== */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ink-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.28s ease-out both;
+}
+
+/* ===== 滚动条美化（成就/兵法等弹层使用） ===== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #44403c #1c1917;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: #1c1917;
+}
+*::-webkit-scrollbar-thumb {
+  background: #44403c;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #57534e;
+}
+
+/* ===== 移动端安全区适配（iOS 刘海屏底部） ===== */
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
