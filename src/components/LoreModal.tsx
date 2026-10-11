@@ -40,7 +40,7 @@ export const LoreModal: React.FC<LoreModalProps> = ({ onClose }) => {
                 突破传统平移束缚，引入 2.5D 走道纵深与真实多关节火柴人骨骼物理：
               </p>
               <ul className="mt-2 space-y-1.5 list-disc list-inside text-ink-mid">
-                <li><strong className="text-ink-strong">挥毫操控（全平台统一）：</strong>整屏即纸——点地漫步、点敌出剑、横竖提折画圆施法，更可开启「字诀」逐笔书写汉字召唤术法；电脑端 WASD + J/Q/W/E/R 键盘全程待命。</li>
+                <li><strong className="text-ink-strong">挥毫操控（全平台统一）：</strong>整屏即纸——点地漫步、点敌出剑、横竖提折画圆施法，更可开启「字诀」逐笔书写七字（之山火水川心王）召唤术法；V 键切换青霜剑 / 青罗伞双武器；电脑端 WASD + J/Q/W/E/R 键盘全程待命。</li>
                 <li><strong className="text-ink-strong">2.5D 自由漫步：</strong>桌面 WASD 或触屏点地/拖动引路，上下走道穿行，利用纵深走位闪避箭矢与敌方冲锋。</li>
                 <li><strong className="text-ink-strong">轻功腾跃与凌空斩 (Space)：</strong>起跳后在空中施展落墨凌空斩，如鹰击长空般俯冲大地，引爆范围地震波！</li>
                 <li><strong className="text-ink-strong">多关节骨骼与飘逸绸带：</strong>头颈、脊椎、双节手足与多节点物理披风随风飘拂，受击顿挫回弹感十足。</li>

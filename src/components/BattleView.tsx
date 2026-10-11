@@ -35,6 +35,7 @@ import {
   CharStrokePoint,
   CharMatchResult,
 } from '../utils/charRecognizer';
+import { setActiveWeapon, type WeaponId } from '../utils/weaponSystem';
 import { PauseOverlay } from './PauseOverlay';
 import { BlessingModal } from './BlessingModal';
 import bgInkMountains from '../assets/images/bg_ink_mountains_1791652099827.jpg';
@@ -63,6 +64,7 @@ import {
   X,
   Gem,
   Type,
+  Umbrella,
 } from 'lucide-react';
 
 /** 字诀模式：已收笔画的墨稿预览（青晕 + 墨芯双描，停笔判定前可见所书之字） */
@@ -154,6 +156,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     bamboo_shield: 0,
     starlight_barrage: 0,
     lotus_trap: 0,
+    river_waves: 0,
+    heart_heal: 0,
     ultimate_landscape: 0,
   });
   const [skillCds, setSkillCds] = useState<{ [key: string]: number }>(skillCdsRef.current);
@@ -328,6 +332,50 @@ export const BattleView: React.FC<BattleViewProps> = ({
     flinchTimer: 0,
   });
 
+  // ===== 双武器系统：青霜剑 ⇄ 青罗伞（V 键 / HUD 按钮实时切换，偏好持久化） =====
+  const [weaponId, setWeaponIdState] = useState<WeaponId>(() => {
+    return localStorage.getItem('ink_steel_weapon') === 'QINGLUO_SAN'
+      ? 'QINGLUO_SAN'
+      : 'QINGSHUANG_JIAN';
+  });
+  const weaponIdRef = useRef<WeaponId>(weaponId);
+  const toggleWeapon = useCallback(() => {
+    const next: WeaponId =
+      weaponIdRef.current === 'QINGSHUANG_JIAN' ? 'QINGLUO_SAN' : 'QINGSHUANG_JIAN';
+    weaponIdRef.current = next;
+    setWeaponIdState(next);
+    setActiveWeapon(next);
+    localStorage.setItem('ink_steel_weapon', next);
+    // 青罗伞轻捷：移速 +7%
+    const hero = heroRef.current;
+    if (hero.state !== 'DEAD') {
+      hero.speed = Math.round(HERO_INITIAL_STATS.speed * (next === 'QINGLUO_SAN' ? 1.07 : 1));
+    }
+    setGestureBadge({
+      text: next === 'QINGLUO_SAN' ? '「伞」' : '「剑」',
+      sub: next === 'QINGLUO_SAN' ? '青罗伞 · 一伞烟雨' : '墨锋青霜 · 剑气纵横',
+    });
+    safeTimeout(
+      () =>
+        setGestureBadge((prev) =>
+          prev?.text === '「伞」' || prev?.text === '「剑」' ? null : prev
+        ),
+      1600
+    );
+    sound.playPluck(next === 'QINGLUO_SAN' ? 880 : 659.25, 0.5);
+    triggerHaptic(15);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safeTimeout]);
+
+  // 挂载时同步持久化偏好至渲染器
+  useEffect(() => {
+    setActiveWeapon(weaponId);
+    if (weaponId === 'QINGLUO_SAN') {
+      heroRef.current.speed = Math.round(HERO_INITIAL_STATS.speed * 1.07);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const unitsRef = useRef<UnitInstance[]>([]);
   const lotusTrapsRef = useRef<InkLotusTrap[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
@@ -439,6 +487,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
         triggerSkillUltimate();
       } else if (code === 'c') {
         toggleCharMode();
+      } else if (code === 'v') {
+        toggleWeapon();
       } else if (code === '1') {
         setArmyCommand('DEFEND');
       } else if (code === '2') {
@@ -641,13 +691,22 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
     setCharHint({
       text: charModeRef.current ? '字诀 · 开' : '字诀 · 合',
-      sub: charModeRef.current ? '以指书字：之 山 火 水 王' : '回归挥毫手势',
+      sub: charModeRef.current ? '以指书字：之 山 火 水 川 心 王' : '回归挥毫手势',
     });
-    safeTimeout(() => setCharHint(null), 1700);
+    // 条件式清空：只在提示仍是「字诀 · 开/合」本身时才散去，
+    // 避免延迟计时器误杀快速书写后弹出的识别结果提示
+    safeTimeout(
+      () =>
+        setCharHint(
+          (prev) =>
+            prev?.text === '字诀 · 开' || prev?.text === '字诀 · 合' ? null : prev
+        ),
+      1700
+    );
     sound.playPluck(charModeRef.current ? 783.99 : 523.25, 0.5);
   }, [safeTimeout]);
 
-  // 字诀收笔判定：停笔 550ms 自动识别（集满笔画数则立即判定）
+  // 字诀收笔判定：停笔 550ms 自动识别（集满笔画数则立即判定）——笔间自然停顿实测约 300-500ms，550ms 不拆字
   const commitCharStrokes = () => {
     if (charCommitTimerRef.current) {
       clearTimeout(charCommitTimerRef.current);
@@ -661,7 +720,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     const match = recognizeChar({ strokes });
     if (!match) {
       sound.playCharFail();
-      setCharHint({ text: '墨渍', sub: '未成字 · 试试「之 山 火 水 王」' });
+      setCharHint({ text: '墨渍', sub: '未成字 · 七诀：之 山 火 水 川 心 王' });
       safeTimeout(() => setCharHint((prev) => (prev?.text === '墨渍' ? null : prev)), 1500);
       return;
     }
@@ -688,6 +747,29 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }, 550);
   };
 
+  // 退一笔 / 重写：字诀书写后悔药（手势舒适度）
+  const undoCharStroke = () => {
+    if (charCommitTimerRef.current) {
+      clearTimeout(charCommitTimerRef.current);
+      charCommitTimerRef.current = null;
+    }
+    if (charStrokesRef.current.length === 0) return;
+    charStrokesRef.current.pop();
+    setCharStrokeCount(charStrokesRef.current.length);
+    if (charStrokesRef.current.length > 0) scheduleCharCommit();
+    sound.playPluck(392, 0.25);
+  };
+
+  const clearCharStrokes = () => {
+    if (charCommitTimerRef.current) {
+      clearTimeout(charCommitTimerRef.current);
+      charCommitTimerRef.current = null;
+    }
+    charStrokesRef.current = [];
+    setCharStrokeCount(0);
+    sound.playPluck(329.63, 0.3);
+  };
+
   const castCharAbility = (match: CharMatchResult) => {
     const hero = heroRef.current;
     if (hero.state === 'DEAD') return;
@@ -703,6 +785,12 @@ export const BattleView: React.FC<BattleViewProps> = ({
         break;
       case 'lotus_trap':
         triggerSkillInkLotus(hero.x + hero.facing * 40, hero.y, match.powerMult);
+        break;
+      case 'river_waves':
+        triggerSkillRiverWaves(match.powerMult);
+        break;
+      case 'heart_heal':
+        triggerSkillHeartHeal(match.powerMult);
         break;
       case 'ultimate_landscape':
         triggerSkillUltimate(match.powerMult);
@@ -1136,20 +1224,61 @@ export const BattleView: React.FC<BattleViewProps> = ({
     // 暴击系统：残月生辉大幅提升暴击率（1.6倍伤害 + 朱印刻章）
     const critChance = weatherRef.current?.type === 'LUNAR_GLOW' ? 0.35 : 0.18;
     const isCrit = Math.random() < critChance;
-    const attackDmg = hero.attack * (isHeavy ? 1.85 : 1.0) * (isCrit ? 1.6 : 1);
+    const isUmbrella = weaponIdRef.current === 'QINGLUO_SAN';
+    // 青罗伞略轻（×0.95），青霜剑全力；伞三式为范围旋击
+    const attackDmg =
+      hero.attack * (isHeavy ? 1.85 : 1.0) * (isCrit ? 1.6 : 1) * (isUmbrella ? 0.95 : 1);
 
-    unitsRef.current.forEach((u) => {
-      if (u.isEnemy && u.hp > 0) {
-        const dx = (u.x - hero.x) * hero.facing;
-        const dy = Math.abs(u.y - hero.y);
-        if (dx >= -10 && dx <= reachX && dy <= reachDepth) {
-          applyDamage(u, attackDmg, isCrit || isHeavy, hero.x, hero.y);
-          if (isHeavy) {
-            u.x += hero.facing * 40;
+    if (isHeavy && isUmbrella) {
+      // 青罗伞三式「旋伞回雪」：周身伞影回旋，四方击退（范围 108）
+      triggerSealStamp(hero.x, hero.y - 46, '旋');
+      const spinR = 108;
+      unitsRef.current.forEach((u) => {
+        if (u.isEnemy && u.hp > 0) {
+          const d = Math.hypot(u.x - hero.x, u.y - hero.y);
+          if (d <= spinR) {
+            applyDamage(u, attackDmg, isCrit, hero.x, hero.y);
+            const ang = Math.atan2(u.y - hero.y, u.x - hero.x);
+            u.x += Math.cos(ang) * 46;
+            u.y = Math.max(
+              LANE_MIN_Y.current,
+              Math.min(LANE_MAX_Y.current, u.y + Math.sin(ang) * 28)
+            );
           }
         }
+      });
+      for (let i = 0; i < 14; i++) {
+        const ang = (i / 14) * Math.PI * 2;
+        particlesRef.current.push({
+          id: `p_spin_${Math.random()}`,
+          x: hero.x + Math.cos(ang) * 60,
+          y: hero.y + Math.sin(ang) * 34,
+          altitudeZ: 20 + Math.random() * 40,
+          vx: Math.cos(ang) * 260,
+          vy: Math.sin(ang) * 120,
+          vz: 30 + Math.random() * 60,
+          color: i % 2 === 0 ? '#5eead4' : '#0f172a',
+          size: Math.random() * 3 + 1.5,
+          alpha: 1,
+          life: 0.45,
+          maxLife: 0.45,
+          type: 'SLASH',
+        });
       }
-    });
+    } else {
+      unitsRef.current.forEach((u) => {
+        if (u.isEnemy && u.hp > 0) {
+          const dx = (u.x - hero.x) * hero.facing;
+          const dy = Math.abs(u.y - hero.y);
+          if (dx >= -10 && dx <= reachX && dy <= reachDepth) {
+            applyDamage(u, attackDmg, isCrit || isHeavy, hero.x, hero.y);
+            if (isHeavy) {
+              u.x += hero.facing * 40;
+            }
+          }
+        }
+      });
+    }
 
     const baseDist = (WORLD_WIDTH - 100 - hero.x) * hero.facing;
     if (baseDist >= 0 && baseDist <= reachX && Math.abs(hero.y - (LANE_MIN_Y.current + LANE_MAX_Y.current) * 0.5) <= 60) {
@@ -1178,9 +1307,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
       hero.facing = forceDirection === 'RIGHT' ? 1 : -1;
     }
 
+    const isUmbrella = weaponIdRef.current === 'QINGLUO_SAN';
     sound.playDash();
     sound.playSlash(true);
-    triggerSealStamp(hero.x + 80 * hero.facing, hero.y - 30, '断');
+    triggerSealStamp(hero.x + 80 * hero.facing, hero.y - 30, isUmbrella ? '旋' : '断');
 
     hero.state = 'SKILL_DASH';
     hero.stateTime = 0;
@@ -1191,14 +1321,18 @@ export const BattleView: React.FC<BattleViewProps> = ({
     const endX = Math.max(100, Math.min(WORLD_WIDTH - 120, hero.x + dashDist));
     hero.x = endX;
 
-    applySkillCd('dash_slash', 4.0);
+    // 青罗伞「翻雨旋」：更宽的浪带与额外伞击退，冷却略短；青霜剑势大力沉
+    applySkillCd('dash_slash', isUmbrella ? 3.6 : 4.0);
 
     const minX = Math.min(startX, endX) - 25;
     const maxX = Math.max(startX, endX) + 25;
 
+    // 青罗伞「翻雨旋」：更宽的浪带（±70）与额外伞击退，单伤略低（2.5 vs 2.8）
+    const bandY = isUmbrella ? 70 : 50;
     unitsRef.current.forEach((u) => {
-      if (u.isEnemy && u.hp > 0 && u.x >= minX && u.x <= maxX && Math.abs(u.y - hero.y) <= 50) {
-        applyDamage(u, hero.attack * 2.8 * powerMult, true, hero.x, hero.y);
+      if (u.isEnemy && u.hp > 0 && u.x >= minX && u.x <= maxX && Math.abs(u.y - hero.y) <= bandY) {
+        applyDamage(u, hero.attack * (isUmbrella ? 2.5 : 2.8) * powerMult, true, hero.x, hero.y);
+        if (isUmbrella) u.x += hero.facing * 26;
       }
     });
 
@@ -1223,8 +1357,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
     triggerSealStamp(hero.x, hero.y - 40, '阵');
     hero.state = 'SKILL_SHIELD';
     hero.stateTime = 0;
-    // 风雅领域共鸣增幅：护盾厚度随共鸣等级提升；字诀评级再乘威力
-    hero.shieldHp = Math.round(280 * resonanceMult * powerMult);
+    // 风雅领域共鸣增幅：护盾厚度随共鸣等级提升；字诀评级再乘威力；青罗伞「伞盾同源」加成
+    const shieldUmbMult = weaponIdRef.current === 'QINGLUO_SAN' ? 1.3 : 1;
+    hero.shieldHp = Math.round(280 * resonanceMult * powerMult * shieldUmbMult);
     hero.shieldTimer = 7.0;
 
     applySkillCd('bamboo_shield', 8.0);
@@ -1376,6 +1511,123 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
   };
 
+  // Skill 6（字诀「川」）: 三江引·墨浪 — 三道墨浪沿三路横扫，穿行击退
+  const triggerSkillRiverWaves = (powerMult: number = 1) => {
+    const hero = heroRef.current;
+    if (hero.state === 'DEAD' || skillCdsRef.current.river_waves > 0 || isPausedRef.current)
+      return;
+
+    sound.playLotusBloom();
+    triggerSealStamp(hero.x, hero.y - 42, '川');
+    hero.state = 'SKILL_LOTUS';
+    hero.stateTime = 0;
+    applySkillCd('river_waves', 9.0);
+
+    [-64, 0, 64].forEach((dy, i) => {
+      safeTimeout(() => {
+        const h = heroRef.current;
+        if (!h || h.state === 'DEAD') return;
+        const wy = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, h.y + dy));
+        projectilesRef.current.push({
+          id: `wave_${Date.now()}_${i}`,
+          x: h.x + 24 * h.facing,
+          y: wy,
+          altitudeZ: 0,
+          targetX: h.x + 800 * h.facing,
+          targetY: wy,
+          vx: 400 * h.facing,
+          vy: 0,
+          vz: 0,
+          damage: h.attack * 1.7 * powerMult,
+          isEnemy: false,
+          type: 'INK_BLADE',
+          pierce: true,
+          duration: 0,
+          maxDuration: 2.0,
+        });
+        // 浪起水花
+        for (let k = 0; k < 7; k++) {
+          particlesRef.current.push({
+            id: `p_wave_${Date.now()}_${i}_${k}`,
+            x: h.x + 24 * h.facing + (Math.random() - 0.5) * 30,
+            y: wy + (Math.random() - 0.5) * 26,
+            altitudeZ: Math.random() * 18,
+            vx: h.facing * (120 + Math.random() * 160),
+            vy: (Math.random() - 0.5) * 60,
+            vz: 60 + Math.random() * 120,
+            color: k % 2 === 0 ? '#5eead4' : '#0d9488',
+            size: Math.random() * 3 + 1.6,
+            alpha: 1,
+            life: 0.55,
+            maxLife: 0.55,
+            type: 'WATER_RIPPLE',
+          });
+        }
+      }, i * 130);
+    });
+  };
+
+  // Skill 7（字诀「心」）: 墨心归元 — 剑仙与全军浴墨回春
+  const triggerSkillHeartHeal = (powerMult: number = 1) => {
+    const hero = heroRef.current;
+    if (hero.state === 'DEAD' || skillCdsRef.current.heart_heal > 0 || isPausedRef.current)
+      return;
+
+    sound.playShield();
+    triggerSealStamp(hero.x, hero.y - 46, '愈');
+    hero.state = 'SKILL_SHIELD';
+    hero.stateTime = 0;
+    applySkillCd('heart_heal', 15.0);
+
+    const heroHeal = Math.round(hero.maxHp * 0.32 * powerMult);
+    hero.hp = Math.min(hero.maxHp, hero.hp + heroHeal);
+    damageNumbersRef.current.push({
+      id: `heal_${Math.random()}`,
+      x: hero.x,
+      y: hero.y - hero.altitudeZ - 70,
+      text: `+${heroHeal}`,
+      color: '#4ade80',
+      alpha: 1,
+      scale: 1.3,
+      life: 1.0,
+    });
+
+    unitsRef.current.forEach((u) => {
+      if (!u.isEnemy && u.hp > 0) {
+        const heal = Math.round(u.maxHp * 0.28 * powerMult);
+        u.hp = Math.min(u.maxHp, u.hp + heal);
+        damageNumbersRef.current.push({
+          id: `heal_${Math.random()}`,
+          x: u.x,
+          y: u.y - 60,
+          text: `+${heal}`,
+          color: '#86efac',
+          alpha: 1,
+          scale: 1.0,
+          life: 0.9,
+        });
+      }
+    });
+
+    for (let i = 0; i < 22; i++) {
+      particlesRef.current.push({
+        id: `p_heart_${i}`,
+        x: hero.x + (Math.random() - 0.5) * 320,
+        y: hero.y + (Math.random() - 0.5) * 60,
+        altitudeZ: Math.random() * 40,
+        vx: (Math.random() - 0.5) * 60,
+        vy: (Math.random() - 0.5) * 40,
+        vz: 90 + Math.random() * 120,
+        color: i % 3 === 0 ? '#facc15' : '#4ade80',
+        size: Math.random() * 3.5 + 2,
+        alpha: 1,
+        life: 1.3,
+        maxLife: 1.3,
+        type: 'STAR',
+      });
+    }
+  };
+
   // --- UNIFIED CALLIGRAPHY GESTURE & TOUCH HANDLERS (Screen-as-Canvas) ---
   // 指针路由策略（全平台统一，摇杆已移除）：
   //  · 所有指针 → 挥毫手势（点按/横竖提/画圆/折线/拖动/字诀书字）
@@ -1499,9 +1751,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
     }
 
-    // Clear gesture badge after 1.8s
+    // Clear gesture badge after 1.8s（比对徽章全文「名」，否则永不清散）
     safeTimeout(() => {
-      setGestureBadge((prev) => (prev?.text === gesture.name ? null : prev));
+      setGestureBadge((prev) => (prev?.text === `「${gesture.name}」` ? null : prev));
     }, 1800);
   };
 
@@ -2459,7 +2711,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
                 ? 'bg-amber-800/90 text-amber-100 border-amber-400/80 font-bold shadow-[0_0_10px_rgba(245,158,11,0.45)]'
                 : 'bg-stone-900 text-stone-300 border-stone-800 hover:text-stone-100'
             }`}
-            title="字诀模式：逐笔书写汉字施法（之=断水斩 山=墨盾 火=笔阵 水=墨荷 王=大招）· 快捷键 C"
+            title="字诀模式：逐笔书写汉字施法（之=断水斩 山=墨盾 火=笔阵 水=墨荷 川=三江引 心=归元 王=大招）· 快捷键 C"
           >
             <Type className="w-3.5 h-3.5 text-amber-400" />
             <span>字诀</span>
@@ -2568,10 +2820,29 @@ export const BattleView: React.FC<BattleViewProps> = ({
       )}
       {charMode && !charHint && (
         <div className="absolute top-56 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
-          <div className="px-4 py-1.5 bg-stone-950/85 border border-amber-600/50 rounded-xl backdrop-blur-md">
+          <div className="px-4 py-1.5 bg-stone-950/85 border border-amber-600/50 rounded-xl backdrop-blur-md flex items-center gap-2">
             <span className="text-xs font-serif text-amber-200 tracking-wider">
-              ✍ 字诀集字 · 已书 {charStrokeCount} 笔（停笔即判定 · 之/山/火/水/王）
+              ✍ 已书 {charStrokeCount} 笔 · 停笔即判定
             </span>
+            <span className="text-[10px] font-serif text-amber-200/60 hidden md:inline">
+              之断水 · 山墨盾 · 火笔阵 · 水墨荷 · 川三江 · 心归元 · 王临江
+            </span>
+            <button
+              onClick={undoCharStroke}
+              disabled={charStrokeCount === 0}
+              className="px-1.5 py-0.5 text-[10px] rounded-md bg-stone-900 border border-amber-700/50 text-amber-200 enabled:hover:bg-amber-900/40 disabled:opacity-40 pointer-events-auto cursor-pointer"
+              title="撤销上一笔"
+            >
+              退笔
+            </button>
+            <button
+              onClick={clearCharStrokes}
+              disabled={charStrokeCount === 0}
+              className="px-1.5 py-0.5 text-[10px] rounded-md bg-stone-900 border border-amber-700/50 text-amber-200 enabled:hover:bg-amber-900/40 disabled:opacity-40 pointer-events-auto cursor-pointer"
+              title="清空重写"
+            >
+              重写
+            </button>
           </div>
         </div>
       )}
@@ -2599,12 +2870,18 @@ export const BattleView: React.FC<BattleViewProps> = ({
           <p><strong className="text-cyan-300">「画圆」⭕：</strong>释放【竹影墨盾 / 墨荷灵阵】</p>
           <p><strong className="text-cyan-300">「折」划（Z型）：</strong>万毫齐发【星河笔阵】</p>
           <div className="pt-1.5 border-t border-stone-800">
+            <p className="text-[11px] font-bold text-teal-300">【双武器 · V 键或右下按钮切换】</p>
+            <p className="text-teal-200">「青霜剑」三式震退+重斩前击 ·「青罗伞」旋伞回雪周身击退、护盾+30%、身法+7%</p>
+          </div>
+          <div className="pt-1.5 border-t border-stone-800">
             <p className="text-[11px] font-bold text-amber-300">
               【字诀 · 以指书字】点「字诀」开启（快捷键 C），逐笔写整个字，停笔自动判定：
             </p>
             <p className="text-amber-200">「之」→ 断水斩 ·「山」→ 竹影墨盾 ·「火」→ 星河笔阵</p>
-            <p className="text-amber-200">「水」→ 墨荷灵阵 ·「王」→ 临江仙（需绝意满）</p>
+            <p className="text-amber-200">「水」→ 墨荷灵阵 ·「川」→ 三江引 ·「心」→ 墨心归元</p>
+            <p className="text-amber-200">「王」→ 临江仙（需绝意满）</p>
             <p className="text-[10px] text-stone-400">字写得越正评级越高：神品 ×1.35 · 妙品 ×1.15 · 能品 ×1.0</p>
+            <p className="text-[10px] text-stone-400">「之」「山」支持连笔快写；写错了点浮签上的「退笔 / 重写」</p>
           </div>
           <div className="pt-1 border-t border-stone-800 text-[10px] text-stone-400 space-y-1">
             <p>* 电脑端键盘（WASD/J/Q/W/E/R/Space）全程原生支持！</p>
@@ -2816,6 +3093,20 @@ export const BattleView: React.FC<BattleViewProps> = ({
         <div className="pointer-events-auto flex items-center gap-2">
           <div className="flex items-center gap-1.5 p-2 bg-stone-950/90 backdrop-blur-md border border-stone-800 rounded-2xl shadow-2xl">
             <button
+              onClick={toggleWeapon}
+              className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-teal-700/60 rounded-xl text-teal-100 active:scale-95"
+              title="切换武器（V）：墨锋青霜剑 ⇄ 青罗伞"
+            >
+              {weaponId === 'QINGSHUANG_JIAN' ? (
+                <Sword className="w-4 h-4 text-cyan-300 mb-0.5" />
+              ) : (
+                <Umbrella className="w-4 h-4 text-teal-300 mb-0.5" />
+              )}
+              <span className="text-[9px] font-serif">
+                {weaponId === 'QINGSHUANG_JIAN' ? '青霜' : '青罗'}
+              </span>
+            </button>
+            <button
               onClick={triggerHeroJump}
               className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-stone-200 active:scale-95"
             >
@@ -2876,7 +3167,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
       {/* ===== 首战教学引导（仅第一折且未完成时展示） ===== */}
       {showTutorial && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-sm w-[calc(100%-2rem)] animate-fade-in">
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-sm w-[calc(100%-2rem)] animate-fade-in pointer-events-none">
           <div className="relative p-4 scroll-mount-thin text-ink">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-serif font-bold text-ink-strong flex items-center gap-1.5">
@@ -2888,7 +3179,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
                   setShowTutorial(false);
                   onTutorialDone();
                 }}
-                className="p-1 text-ink-light hover:text-ink-strong cursor-pointer"
+                className="p-1 text-ink-light hover:text-ink-strong cursor-pointer pointer-events-auto"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2910,7 +3201,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
               </li>
             </ol>
             <p className="mt-2 pt-2 border-t rule-ink text-[10px] text-ink-light">
-              提示：ESC / P 暂停 · 「字诀」逐笔写汉字施法（之山火水王）· 连墨45召墨龙 · 集齐文房四宝获「文光焕彩」
+              提示：ESC / P 暂停 · V 切武器（剑/伞）· 「字诀」逐笔写汉字施法（之山火水川心王）· 连墨45召墨龙 · 集齐文房四宝获「文光焕彩」
             </p>
           </div>
         </div>

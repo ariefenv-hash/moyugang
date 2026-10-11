@@ -7,8 +7,12 @@ import {VitePWA} from 'vite-plugin-pwa';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// GitHub Pages 项目站基路径（本地/预览默认 '/'；CI 部署时 PAGES_BASE=/moyugang/）
+const PAGES_BASE = process.env.PAGES_BASE || '/';
+
 export default defineConfig(() => {
   return {
+    base: PAGES_BASE,
     plugins: [
       react(),
       tailwindcss(),
@@ -18,26 +22,26 @@ export default defineConfig(() => {
         registerType: 'prompt',
         includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
         manifest: {
-          id: '/',
+          id: PAGES_BASE,
           name: '墨韵战纪：风雅篇',
           short_name: '墨韵战纪',
           description:
             '文艺优雅的水墨火柴人战争策略游戏。操控风雅剑仙，施展落墨剑气、星河笔阵与山河绝技，以字诀为印、以笔锋为兵，征战五大诗意关卡，更有无尽试炼等你坚守。',
           lang: 'zh-CN',
           dir: 'ltr',
-          start_url: '/',
-          scope: '/',
+          start_url: PAGES_BASE,
+          scope: PAGES_BASE,
           display: 'standalone',
           orientation: 'any',
           background_color: '#1f2629',
           theme_color: '#1f2629',
           categories: ['games', 'entertainment'],
           icons: [
-            {src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml'},
-            {src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png'},
-            {src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png'},
+            {src: `${PAGES_BASE}favicon.svg`, sizes: 'any', type: 'image/svg+xml'},
+            {src: `${PAGES_BASE}icons/icon-192.png`, sizes: '192x192', type: 'image/png'},
+            {src: `${PAGES_BASE}icons/icon-512.png`, sizes: '512x512', type: 'image/png'},
             {
-              src: '/icons/maskable-512.png',
+              src: `${PAGES_BASE}icons/maskable-512.png`,
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
@@ -47,7 +51,7 @@ export default defineConfig(() => {
         workbox: {
           // 字体/图片/音频全在本地构建产物内，全量预缓存即完全离线可玩
           globPatterns: ['**/*.{js,css,html,svg,png,jpg,woff2}'],
-          navigateFallback: '/index.html',
+          navigateFallback: `${PAGES_BASE}index.html`,
           maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
           cleanupOutdatedCaches: true,
         },

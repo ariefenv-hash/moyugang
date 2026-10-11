@@ -12,7 +12,7 @@ import {
   InkSplat,
 } from '../types/game';
 import { UNIT_CONFIGS } from '../data/gameData';
-import { drawVectorWeapon, getWeaponReach } from './weaponSystem';
+import { drawVectorWeapon, getWeaponReach, getActiveWeaponId } from './weaponSystem';
 import {
   StickPose,
   makeDefaultPose,
@@ -1093,7 +1093,7 @@ export class CanvasRenderer {
       ctx.lineWidth = 4;
       ctx.lineCap = 'round';
       const p = g.pose;
-      const ghostReach = getWeaponReach('QINGSHUANG_JIAN');
+      const ghostReach = getWeaponReach(getActiveWeaponId());
       // 腿（简化折线）
       ctx.beginPath();
       ctx.moveTo(p.hipX, p.hipY);
@@ -1263,7 +1263,7 @@ export class CanvasRenderer {
     }
 
     // —— 剑刃世界坐标（轨迹 / 残影采样点；长度与矢量武器系统对齐） ——
-    const swordReach = getWeaponReach('QINGSHUANG_JIAN');
+    const swordReach = getWeaponReach(getActiveWeaponId());
     const shLX = pose.hipX + Math.sin(pose.torsoLean) * 22;
     const shLY = pose.hipY - 22;
     const elbX = shLX + Math.sin(pose.frontArmA) * 14;
@@ -1472,7 +1472,7 @@ export class CanvasRenderer {
     ctx.save();
     ctx.translate(handX, handY);
     ctx.rotate(angle);
-    drawVectorWeapon(ctx, 'QINGSHUANG_JIAN', glow);
+    drawVectorWeapon(ctx, getActiveWeaponId(), glow);
     ctx.restore();
   }
 
@@ -2336,6 +2336,36 @@ export class CanvasRenderer {
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.arc(0, 0, 16, -Math.PI * 0.45, Math.PI * 0.45);
+      ctx.stroke();
+    } else if (proj.type === 'INK_BLADE') {
+      // 墨浪（川字诀「三江引」）：弧形墨潮 + 浪尖飞沫，友军青碧 / 敌军暗红
+      const waveGrad = ctx.createLinearGradient(-30, 0, 18, 0);
+      if (proj.isEnemy) {
+        waveGrad.addColorStop(0, 'rgba(127, 29, 29, 0)');
+        waveGrad.addColorStop(1, '#b91c1c');
+      } else {
+        waveGrad.addColorStop(0, 'rgba(13, 148, 136, 0)');
+        waveGrad.addColorStop(0.65, '#0d9488');
+        waveGrad.addColorStop(1, '#99f6e4');
+      }
+      ctx.strokeStyle = waveGrad;
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(-6, 0, 22, -Math.PI * 0.5, Math.PI * 0.5);
+      ctx.stroke();
+      // 浪尖飞沫
+      ctx.fillStyle = proj.isEnemy ? '#ef4444' : '#ccfbf1';
+      ctx.beginPath();
+      ctx.arc(16, -9, 2.6, 0, Math.PI * 2);
+      ctx.arc(20, 5, 2, 0, Math.PI * 2);
+      ctx.fill();
+      // 浪脚拖尾
+      ctx.strokeStyle = proj.isEnemy ? 'rgba(127, 29, 29, 0.4)' : 'rgba(45, 212, 191, 0.4)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(-34, 6);
+      ctx.lineTo(-14, 8);
       ctx.stroke();
     }
 
