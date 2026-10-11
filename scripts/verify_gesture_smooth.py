@@ -361,9 +361,9 @@ async def main():
         mbox = await mpage.locator('canvas').last.bounding_box()
         mcx, mcy = mbox['x'] + mbox['width']/2, mbox['y'] + mbox['height']*0.45
 
-        # M1 触摸点按移动
+        # M1 触摸点按移动（分区后点地移形须点在下方行止区：>56% 屏高）
         mp0 = await mpage.evaluate("() => window.__inkGestureDebug?.heroPos?.() || null")
-        await mpage.touchscreen.tap(mcx - 130, mcy)
+        await mpage.touchscreen.tap(mcx - 130, mbox['y'] + mbox['height'] * 0.82)
         await mpage.wait_for_timeout(1200)
         mp1 = await mpage.evaluate("() => window.__inkGestureDebug?.heroPos?.() || null")
         m_moved = mp0 and mp1 and abs(mp1['x'] - mp0['x']) > 30

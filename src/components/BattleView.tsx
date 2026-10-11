@@ -196,6 +196,18 @@ export const BattleView: React.FC<BattleViewProps> = ({
   const [heroReviving, setHeroReviving] = useState(false);
   const [heroReviveTimer, setHeroReviveTimer] = useState(0);
 
+  // ===== 战况 HUD（随节流同步）：波次进度/场上敌情/用时/双方基地/护盾/文思段数 =====
+  const [battleHud, setBattleHud] = useState({
+    waveDone: 0,
+    waveTotal: 0,
+    enemyCount: 0,
+    timeSec: 0,
+    playerBasePct: 100,
+    enemyBasePct: 100,
+    shieldHp: 0,
+    charChainN: 0,
+  });
+
   // Calligraphy Combo state（真相源 comboRef，命中时即时同步，衰减走节流）
   const comboRef = useRef<CalligraphyCombo>({
     count: 0,
@@ -362,6 +374,13 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
   // Target navigation destination for Tap-to-move
   const heroTargetMove = useRef<{ x: number; y: number } | null>(null);
+
+  // ===== 上下分区操控：偏上「书符区」画字施法，下方「行止区」点地移形/拖动引路 =====
+  // 分区线取视口高 56% 处：上区只出招不出行（画字/划手势绝不带跑角色），
+  // 下区点地漫步、拖动引路、点敌出剑（移动泳道本就在屏幕底部泳道带，天然吻合）
+  const CAST_ZONE_RATIO = 0.56;
+  const strokeZoneRef = useRef<'CAST' | 'ACT'>('ACT');
+  const castZoneHintShownRef = useRef(false);
 
   // Core Simulation Entities Refs
   const heroRef = useRef<HeroInstance>({
@@ -1865,6 +1884,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
       charCommitTimerRef.current = null;
     }
 
+    // 上下分区：记录起笔所属区（上=书符区 只出招不出行；下=行止区 可点地移形/拖动引路）
+    strokeZoneRef.current =
+      clientY < rect.height * CAST_ZONE_RATIO ? 'CAST' : 'ACT';
+
     gestureRecognizer.current.startStroke(clientX, clientY);
   };
 
@@ -1882,8 +1905,13 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     // If dragging slowly in gesture mode, continuously lead the hero!
     // 字诀模式豁免：专注书写，角色不被笔尖牵引（防写一字全场乱跑）
+    // 书符区起笔同样豁免：画字/划手势只出招不出行，笔尖绝不带跑角色
     const pts = gestureRecognizer.current.getPoints();
-    if (!charModeRef.current && pts.length > 5) {
+    if (
+      !charModeRef.current &&
+      strokeZoneRef.current === 'ACT' &&
+      pts.length > 5
+    ) {
       const worldX = clientX + cameraX.current;
       const clampedY = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, clientY));
       heroTargetMove.current = { x: worldX, y: clampedY };
@@ -1895,6 +1923,15 @@ export const BattleView: React.FC<BattleViewProps> = ({
     const worldStartX = gesture.startX + cameraX.current;
     const worldEndX = gesture.endX + cameraX.current;
     const worldY = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, gesture.endY));
+
+    // 起笔分区：上=书符区（画字施法） / 下=行止区（点地移形）
+    const startInCastZone = gesture.startY < viewHRef.current * CAST_ZONE_RATIO;
+
+    // 施法/攻击类手势即出招：清掉旧的点地漫步目标，
+    // 防「划手势出招后角色仍走向旧落点」与「点敌出剑后继续行进」的残留移动
+    if (gesture.type !== 'DRAG') {
+      heroTargetMove.current = null;
+    }
 
     // Execute actions based on recognized gesture
     switch (gesture.type) {
@@ -1908,10 +1945,17 @@ export const BattleView: React.FC<BattleViewProps> = ({
         });
 
         if (hitEnemy) {
+          // 点敌出剑：两区通用（攻击意图明确，不算误触行进）
           triggerHeroAttack(worldEndX, worldY);
           flashGestureBadge('「点」', '落墨点煞');
+        } else if (startInCastZone) {
+          // 书符区空点：不移动（防「点其他地方误会朝对应地方行进」），首次轻提示分区用途
+          if (!castZoneHintShownRef.current) {
+            castZoneHintShownRef.current = true;
+            flashGestureBadge('「书」', '此处画字施法 · 移步请点下方行止区', 2400);
+          }
         } else {
-          // Tap ground -> Glide move to position
+          // Tap ground -> Glide move to position（仅行止区生效）
           heroTargetMove.current = { x: worldEndX, y: worldY };
           flashGestureBadge('「行」', '步移景从');
           sound.playPluck(523.25, 0.3);
@@ -1969,7 +2013,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
 
       case 'DRAG': {
-        heroTargetMove.current = { x: worldEndX, y: worldY };
+        // 拖动引路仅行止区生效：书符区拖动视为画字起手，不带跑角色
+        if (!startInCastZone) {
+          heroTargetMove.current = { x: worldEndX, y: worldY };
+        }
         break;
       }
     }
@@ -2055,6 +2102,34 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
     dbg.__inkGestureDebug.heroPos = () => ({ x: heroRef.current.x, y: heroRef.current.y });
     dbg.__inkGestureDebug.isCharMode = () => charModeRef.current;
+    // 状态机/分区/战况观测（无头实测用）：突刺收势/移动目标/基地血量/波次进度
+    dbg.__inkGestureDebug.heroState = () => ({
+      state: heroRef.current.state,
+      stateTime: Math.round(heroRef.current.stateTime * 1000) / 1000,
+      grounded: heroRef.current.isGrounded,
+    });
+    dbg.__inkGestureDebug.heroTarget = () => heroTargetMove.current;
+    dbg.__inkGestureDebug.strokeZone = () => strokeZoneRef.current;
+    dbg.__inkGestureDebug.forceVictory = () => {
+      if (isGameOverRef.current || levelRef.current.endless) return false;
+      enemyBaseHpRef.current = Math.min(5, enemyBaseHpRef.current);
+      applyDamage('ENEMY_BASE', 10);
+      return true;
+    };
+    dbg.__inkGestureDebug.battleState = () => ({
+      enemyBaseHp: Math.round(enemyBaseHpRef.current),
+      playerBaseHp: Math.round(playerBaseHpRef.current),
+      enemyCount: unitsRef.current.filter((u) => u.isEnemy && u.hp > 0).length,
+      friendlyCount: unitsRef.current.filter((u) => !u.isEnemy && u.hp > 0).length,
+      waveDone: spawnedWavesRef.current.size,
+      waveTotal: levelRef.current.enemySpawns?.length ?? 0,
+      gameTime: Math.round(gameTimeRef.current * 10) / 10,
+      bossSpawned: bossSpawnedRef.current,
+      levelId: levelRef.current.id,
+      levelTitle: levelRef.current.title,
+      heroState: heroRef.current.state,
+      skillCds: { ...skillCdsRef.current },
+    });
     // 连招体系观测：连墨段位/伤害倍率/衔招窗口/文思段数/最近敌军（无头实测用）
     dbg.__inkGestureDebug.comboInfo = () => ({
       count: comboRef.current.count,
@@ -2440,7 +2515,22 @@ export const BattleView: React.FC<BattleViewProps> = ({
       const inkSlowBoost = inkSlowTimerRef.current > 0 ? 2.1 : 1.0;
       const effectiveHeroSpeed = hero.speed * speedBonus * inkSlowBoost * blessingMultsRef.current.speed;
 
-      if (!hero.state.startsWith('ATTACK_') && hero.state !== 'SKILL_DASH') {
+      // ===== 技能姿势自动收势（根治突刺卡滞）=====
+      // 「断水斩」突进为瞬发动作：0.35s 收势后自动回位——「突进→即行」两动作合为一体，
+      // 不再永久卡在突进姿势（此前 SKILL_DASH 被移动锁与恢复条件双重排除，只能靠竖划解卡）
+      if (hero.state === 'SKILL_DASH' && hero.stateTime > 0.35) {
+        hero.state = 'IDLE';
+      }
+      // 其余技能结印姿势（竹影/笔阵/墨荷/临江仙/三江/归元）施毕 0.6s 自动收势，不残留定格
+      if (
+        hero.state.startsWith('SKILL_') &&
+        hero.state !== 'SKILL_DASH' &&
+        hero.stateTime > 0.6
+      ) {
+        hero.state = 'IDLE';
+      }
+
+      if (!hero.state.startsWith('ATTACK_')) {
         if (inputMag > 0.15) {
           hero.x = Math.max(120, Math.min(WORLD_WIDTH - 120, hero.x + inputX * effectiveHeroSpeed * dt));
           hero.y = Math.max(
@@ -2464,7 +2554,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
         }
       } else {
         hero.stateTime += dt;
-        if (hero.stateTime > 0.35 && !hero.state.startsWith('SKILL_') && hero.isGrounded) {
+        if (hero.stateTime > 0.35 && hero.isGrounded) {
           hero.state = 'IDLE';
         }
       }
@@ -3019,6 +3109,25 @@ export const BattleView: React.FC<BattleViewProps> = ({
       setEnemyBaseHp(enemyBaseHpRef.current);
       setEndlessWave(endlessWaveRef.current);
       setInkSlowLeft(inkSlowTimerRef.current > 0 ? inkSlowTimerRef.current : 0);
+
+      // 战况详情：波次进度（剧本关）/当前波（无尽）/场上敌军/用时/双方基地血量/护盾/文思
+      const lvNow = levelRef.current;
+      const chainWindowOpen = gameTimeRef.current - charChainRef.current.lastAt <= 8;
+      setBattleHud({
+        waveDone: lvNow.endless ? endlessWaveRef.current : spawnedWavesRef.current.size,
+        waveTotal: lvNow.endless ? 0 : lvNow.enemySpawns?.length ?? 0,
+        enemyCount: unitsRef.current.filter((u) => u.isEnemy && u.hp > 0).length,
+        timeSec: Math.floor(gameTimeRef.current),
+        playerBasePct: Math.max(
+          0,
+          Math.round((playerBaseHpRef.current / Math.max(1, playerBaseMaxHpRef.current)) * 100)
+        ),
+        enemyBasePct: lvNow.endless
+          ? -1
+          : Math.max(0, Math.round((enemyBaseHpRef.current / Math.max(1, enemyBaseMaxHpRef.current)) * 100)),
+        shieldHp: Math.max(0, Math.round(heroRef.current.shieldHp)),
+        charChainN: chainWindowOpen ? charChainRef.current.count : 0,
+      });
     }, 130);
     return () => clearInterval(hudTimer);
   }, []);
@@ -3038,7 +3147,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
         className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between gap-4 px-4 md:px-6 py-2.5 bg-stone-950/85 backdrop-blur-md border-b border-stone-800"
         style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={onExit}
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-stone-300 hover:text-white bg-stone-900 border border-stone-800 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
@@ -3046,15 +3155,55 @@ export const BattleView: React.FC<BattleViewProps> = ({
             <ChevronLeft className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">退出</span>
           </button>
-          <span className="text-sm md:text-base font-bold tracking-wide text-stone-100 font-serif whitespace-nowrap shrink-0">
-            {level.endless && (
-              <span className="inline-flex items-center gap-1 mr-2 px-2 py-0.5 align-middle rounded-md bg-purple-950/80 border border-purple-700/60 text-[10px] font-bold text-purple-200">
-                <InfinityIcon className="w-3 h-3" />
-                第 {endlessWave} 波
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-sm md:text-base font-bold tracking-wide text-stone-100 font-serif whitespace-nowrap shrink-0">
+              {level.endless && (
+                <span className="inline-flex items-center gap-1 mr-2 px-2 py-0.5 align-middle rounded-md bg-purple-950/80 border border-purple-700/60 text-[10px] font-bold text-purple-200">
+                  <InfinityIcon className="w-3 h-3" />
+                  第 {endlessWave} 波
+                </span>
+              )}
+              {level.chapter} · {level.title}
+            </span>
+            {/* 战况详情行：波次进度 / 场上敌军 / 用时 / 双方基地完好度 */}
+            <div className="flex items-center gap-2 text-[10px] font-mono text-stone-400 leading-none whitespace-nowrap overflow-hidden">
+              <span title={level.endless ? '无尽试炼当前波次' : '敌军波次进度'}>
+                {level.endless
+                  ? `无尽第 ${battleHud.waveDone} 波`
+                  : `波 ${battleHud.waveDone}/${battleHud.waveTotal}`}
               </span>
-            )}
-            {level.chapter} · {level.title}
-          </span>
+              <span className="text-stone-600">·</span>
+              <span className="text-rose-400/90" title="场上存活敌军">
+                敌 {battleHud.enemyCount}
+              </span>
+              <span className="text-stone-600">·</span>
+              <span title="战斗用时">
+                {String(Math.floor(battleHud.timeSec / 60)).padStart(2, '0')}:
+                {String(battleHud.timeSec % 60).padStart(2, '0')}
+              </span>
+              <span className="text-stone-600">·</span>
+              <span
+                className={
+                  battleHud.playerBasePct > 60
+                    ? 'text-emerald-400/90'
+                    : battleHud.playerBasePct > 30
+                      ? 'text-amber-400/90'
+                      : 'text-rose-400'
+                }
+                title="我方墨阁完好度"
+              >
+                墨阁 {battleHud.playerBasePct}%
+              </span>
+              {battleHud.enemyBasePct >= 0 && (
+                <>
+                  <span className="text-stone-600">·</span>
+                  <span className="text-cyan-400/90" title="敌方大营完好度（打空即胜）">
+                    敌营 {battleHud.enemyBasePct}%
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Army Commands Toolbar */}
@@ -3176,6 +3325,36 @@ export const BattleView: React.FC<BattleViewProps> = ({
         className="w-full h-full block touch-none select-none cursor-crosshair"
       />
 
+      {/* 上下分区指示线：上=书符区（画字施法） / 下=行止区（点地移形）；字诀模式全屏皆纸时隐去 */}
+      {!charMode && (
+        <div
+          className="absolute left-0 right-0 z-10 pointer-events-none"
+          style={{ top: `${CAST_ZONE_RATIO * 100}%` }}
+        >
+          <div
+            className="h-px w-full"
+            style={{
+              background:
+                'linear-gradient(90deg, transparent 4%, rgba(103,232,249,0.20) 22%, rgba(103,232,249,0.30) 50%, rgba(103,232,249,0.20) 78%, transparent 96%)',
+            }}
+          />
+          <div className="relative">
+            <span
+              className="absolute left-3 -top-5 px-1.5 py-px text-[9px] font-serif tracking-[0.2em] rounded"
+              style={{ color: 'rgba(165,243,252,0.42)', background: 'rgba(8,12,14,0.28)' }}
+            >
+              书符 · 画字施法
+            </span>
+            <span
+              className="absolute right-3 top-1 px-1.5 py-px text-[9px] font-serif tracking-[0.2em] rounded"
+              style={{ color: 'rgba(214,211,209,0.40)', background: 'rgba(8,12,14,0.28)' }}
+            >
+              行止 · 点地移形
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* 文房四宝收集进度 + 已获墨灵祝福 */}
       <div className="absolute left-4 md:left-6 top-28 z-30 pointer-events-none flex flex-col gap-1.5">
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-stone-950/80 border border-amber-800/50 rounded-xl backdrop-blur-sm shadow-xl">
@@ -3285,9 +3464,15 @@ export const BattleView: React.FC<BattleViewProps> = ({
             </button>
           </div>
           <p className="text-[11px] font-bold text-cyan-300">
-            【挥毫操控 · 全平台统一】整屏即纸：点地漫步、点敌出剑、划字施法；右下技能按钮随时可点，电脑端键盘全程待命！
+            【挥毫操控 · 全平台统一】上下分区各司其职：上区画字施法、下区行动移动；右下技能按钮随时可点，电脑端键盘全程待命！
           </p>
-          <p><strong className="text-cyan-300">轻点地面：</strong>剑仙踏墨巡行至该位置</p>
+          <div className="rounded-lg border border-cyan-800/50 bg-stone-950/60 px-2 py-1.5 space-y-0.5">
+            <p className="text-[11px] font-bold text-cyan-200">【上下分区 · 各司其职】</p>
+            <p className="text-cyan-100/90">屏幕偏上＝书符区：画字/划手势只出招，空点不会误走</p>
+            <p className="text-cyan-100/90">屏幕偏下＝行止区：点地漫步、拖动引路、点敌出剑</p>
+            <p className="text-[10px] text-stone-400">字诀模式开启后全屏皆纸，分区线自动隐去</p>
+          </div>
+          <p><strong className="text-cyan-300">轻点地面（下区）：</strong>剑仙踏墨巡行至该位置</p>
           <p><strong className="text-cyan-300">轻点敌军：</strong>施展落墨三式剑招</p>
           <p><strong className="text-cyan-300">「横」划：</strong>化身墨影疾驰【断水斩】</p>
           <p><strong className="text-cyan-300">「竖」划：</strong>凌空暴扣【笔落惊风俯冲斩】</p>
@@ -3519,6 +3704,28 @@ export const BattleView: React.FC<BattleViewProps> = ({
       <div className="absolute bottom-4 left-6 right-6 z-20 flex items-end justify-between pointer-events-none pb-[env(safe-area-inset-bottom)]">
         {/* Left: Hero Stats & Gesture Mode prompt */}
         <div className="flex flex-col items-start gap-1.5 pointer-events-auto">
+          {/* 增益实时 chips：墨盾厚度 / 文思连段（8s 窗内） */}
+          {(battleHud.shieldHp > 0 || battleHud.charChainN > 1) && (
+            <div className="flex items-center gap-1.5">
+              {battleHud.shieldHp > 0 && (
+                <span
+                  className="px-2 py-0.5 text-[10px] font-serif font-bold rounded-lg bg-cyan-950/85 border border-cyan-600/60 text-cyan-200 backdrop-blur-sm animate-fade-in"
+                  title="竹影墨盾剩余护体墨量"
+                >
+                  墨盾 {battleHud.shieldHp}
+                </span>
+              )}
+              {battleHud.charChainN > 1 && (
+                <span
+                  className="px-2 py-0.5 text-[10px] font-serif font-bold rounded-lg bg-amber-950/85 border border-amber-500/60 text-amber-200 backdrop-blur-sm animate-fade-in"
+                  title="字诀文思连段：8 秒内连续写中，每段 +10% 增伤（至多 +30%）"
+                >
+                  文思 ×{battleHud.charChainN} · 伤+
+                  {Math.min(30, (battleHud.charChainN - 1) * 10)}%
+                </span>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-3 px-3.5 py-2 bg-stone-950/85 backdrop-blur-md border border-stone-800 rounded-xl shadow-xl">
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-serif text-stone-300">云砚气血</span>
@@ -3548,7 +3755,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           </div>
 
           <div className="text-[11px] font-serif text-stone-400 bg-stone-950/70 border border-stone-800 px-3 py-1 rounded-lg">
-            ✨ 挥毫手势：点地漫步 · 横划破水 · 画圆起盾 · 折线引星 · 点「字诀」可写字施法（C）
+            ✨ 上区画字施法 · 下区点地移形：横划破水 · 画圆起盾 · 折线引星 · 「字诀」写字施法（C）
           </div>
         </div>
 
@@ -3578,24 +3785,42 @@ export const BattleView: React.FC<BattleViewProps> = ({
             </button>
             <button
               onClick={() => triggerSkillDashSlash()}
-              className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-cyan-200 active:scale-95"
+              disabled={skillCds.dash_slash > 0}
+              className="relative w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-cyan-200 active:scale-95 disabled:opacity-55"
             >
               <Zap className="w-4 h-4 text-cyan-400 mb-0.5" />
               <span className="text-[9px] font-serif">断水</span>
+              {skillCds.dash_slash > 0 && (
+                <div className="absolute inset-0 bg-stone-950/75 rounded-xl flex items-center justify-center text-[11px] font-mono font-bold text-cyan-300">
+                  {skillCds.dash_slash.toFixed(1)}
+                </div>
+              )}
             </button>
             <button
               onClick={() => triggerSkillBambooShield()}
-              className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-emerald-200 active:scale-95"
+              disabled={skillCds.bamboo_shield > 0}
+              className="relative w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-emerald-200 active:scale-95 disabled:opacity-55"
             >
               <Shield className="w-4 h-4 text-emerald-400 mb-0.5" />
               <span className="text-[9px] font-serif">竹影</span>
+              {skillCds.bamboo_shield > 0 && (
+                <div className="absolute inset-0 bg-stone-950/75 rounded-xl flex items-center justify-center text-[11px] font-mono font-bold text-emerald-300">
+                  {skillCds.bamboo_shield.toFixed(1)}
+                </div>
+              )}
             </button>
             <button
               onClick={() => triggerSkillStarlightBarrage()}
-              className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-amber-200 active:scale-95"
+              disabled={skillCds.starlight_barrage > 0}
+              className="relative w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-amber-200 active:scale-95 disabled:opacity-55"
             >
               <Sparkles className="w-4 h-4 text-amber-400 mb-0.5" />
               <span className="text-[9px] font-serif">笔阵</span>
+              {skillCds.starlight_barrage > 0 && (
+                <div className="absolute inset-0 bg-stone-950/75 rounded-xl flex items-center justify-center text-[11px] font-mono font-bold text-amber-300">
+                  {skillCds.starlight_barrage.toFixed(1)}
+                </div>
+              )}
             </button>
             <button
               onClick={() => triggerHeroAttack()}
@@ -3653,8 +3878,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
                 （顶栏「采墨 50」）→ 他们会自动汲取墨韵运回墨阁
               </li>
               <li>
-                <strong className="text-shilv">全平台挥毫手势</strong>
-                ：点地漫步、点敌出剑、划手势施法；电脑端 WASD + J 攻击，右下技能键随时可点
+                <strong className="text-shilv">上下分区操控</strong>
+                ：上区画字/划手势施法，下区点地漫步、点敌出剑；电脑端 WASD + J 攻击，右下技能键随时可点
               </li>
               <li>
                 <strong className="text-cinnabar">横划屏幕</strong>

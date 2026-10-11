@@ -108,6 +108,9 @@ function checkAchievements(
 export default function App() {
   const [mode, setMode] = useState<GameMode>('MENU');
   const [currentLevel, setCurrentLevel] = useState<LevelConfig>(CHAPTER_LEVELS[0]);
+  // 战斗会话序号：每次开战自增，作为 BattleView 的 key —— 保证切折/重开时全新挂载，
+  // 根治「进入下一关仍残留旧场景致卡死」（旧组件全部 ref/波次时间线随卸载清零）
+  const [battleSession, setBattleSession] = useState(0);
   const [progress, setProgress] = useState<PlayerProgress>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -138,6 +141,8 @@ export default function App() {
     setCurrentLevel(level);
     setBattleResult(null);
     setMode('BATTLE');
+    // 会话序号自增 → key 变化 → 旧 BattleView 完全卸载（RAF/定时器/部队/波次全清）后全新开战场
+    setBattleSession((s) => s + 1);
     sound.startBGM();
   };
 
@@ -514,6 +519,7 @@ export default function App() {
 
       {mode === 'BATTLE' && (
         <BattleView
+          key={`${currentLevel.id}-${battleSession}`}
           level={currentLevel}
           progress={progress}
           onVictory={handleVictory}
