@@ -169,7 +169,7 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
 
                   {/* 题跋式引文：朱丝左界 */}
                   <div className="my-4 pl-3 border-l-2 border-cinnabar/60">
-                    <p className="text-xs font-serif text-ink-mid leading-relaxed">
+                    <p className="text-sm font-brush-xing text-ink-mid leading-relaxed">
                       {level.poeticVerse}
                     </p>
                   </div>
@@ -249,7 +249,7 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
               </p>
 
               <div className={`my-4 pl-3 border-l-2 ${endlessUnlocked ? 'border-paper-dim/60' : 'border-cinnabar/60'}`}>
-                <p className={`text-xs font-serif leading-relaxed ${endlessUnlocked ? 'text-paper-dim' : 'text-ink-mid'}`}>
+                <p className={`text-sm font-brush-xing leading-relaxed ${endlessUnlocked ? 'text-paper-dim' : 'text-ink-mid'}`}>
                   {ENDLESS_LEVEL.poeticVerse}
                 </p>
               </div>

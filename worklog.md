@@ -132,3 +132,26 @@ Stage Summary:
 - dev server 以守护进程常驻（scripts/start_vite_daemon.py 可复用）
 - 预览链路恢复：caddy → localhost:3000 → 200 OK
 - 项目维持 React+Vite，未迁移 Next.js（遵守硬约束）
+
+---
+Task ID: 7
+Agent: 主 agent (Super Z)
+Task: 修复首页立轴图错印问题 + 引入奔放书法字体三件套
+
+Work Log:
+- 用户指出立轴图（hero_poet_avatar）左侧题字栏出现「印章」二字字面题字 + 刻着「印章」的红印（AI 把提示词关键词画进画面），且此前已有正常古印
+- 尝试 AI 图像编辑删除 → 失败反噬（模型把「印章」放大重绘到画面顶部），证实"删除类"提示词对文字元素反效果
+- 改用确定性方案：OpenCV bbox 内红印/黑字像素检测（红色通道阈值 + 暗度阈值）+ 膨胀 3px + TELEA inpaint，精准剜除两处错印（scripts/patch_avatar_seal.py），左下仿古收藏印与其余画面分毫未动，构图回归「题诗→落款→古印」
+- 字库排查：霞鹜文楷沙箱已有（lxgw-wenkai 目录，之前已子集化接入）；本地无奔放书法体
+- 网络搜索选型三款 OFL 开源书法字体并经 @fontsource 安装（bun add）：
+  * Ma Shan Zheng 马善政毛笔楷书（毛笔楷）→ 首页 h1 大标题（替换 font-serif font-black，避免合成粗体糊笔画）
+  * Zhi Mang Xing 钟齐志莽行书（行书）→ 首页竖排签条 + 选折页题跋引文（text-xs→text-sm 保可读）
+  * Liu Jian Mao Cao 刘建毛草（狂草）→ 战报立轴诗句题跋（text-sm→text-lg 高光装饰）
+- 接线：main.tsx 三行 fontsource import（unicode-range 子集按需加载）；index.css @theme 新增 --font-brush-kai/xing/cao 三令牌
+- 验证：tsc 零错误；vite build 1.94s 成功；agent-browser 截图（首页 h1 毛笔笔触生效、签条行书生效、选折页题跋行书生效、立轴图干净）控制台零错误
+
+Stage Summary:
+- hero_poet_avatar_1791652089636.jpg 原地修复（git 历史保留原图）
+- 书法三体接入：楷→标题 / 行→题跋 / 草→战报，UI 信息层仍以文楷保证可读性
+- scripts/patch_avatar_seal.py 可复用（像素级文字/印章移除方案，替代不可靠的 AI 删除式编辑）
+- 未动游戏架构，未迁移 Next.js

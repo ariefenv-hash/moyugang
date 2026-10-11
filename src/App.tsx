@@ -313,7 +313,7 @@ export default function App() {
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.55, delay: 0.08 }}
-                className="text-4xl md:text-5xl font-serif font-black tracking-widest text-ink-strong leading-tight"
+                className="text-4xl md:text-5xl font-brush-kai tracking-widest text-ink-strong leading-tight"
               >
                 一砚清霜写江山
                 <br />
@@ -407,7 +407,7 @@ export default function App() {
                 </div>
                 {/* 竖排题跋签条 */}
                 <div className="hidden sm:flex w-9 py-4 items-start justify-center panel-paper-deep border-rule-ink">
-                  <span className="verse-v text-[13px] font-serif text-ink-mid">
+                  <span className="verse-v text-[13px] font-brush-xing text-ink-mid">
                     十步杀一人 千里不留行
                   </span>
                 </div>

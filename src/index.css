@@ -30,6 +30,11 @@
   --font-sans: 'LXGW WenKai', 'Noto Serif SC', 'PingFang SC', 'Microsoft YaHei', serif;
   --font-serif: 'LXGW WenKai', 'Noto Serif SC', 'Songti SC', 'STSong', serif;
 
+  /* 书法三体（仅用于题跋/诗句等装饰性文本，UI 信息层仍以文楷保证可读性） */
+  --font-brush-kai: 'Ma Shan Zheng', 'LXGW WenKai', 'Noto Serif SC', serif;   /* 毛笔楷：大标题 */
+  --font-brush-xing: 'Zhi Mang Xing', 'LXGW WenKai', 'Noto Serif SC', serif;  /* 行书：签条题跋 */
+  --font-brush-cao: 'Liu Jian Mao Cao', 'LXGW WenKai', 'Noto Serif SC', serif;/* 狂草：战报高光 */
+
   /* 宣纸（冷调绢白系） */
   --color-paper: #e9e3d4;
   --color-paper-soft: #f1ecdf;

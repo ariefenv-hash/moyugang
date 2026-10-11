@@ -143,7 +143,7 @@ export const VictoryDefeatModal: React.FC<VictoryDefeatModalProps> = ({
 
         {/* 题跋：诗句收束 */}
         <div className="my-5 pl-4 border-l-2 border-cinnabar/60 w-full text-left">
-          <p className="text-sm font-serif text-ink leading-loose">{poeticVerse}</p>
+          <p className="text-lg font-brush-cao text-ink leading-loose">{poeticVerse}</p>
         </div>
 
         {/* New achievements */}
