@@ -249,6 +249,14 @@ export const BattleView: React.FC<BattleViewProps> = ({
   const [stageBanner, setStageBanner] = useState<string | null>(level.poeticVerse);
   const [bossAnnounced, setBossAnnounced] = useState(false);
 
+  // ===== 开战卷首语：本折剧情引言，8s 后自散（配合 stageBanner 诗签共同演出） =====
+  const [storyHead, setStoryHead] = useState<string | null>(level.storyIntro ?? null);
+  useEffect(() => {
+    if (!storyHead) return;
+    const tm = setTimeout(() => setStoryHead(null), 8000);
+    return () => clearTimeout(tm);
+  }, [storyHead]);
+
   // Recent Recognized Calligraphy Gesture Badge (e.g. 「横 · 断水东流」)
   const [gestureBadge, setGestureBadge] = useState<{ text: string; sub: string } | null>(null);
 
@@ -2188,14 +2196,16 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
       if (now >= nextEnemyWaveTimeRef.current) {
         nextEnemyWaveTimeRef.current = now + lv.enemyWaveInterval;
-        spawnUnit('SWORD', true, WORLD_WIDTH - 140);
-        if (lv.id >= 2) spawnUnit('ARCHER', true, WORLD_WIDTH - 160);
-        if (lv.id >= 3) spawnUnit('GUARDIAN', true, WORLD_WIDTH - 150);
+        // 周期性基础波次：编成由关卡数据驱动（baselineWaves），缺省剑客打底
+        const baseline: UnitType[] = lv.baselineWaves ?? ['SWORD'];
+        baseline.forEach((unitT, i) => {
+          safeTimeout(() => spawnUnit(unitT, true, WORLD_WIDTH - 140 - i * 14), i * 320);
+        });
       }
 
       if (lv.boss && !bossSpawnedRef.current) {
         const baseDamaged = enemyBaseHpRef.current < enemyBaseMaxHpRef.current * 0.85;
-        const timeThreshold = now >= (lv.id === 5 ? 25 : 45);
+        const timeThreshold = now >= (lv.bossTime ?? (lv.id === 5 ? 25 : 45));
 
         if (baseDamaged || timeThreshold) {
           bossSpawnedRef.current = true;
@@ -2204,7 +2214,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
           sound.playUltimate();
           triggerSealStamp(WORLD_WIDTH - 200, (LANE_MIN_Y.current + LANE_MAX_Y.current) * 0.5, '尊');
-          spawnUnit(lv.id === 5 ? 'GUARDIAN' : 'SWORD', true, WORLD_WIDTH - 200, undefined, true);
+          spawnUnit(lv.bossUnit ?? (lv.id === 5 ? 'GUARDIAN' : 'SWORD'), true, WORLD_WIDTH - 200, undefined, true);
         }
       }
     } else {
@@ -3058,6 +3068,18 @@ export const BattleView: React.FC<BattleViewProps> = ({
             </p>
             <p className="mt-1 text-[11px] text-stone-400 font-serif tracking-wider">
               {level.poeticAuthor}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 开战卷首语：本折剧情引言（纸卷风，8s 自散） */}
+      {storyHead && (
+        <div className="absolute top-44 left-1/2 -translate-x-1/2 z-20 pointer-events-none text-center animate-fade-in max-w-xs sm:max-w-sm md:max-w-md w-full px-4">
+          <div className="px-5 py-2.5 bg-stone-900/85 border-x border-amber-900/40 rounded-md backdrop-blur-sm shadow-xl">
+            <p className="text-[10px] text-amber-500/80 font-serif tracking-[0.3em] mb-0.5">卷首语</p>
+            <p className="text-xs md:text-sm text-stone-200 font-serif leading-relaxed">
+              {storyHead}
             </p>
           </div>
         </div>

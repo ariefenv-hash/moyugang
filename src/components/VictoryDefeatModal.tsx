@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, RotateCcw, ArrowRight, Home, Star, Swords, Flame, Timer, ShieldCheck, Award } from 'lucide-react';
+import { Sparkles, RotateCcw, ArrowRight, Home, Star, Swords, Flame, Timer, ShieldCheck, Award, ScrollText } from 'lucide-react';
 import { AchievementDef } from '../types/game';
 import { ACHIEVEMENTS } from '../data/gameData';
 
@@ -7,6 +7,8 @@ interface VictoryDefeatModalProps {
   isVictory: boolean;
   levelTitle: string;
   poeticVerse: string;
+  /** 大章通关尾声（终折大捷时展示剧情卷宗） */
+  epilogue?: string;
   jadeEarned: number;
   stars: number;
   kills: number;
@@ -19,6 +21,8 @@ interface VictoryDefeatModalProps {
   onNextLevel?: () => void;
   onRetry: () => void;
   onBackToMap: () => void;
+  /** 下一折按钮文案（跨章时显示「启下一章」） */
+  nextLevelLabel?: string;
 }
 
 function StatChip({
@@ -47,6 +51,7 @@ export const VictoryDefeatModal: React.FC<VictoryDefeatModalProps> = ({
   isVictory,
   levelTitle,
   poeticVerse,
+  epilogue,
   jadeEarned,
   stars,
   kills,
@@ -59,6 +64,7 @@ export const VictoryDefeatModal: React.FC<VictoryDefeatModalProps> = ({
   onNextLevel,
   onRetry,
   onBackToMap,
+  nextLevelLabel = '下一折',
 }) => {
   const minutes = Math.floor(durationSec / 60);
   const seconds = durationSec % 60;
@@ -146,6 +152,17 @@ export const VictoryDefeatModal: React.FC<VictoryDefeatModalProps> = ({
           <p className="text-lg font-brush-cao text-ink leading-loose">{poeticVerse}</p>
         </div>
 
+        {/* 章节尾声：大章终折大捷的剧情卷宗 */}
+        {isVictory && epilogue && (
+          <div className="w-full mb-4 p-4 panel-paper text-left border-l-2 border-cinnabar/70">
+            <p className="text-[11px] font-serif font-bold text-cinnabar tracking-[0.25em] mb-2 flex items-center gap-1.5">
+              <ScrollText className="w-3.5 h-3.5" />
+              章节尾声
+            </p>
+            <p className="text-xs text-ink-mid font-serif leading-loose text-justify">{epilogue}</p>
+          </div>
+        )}
+
         {/* New achievements */}
         {newAchievements.length > 0 && (
           <div className="w-full mb-4 p-3 panel-paper text-left">
@@ -195,7 +212,7 @@ export const VictoryDefeatModal: React.FC<VictoryDefeatModalProps> = ({
               onClick={onNextLevel}
               className="btn-seal flex-1 py-3 px-4 text-xs font-serif font-bold tracking-widest flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              下一折
+              {nextLevelLabel}
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}

@@ -97,9 +97,14 @@ async def run_flow(ctx, tag, is_mobile):
         await page.get_by_text('启卷入战').first.click()
         await page.wait_for_timeout(900)
 
-    # 5) 选折 → 出战第一折
+    # 5) 选折 → 出战第一折（首次进入会自动弹「章前引子」卷轴，先启卷再选折）
     R['select_page'] = await page.get_by_text('启程试炼').first.is_visible()
     await page.screenshot(path=f'{OUT}/noimg_{tag}_5_select.png')
+    try:
+        await page.get_by_role('button', name='启 卷').click(timeout=2500)
+        await page.wait_for_timeout(400)
+    except Exception:
+        pass
     await page.get_by_text('启程试炼').first.click()
     await page.wait_for_timeout(2500)
 

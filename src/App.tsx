@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { GameMode, LevelConfig, PlayerProgress, BattleResultStats, AchievementDef } from './types/game';
 import { CHAPTER_LEVELS, ENDLESS_LEVEL, ACHIEVEMENTS } from './data/gameData';
+import {
+  MAX_STORY_LEVEL_ID,
+  getChapterByLevelId,
+  getChapterFoldPosition,
+  CN_NUMS,
+} from './data/story';
 import { BattleView } from './components/BattleView';
 import { ChapterSelect } from './components/ChapterSelect';
 import { PavilionUpgrades } from './components/PavilionUpgrades';
@@ -28,6 +34,7 @@ const STORAGE_KEY = 'ink_and_steel_progress_v1';
 const INITIAL_PROGRESS: PlayerProgress = {
   unlockedLevel: 1,
   completedLevels: [],
+  storySeen: [],
   jadeSparks: 120, // Starting bonus for exploring
   heroUpgrades: {
     attackLevel: 0,
@@ -63,6 +70,7 @@ function migrateProgress(raw: any): PlayerProgress {
     citadelUpgrades: { ...INITIAL_PROGRESS.citadelUpgrades, ...(raw?.citadelUpgrades || {}) },
     levelStars: raw?.levelStars || {},
     achievements: Array.isArray(raw?.achievements) ? raw.achievements : [],
+    storySeen: Array.isArray(raw?.storySeen) ? raw.storySeen : [],
   };
 }
 
@@ -84,6 +92,8 @@ function checkAchievements(
     if (progress.completedLevels.length >= 1 || progress.unlockedLevel >= 2) add('first_clear');
     if (progress.completedLevels.includes(3)) add('chapter_half');
     if (progress.completedLevels.includes(5)) add('chapter_clear');
+    if (progress.completedLevels.includes(8)) add('chapter2_half');
+    if (progress.completedLevels.includes(10)) add('chapter2_clear');
     if (stats.baseHpPct >= 0.7) add('perfect_defense');
   }
   if (stats.maxCombo >= 20) add('combo_dragon');
@@ -137,7 +147,11 @@ export default function App() {
 
     setProgress((prev) => {
       const completed = Array.from(new Set([...prev.completedLevels, level.id]));
-      const nextUnlocked = Math.max(prev.unlockedLevel, Math.min(5, level.id + 1));
+      // 跨章解锁链：本折通关即解锁下一折（若已是已启章节末折，则解锁下一大章首折）
+      const nextUnlocked = Math.max(
+        prev.unlockedLevel,
+        Math.min(MAX_STORY_LEVEL_ID, level.id + 1)
+      );
       const prevStars = prev.levelStars[level.id] || 0;
       return {
         ...prev,
@@ -211,6 +225,35 @@ export default function App() {
       setMode('LEVEL_SELECT');
     }
   };
+
+  /** 章前引子已读标记（每章仅首次自动弹出） */
+  const handleMarkStorySeen = (chapterId: number) => {
+    setProgress((prev) =>
+      prev.storySeen.includes(chapterId)
+        ? prev
+        : { ...prev, storySeen: [...prev.storySeen, chapterId] }
+    );
+  };
+
+  /** 终折通关时展示所属大章的尾声卷宗 */
+  const victoryEpilogue = (() => {
+    if (!battleResult || battleResult.status !== 'VICTORY' || currentLevel.endless) return undefined;
+    const chapter = getChapterByLevelId(currentLevel.id);
+    if (!chapter || chapter.status !== 'RELEASED') return undefined;
+    const levels = chapter.levels ?? [];
+    const isFinalFold = levels.length > 0 && levels[levels.length - 1].id === currentLevel.id;
+    return isFinalFold ? chapter.epilogue || undefined : undefined;
+  })();
+
+  /** 下一折按钮文案：跨章时提示「启下一章」 */
+  const nextLevelLabel = (() => {
+    if (currentLevel.endless) return '下一折';
+    const curCh = getChapterByLevelId(currentLevel.id);
+    const nextLevel = CHAPTER_LEVELS.find((l) => l.id === currentLevel.id + 1);
+    if (!curCh || !nextLevel) return '下一折';
+    const nextCh = getChapterByLevelId(nextLevel.id);
+    return nextCh && nextCh.id !== curCh.id ? '启下一章' : '下一折';
+  })();
 
   const toggleSound = () => {
     const muted = sound.toggleMute();
@@ -330,7 +373,7 @@ export default function App() {
                 transition={{ duration: 0.55, delay: 0.16 }}
                 className="text-sm text-ink-mid font-serif leading-loose max-w-md"
               >
-                告别单调纯旁观的阵线对撞！亲临前线操控「云砚剑仙」，手握落墨三式与绝技「水墨山河」，统领采墨侍、折柳剑客、抚竹射手与墨岩卫，征战五大诗意关卡。更有墨灵祝福三选一、文房四宝收集、墨龙卷与墨滞时刻等奇遇机制，通关后更可入无尽长夜，迎战无穷墨潮！
+                告别单调纯旁观的阵线对撞！亲临前线操控「云砚剑仙」，手握落墨三式与绝技「水墨山河」，统领采墨侍、折柳剑客、抚竹射手与墨岩卫，征战十章水墨长卷。第一大章《风雅集》与第二大章《山河谣》已启，更有墨灵祝福、文房四宝、墨龙卷与墨滞时刻等奇遇机制，通关后更可入无尽长夜，迎战无穷墨潮！
               </motion.p>
 
               {/* Action Buttons */}
@@ -372,7 +415,15 @@ export default function App() {
                 transition={{ duration: 0.6, delay: 0.32 }}
                 className="pt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-ink-light font-serif"
               >
-                <span>当前进度: 第 <span className="font-mono text-ink-mid">{progress.unlockedLevel}</span>/5 折</span>
+                <span>
+                  当前进度:{' '}
+                  {(() => {
+                    const pos = getChapterFoldPosition(Math.min(progress.unlockedLevel, MAX_STORY_LEVEL_ID));
+                    return pos
+                      ? `第${CN_NUMS[pos.chapterNo] ?? pos.chapterNo}章 · 第${CN_NUMS[pos.foldNo] ?? pos.foldNo}折`
+                      : `第 ${progress.unlockedLevel} 关`;
+                  })()}
+                </span>
                 <span aria-hidden="true" className="text-cinnabar/50">·</span>
                 <span>已通关: <span className="font-mono text-ink-mid">{progress.completedLevels.length}</span> 关</span>
                 {progress.endlessBest > 0 && (
@@ -422,7 +473,7 @@ export default function App() {
 
           {/* 地杆：卷尾 */}
           <footer className="relative z-10 flex flex-wrap items-center justify-between gap-2 px-8 py-4 border-t rule-ink text-xs text-ink-light">
-            <span className="font-serif tracking-wider">《风雅集·翰墨千秋》 第一大章全五折已备</span>
+            <span className="font-serif tracking-wider">《墨韵战纪》主线十章徐徐展开 —— 风雅、山河两卷已备</span>
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setShowAchievements(true)}
@@ -449,6 +500,7 @@ export default function App() {
           onSelectLevel={handleStartBattle}
           onOpenUpgrades={() => setMode('UPGRADES')}
           onBackToMenu={() => setMode('MENU')}
+          onMarkStorySeen={handleMarkStorySeen}
         />
       )}
 
@@ -480,6 +532,7 @@ export default function App() {
           isVictory={battleResult.status === 'VICTORY'}
           levelTitle={currentLevel.title}
           poeticVerse={currentLevel.poeticVerse}
+          epilogue={victoryEpilogue}
           jadeEarned={battleResult.stats.jadeEarned}
           stars={battleResult.stats.stars}
           kills={battleResult.stats.kills}
@@ -490,8 +543,9 @@ export default function App() {
           endlessBest={progress.endlessBest}
           newAchievements={battleResult.newAchievements}
           onNextLevel={
-            !currentLevel.endless && currentLevel.id < 5 ? handleNextLevel : undefined
+            !currentLevel.endless && currentLevel.id < MAX_STORY_LEVEL_ID ? handleNextLevel : undefined
           }
+          nextLevelLabel={nextLevelLabel}
           onRetry={() => handleStartBattle(currentLevel)}
           onBackToMap={() => {
             setBattleResult(null);

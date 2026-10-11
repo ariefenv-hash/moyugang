@@ -244,6 +244,9 @@ export class CanvasRenderer {
       this.drawDamageNumber(d, cameraX);
     });
 
+    // 11.5 大气天气层（章节氛围：雾带/霜叶/雷雨/墨尘，覆于单位层之上）
+    this.drawAmbientWeather(level, gameTime, laneMinY);
+
     ctx.restore();
 
     // 12. 墨滞时刻全屏滤镜（屏幕空间，不受镜头/震动影响）
@@ -507,6 +510,30 @@ export class CanvasRenderer {
       skyGrad.addColorStop(0, '#1c1218');
       skyGrad.addColorStop(0.6, '#38222b');
       skyGrad.addColorStop(1, '#f2d8dd');
+    } else if (level.ambientType === 'MIST') {
+      // 烟雨断桥：灰青水汽，天地褪色
+      skyGrad.addColorStop(0, '#252d33');
+      skyGrad.addColorStop(0.55, '#5d6a6e');
+      skyGrad.addColorStop(0.85, '#9aa5a3');
+      skyGrad.addColorStop(1, '#c5ccc7');
+    } else if (level.ambientType === 'AUTUMN') {
+      // 枫林晚渡：霜枫似火，暮色燎原
+      skyGrad.addColorStop(0, '#241009');
+      skyGrad.addColorStop(0.5, '#6e2c12');
+      skyGrad.addColorStop(0.8, '#b45824');
+      skyGrad.addColorStop(1, '#e8a45c');
+    } else if (level.ambientType === 'STORM') {
+      // 雷峰夕照：雷雨压城，墨云翻滚
+      skyGrad.addColorStop(0, '#080d14');
+      skyGrad.addColorStop(0.5, '#17222f');
+      skyGrad.addColorStop(0.8, '#2c3b4c');
+      skyGrad.addColorStop(1, '#47586a');
+    } else if (level.ambientType === 'VOID') {
+      // 文枢归一：蚀月墨渊，天地尽头
+      skyGrad.addColorStop(0, '#0a0512');
+      skyGrad.addColorStop(0.5, '#1d0f31');
+      skyGrad.addColorStop(0.82, '#33163f');
+      skyGrad.addColorStop(1, '#4a1e3f');
     } else {
       skyGrad.addColorStop(0, '#120d1c');
       skyGrad.addColorStop(0.4, '#2e192f');
@@ -575,6 +602,29 @@ export class CanvasRenderer {
       ctx.beginPath();
       ctx.arc(celestialX, 85, 30, 0, Math.PI * 2);
       ctx.fill();
+    } else if (level.ambientType === 'VOID') {
+      // 蚀月：玄色圆盘噬去月华，唯余紫白冕环（洗墨之乱的天地异象）
+      const eclipseX = this.width * 0.75 - cameraX * 0.05;
+      const corona = ctx.createRadialGradient(eclipseX, 90, 26, eclipseX, 90, 88);
+      corona.addColorStop(0, 'rgba(216, 180, 254, 0.85)');
+      corona.addColorStop(0.35, 'rgba(147, 112, 219, 0.35)');
+      corona.addColorStop(1, 'rgba(88, 28, 135, 0)');
+      ctx.fillStyle = corona;
+      ctx.beginPath();
+      ctx.arc(eclipseX, 90, 88, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 玄盘本体
+      ctx.fillStyle = '#0a0512';
+      ctx.beginPath();
+      ctx.arc(eclipseX, 90, 30, 0, Math.PI * 2);
+      ctx.fill();
+      // 新月细环（被蚀后残存的月缘）
+      ctx.strokeStyle = 'rgba(233, 213, 255, 0.9)';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(eclipseX, 90, 31.5, Math.PI * 0.62, Math.PI * 1.58);
+      ctx.stroke();
     } else if (level.ambientType === 'DAWN') {
       const sunGlow = ctx.createRadialGradient(celestialX, 100, 15, celestialX, 100, 130);
       sunGlow.addColorStop(0, 'rgba(255, 220, 140, 0.9)');
@@ -624,6 +674,123 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
+  /** 大气天气层：按章节氛围程序化绘制（纯 gameTime 函数，暂停自然凝滞；行云模式裁剪粒子） */
+  private drawAmbientWeather(level: LevelConfig, gameTime: number, laneMinY: number) {
+    const ctx = this.ctx;
+    const t = gameTime;
+    const W = this.width;
+    const H = this.height;
+
+    if (level.ambientType === 'MIST') {
+      // 烟雨断桥：横移雾带 + 灰青细雨
+      ctx.save();
+      for (let i = 0; i < 3; i++) {
+        const seed = i * 173.3;
+        const bandH = 34 + i * 14;
+        const bandY = laneMinY - 96 + i * 42 + Math.sin(t * 0.35 + seed) * 8;
+        const drift = ((t * (9 + i * 4) + seed * 7) % (W + 240)) - 120;
+        const g = ctx.createLinearGradient(drift - 180, 0, drift + 180, 0);
+        g.addColorStop(0, 'rgba(213, 220, 216, 0)');
+        g.addColorStop(0.5, `rgba(213, 220, 216, ${0.16 - i * 0.03})`);
+        g.addColorStop(1, 'rgba(213, 220, 216, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(drift - 180, bandY, 360, bandH);
+      }
+      if (!this.qualityLow) {
+        ctx.strokeStyle = 'rgba(214, 224, 220, 0.22)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 42; i++) {
+          const seed = i * 97.31;
+          const rx = ((seed * 73 + t * 240) % (W + 40)) - 20;
+          const ry = ((seed * 57 + t * 430) % (H + 80)) - 40;
+          ctx.moveTo(rx, ry);
+          ctx.lineTo(rx - 2.4, ry + 11);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'AUTUMN') {
+      // 枫林晚渡：飘旋霜叶
+      if (this.qualityLow) return;
+      ctx.save();
+      const palette = ['#b45824', '#8a2f1d', '#d97b3f', '#a83a2a', '#c9552e'];
+      for (let i = 0; i < 14; i++) {
+        const seed = i * 131.7;
+        const bx = ((seed * 53) % (W + 80)) - 40;
+        const lx = bx + Math.sin(t * 0.8 + seed) * 46;
+        const ly = ((seed * 97 + t * 88) % (H + 60)) - 30;
+        const rot = t * 1.9 + seed;
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate(rot);
+        ctx.globalAlpha = 0.72;
+        ctx.fillStyle = palette[i % palette.length];
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 5.2, 2.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'STORM') {
+      // 雷峰夕照：斜骤雨 + 周期惊雷
+      ctx.save();
+      if (!this.qualityLow) {
+        ctx.strokeStyle = 'rgba(178, 196, 214, 0.24)';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        for (let i = 0; i < 58; i++) {
+          const seed = i * 89.77;
+          const rx = ((seed * 67 + t * 520) % (W + 60)) - 30;
+          const ry = ((seed * 43 + t * 760) % (H + 90)) - 45;
+          ctx.moveTo(rx, ry);
+          ctx.lineTo(rx - 4.5, ry + 19);
+        }
+        ctx.stroke();
+      }
+      // 惊雷：7.5s 周期双脉冲白闪 + 折线闪电（seed 随周期轮换）
+      const ph = t % 7.5;
+      if (ph < 0.5) {
+        const a =
+          ph < 0.08 ? 0.5 : ph < 0.16 ? 0.08 : ph < 0.26 ? 0.34 : Math.max(0, 0.34 * (1 - (ph - 0.26) / 0.24));
+        ctx.fillStyle = `rgba(226, 238, 255, ${a})`;
+        ctx.fillRect(0, 0, W, H);
+        if (ph < 0.2) {
+          const cyc = Math.floor(t / 7.5);
+          let bx = ((cyc * 197) % Math.floor(W * 0.7)) + W * 0.15;
+          let by = 0;
+          ctx.strokeStyle = 'rgba(230, 240, 255, 0.85)';
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          for (let s = 0; s < 6; s++) {
+            const seg = ((cyc * 61 + s * 37) % 70) - 35;
+            bx += seg;
+            by += (laneMinY * 0.72) / 6;
+            ctx.lineTo(bx, by);
+          }
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'VOID') {
+      // 文枢归一：上浮的褪字墨尘（被洗去的文字化作微光升散）
+      if (this.qualityLow) return;
+      ctx.save();
+      for (let i = 0; i < 20; i++) {
+        const seed = i * 149.3;
+        const mx = ((seed * 41) % (W + 60)) - 30 + Math.sin(t * 0.5 + seed) * 26;
+        const my = H - ((seed * 83 + t * 42) % (H + 50));
+        const r = 1.4 + (seed % 10) * 0.18;
+        ctx.fillStyle = `rgba(216, 180, 254, ${0.1 + (seed % 7) * 0.028})`;
+        ctx.beginPath();
+        ctx.arc(mx, my, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
   // Draw 2.5D Perspective Ground Plane
   private drawPerspectiveGround(
     cameraX: number,
@@ -645,6 +812,26 @@ export class CanvasRenderer {
       groundGrad.addColorStop(0, '#334835');
       groundGrad.addColorStop(0.3, '#213023');
       groundGrad.addColorStop(1, '#111912');
+    } else if (level.ambientType === 'MIST') {
+      // 烟雨青灰石板
+      groundGrad.addColorStop(0, '#6b7678');
+      groundGrad.addColorStop(0.3, '#455154');
+      groundGrad.addColorStop(1, '#1c2426');
+    } else if (level.ambientType === 'AUTUMN') {
+      // 霜枫赤褐渡口
+      groundGrad.addColorStop(0, '#5e3220');
+      groundGrad.addColorStop(0.3, '#3d2015');
+      groundGrad.addColorStop(1, '#170c08');
+    } else if (level.ambientType === 'STORM') {
+      // 雷雨溃溡深蓝黑
+      groundGrad.addColorStop(0, '#2b3540');
+      groundGrad.addColorStop(0.3, '#1c242d');
+      groundGrad.addColorStop(1, '#0b0f14');
+    } else if (level.ambientType === 'VOID') {
+      // 墨渊紫黑
+      groundGrad.addColorStop(0, '#241331');
+      groundGrad.addColorStop(0.3, '#160b22');
+      groundGrad.addColorStop(1, '#0a0512');
     } else {
       groundGrad.addColorStop(0, '#26262b');
       groundGrad.addColorStop(0.3, '#1c1c20');

@@ -27,6 +27,12 @@ async def main():
         # 进战斗
         await page.get_by_text('启卷入战').click()
         await page.wait_for_timeout(900)
+        # 新增：首次进入选折页会自动弹出「章前引子」卷轴，先启卷再选折
+        try:
+            await page.get_by_role('button', name='启 卷').click(timeout=2500)
+            await page.wait_for_timeout(400)
+        except Exception:
+            pass
         await page.get_by_text('启程试炼').first.click()
         await page.wait_for_timeout(2200)
 

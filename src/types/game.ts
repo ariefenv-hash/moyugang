@@ -210,7 +210,16 @@ export interface LevelConfig {
   description: string;
   enemyBaseHp: number;
   playerBaseHp: number;
-  ambientType: 'SNOW' | 'BAMBOO' | 'MOON' | 'PETAL' | 'DAWN';
+  ambientType:
+    | 'SNOW'
+    | 'BAMBOO'
+    | 'MOON'
+    | 'PETAL'
+    | 'DAWN'
+    | 'MIST'
+    | 'AUTUMN'
+    | 'STORM'
+    | 'VOID';
   initialInk: number;
   enemySpawns: {
     time: number;
@@ -225,10 +234,57 @@ export interface LevelConfig {
     attack: number;
     speed: number;
   };
+  /** Boss 出场使用的兵种造型（默认按旧规则：终折 GUARDIAN，其余 SWORD） */
+  bossUnit?: UnitType;
+  /** Boss 出场时间阈值秒数（或敌阵受创提前触发，默认：终折 25 / 其余 45） */
+  bossTime?: number;
+  /** 周期性基础波次的兵种编成（缺省时沿用旧行为：剑客打底，按折序加射手/重卫） */
+  baselineWaves?: UnitType[];
+  /** 开战卷首语：本折剧情引言（战斗开场展示数秒） */
+  storyIntro?: string;
   rewardJade: number;
   unlockedUnit?: UnitType;
   /** 无尽试炼模式：波次无限，敌軍逐波变强，坚守越久奖励越丰 */
   endless?: boolean;
+}
+
+/* ============================================================
+   主线剧情架构：十章总纲 + 大章元数据
+   新增一章 = 向 STORY_CHAPTERS 追加一个对象，UI/解锁/存档全自动适配
+   ============================================================ */
+
+/** 大章状态：已启（可玩）/ 未启（预告） */
+export type ChapterStatus = 'RELEASED' | 'UPCOMING';
+
+/** 十大章总纲条目（未启章仅展示预告，后续逐章实装） */
+export interface StoryOutlineEntry {
+  id: number;
+  anthology: string;
+  name: string;
+  teaser: string;
+  status: ChapterStatus;
+}
+
+/** 大章元数据：卷首诗 + 章前引子 + 通关尾声 + 折页关卡组 */
+export interface StoryChapterMeta {
+  id: number;
+  key: string;
+  /** 集名（如「风雅集」） */
+  anthology: string;
+  /** 章名（如「翰墨千秋」） */
+  name: string;
+  /** 卷首诗 */
+  verse: string;
+  verseAuthor: string;
+  /** 章前引子（剧情卷宗，进章首读） */
+  intro: string;
+  /** 通关尾声（终折大捷后展示） */
+  epilogue: string;
+  status: ChapterStatus;
+  /** 未启之卷的一句话预告 */
+  teaser?: string;
+  /** 本大章折页关卡（RELEASED 章必填） */
+  levels?: LevelConfig[];
 }
 
 /** 结算战斗统计：胜负、星级、击杀、最高连击、用时、基地留存、无尽波次 */
@@ -245,6 +301,8 @@ export interface BattleResultStats {
 export interface PlayerProgress {
   unlockedLevel: number;
   completedLevels: number[];
+  /** 已读过章前引子的大章 id 列表（每章仅自动弹一次） */
+  storySeen: number[];
   jadeSparks: number; // Currency for upgrades
   heroUpgrades: {
     attackLevel: number;

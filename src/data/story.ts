@@ -1,0 +1,550 @@
+import { LevelConfig, StoryChapterMeta, StoryOutlineEntry } from '../types/game';
+
+/* ============================================================
+   墨韵战纪 · 主线剧情总纲（十大章）
+   ------------------------------------------------------------
+   世界观：墨韵大陆以「文脉」为天地根基——万千诗篇文章化作
+   灵墨，滋养山河。玄墨军团欲洗尽天下文字，令山河褪色归寂。
+   剑仙云砚以笔意御剑、以字诀出招，护文脉、战墨潮。
+
+   扩展方式：向 STORY_CHAPTERS 追加一个 StoryChapterMeta，
+   章签导航、解锁链、剧情演出、存档进度即全自动适配。
+   ============================================================ */
+
+/** 十大章总纲（未启章仅展示预告） */
+export const MAIN_STORY_OUTLINE: StoryOutlineEntry[] = [
+  {
+    id: 1,
+    anthology: '风雅集',
+    name: '翰墨千秋',
+    teaser: '幻墨初乱，剑仙起阵，破玄墨尊主·千渊。',
+    status: 'RELEASED',
+  },
+  {
+    id: 2,
+    anthology: '山河谣',
+    name: '蚀文惊变',
+    teaser: '洗墨之乱席卷山河，集文心四魄，文枢殿决战蚀文君。',
+    status: 'RELEASED',
+  },
+  {
+    id: 3,
+    anthology: '漱玉词',
+    name: '断弦遗音',
+    teaser: '断弦夫人以音律蚀文，广陵散遗谱成决胜之钥。',
+    status: 'UPCOMING',
+  },
+  {
+    id: 4,
+    anthology: '边塞引',
+    name: '孤城万仞',
+    teaser: '褪色之潮北上边关，铁血将士以血肉护碑。',
+    status: 'UPCOMING',
+  },
+  {
+    id: 5,
+    anthology: '离骚赋',
+    name: '九歌天问',
+    teaser: '湘水神游，楚辞招魂，文脉源头初现端倪。',
+    status: 'UPCOMING',
+  },
+  {
+    id: 6,
+    anthology: '桃花源',
+    name: '武陵迷津',
+    teaser: '世外桃源竟是墨渊裂隙，渔人再入已是千年。',
+    status: 'UPCOMING',
+  },
+  {
+    id: 7,
+    anthology: '长安幻',
+    name: '盛世残卷',
+    teaser: '盛唐长安一夜成幻，盛世文章是真是妄？',
+    status: 'UPCOMING',
+  },
+  {
+    id: 8,
+    anthology: '赤壁赋',
+    name: '江月问舟',
+    teaser: '赤壁江月，古今一瞬，蚀文真相浮出水面。',
+    status: 'UPCOMING',
+  },
+  {
+    id: 9,
+    anthology: '墨梅图',
+    name: '淡墨痕迹',
+    teaser: '画中乾坤，一枝墨梅，最后的文心守护者现身。',
+    status: 'UPCOMING',
+  },
+  {
+    id: 10,
+    anthology: '文心雕龙',
+    name: '万象归宗',
+    teaser: '终章：文心殿终极之战，墨道归一，文章千古。',
+    status: 'UPCOMING',
+  },
+];
+
+/* ============================================================
+   第一大章 《风雅集·翰墨千秋》
+   ============================================================ */
+
+const CH1_LEVELS: LevelConfig[] = [
+  {
+    id: 1,
+    chapter: '风雅集·第一折',
+    title: '踏雪寻梅',
+    subtitle: '寒梅傲骨，初试锋芒',
+    poeticVerse: '踏雪无痕寻梅骨，一砚清霜写江山。',
+    poeticAuthor: '—— 咏梅引',
+    description: '冬雪初覆，幻墨残影自冰川而至。操控剑笔仙引导采墨侍采撷雪泉灵墨，率领折柳剑客荡涤残敌。',
+    storyIntro: '幻墨残影自冰川苏醒，踏碎寒梅初雪。第一战，试剑锋。',
+    ambientType: 'SNOW',
+    playerBaseHp: 1200,
+    enemyBaseHp: 1000,
+    initialInk: 180,
+    rewardJade: 120,
+    unlockedUnit: 'SWORD',
+    enemyWaveInterval: 14,
+    baselineWaves: ['SWORD'],
+    enemySpawns: [
+      { time: 8, unitType: 'SWORD', count: 1 },
+      { time: 22, unitType: 'SWORD', count: 2 },
+      { time: 42, unitType: 'SWORD', count: 3 },
+      { time: 65, unitType: 'SWORD', count: 4 },
+      { time: 90, unitType: 'SWORD', count: 5 },
+    ],
+  },
+  {
+    id: 2,
+    chapter: '风雅集·第二折',
+    title: '竹林清幽',
+    subtitle: '翠影摇曳，风羽穿林',
+    poeticVerse: '竹影扫阶尘不动，月穿潭底水无痕。',
+    poeticAuthor: '—— 幽篁记',
+    description: '穿过万竿翠竹，敌方暗伏了飞羽墨射。解锁「抚竹射手」，以远攻克远攻，借主角断水斩撕裂阵型。',
+    storyIntro: '穿过万竿翠竹，风里已有了墨腥气——玄墨军团的前锋就在林海深处。',
+    ambientType: 'BAMBOO',
+    playerBaseHp: 1400,
+    enemyBaseHp: 1300,
+    initialInk: 220,
+    rewardJade: 180,
+    unlockedUnit: 'ARCHER',
+    enemyWaveInterval: 15,
+    baselineWaves: ['SWORD', 'ARCHER'],
+    enemySpawns: [
+      { time: 6, unitType: 'SWORD', count: 2 },
+      { time: 20, unitType: 'ARCHER', count: 1 },
+      { time: 38, unitType: 'SWORD', count: 2 },
+      { time: 55, unitType: 'ARCHER', count: 2 },
+      { time: 75, unitType: 'SWORD', count: 3 },
+      { time: 95, unitType: 'ARCHER', count: 3 },
+    ],
+  },
+  {
+    id: 3,
+    chapter: '风雅集·第三折',
+    title: '月下独酌',
+    subtitle: '清辉朗照，磐石御夜',
+    poeticVerse: '花间一壶酒，独酌无相亲。剑起星汉落，墨染九州春。',
+    poeticAuthor: '—— 月下行',
+    description: '皎洁圆月之下，狂暴的玄墨重装侍卫汹涌来袭。解锁重装「墨岩卫」，构筑铜墙铁壁，护卫剑仙挥毫施法！',
+    storyIntro: '月色如洗，玄墨重装侍卫踏月而来。今夜独酌，以剑代酒。',
+    ambientType: 'MOON',
+    playerBaseHp: 1600,
+    enemyBaseHp: 1600,
+    initialInk: 250,
+    rewardJade: 240,
+    unlockedUnit: 'GUARDIAN',
+    enemyWaveInterval: 16,
+    baselineWaves: ['SWORD', 'ARCHER', 'GUARDIAN'],
+    enemySpawns: [
+      { time: 8, unitType: 'SWORD', count: 2 },
+      { time: 24, unitType: 'GUARDIAN', count: 1 },
+      { time: 44, unitType: 'ARCHER', count: 2 },
+      { time: 65, unitType: 'GUARDIAN', count: 2 },
+      { time: 90, unitType: 'SWORD', count: 4 },
+      { time: 115, unitType: 'GUARDIAN', count: 2 },
+    ],
+  },
+  {
+    id: 4,
+    chapter: '风雅集·第四折',
+    title: '流水落花',
+    subtitle: '琴音绕梁，宿命交锋',
+    poeticVerse: '落花流水春去也，天上人间剑自横。',
+    poeticAuthor: '—— 浣溪沙',
+    description: '桃花春水迢迢，敌方派出了宿敌「落花客」。解锁天籁之音「鸣筝琴师」，兼顾群体治疗与声波驱散，两军对决！',
+    storyIntro: '桃花春水迢迢，宿敌「落花客」临水而立。旧年一笔恩怨，今日了结。',
+    ambientType: 'PETAL',
+    playerBaseHp: 1800,
+    enemyBaseHp: 1900,
+    initialInk: 300,
+    rewardJade: 320,
+    unlockedUnit: 'HARPIST',
+    enemyWaveInterval: 16,
+    baselineWaves: ['SWORD', 'ARCHER', 'GUARDIAN'],
+    boss: {
+      name: '落花客·残红',
+      title: '敌方先锋剑客',
+      hp: 1200,
+      attack: 55,
+      speed: 180,
+    },
+    enemySpawns: [
+      { time: 6, unitType: 'SWORD', count: 3 },
+      { time: 22, unitType: 'ARCHER', count: 2 },
+      { time: 40, unitType: 'GUARDIAN', count: 2 },
+      { time: 60, unitType: 'HARPIST', count: 1 },
+      { time: 85, unitType: 'SWORD', count: 4 },
+      { time: 110, unitType: 'GUARDIAN', count: 3 },
+    ],
+  },
+  {
+    id: 5,
+    chapter: '风雅集·第五折',
+    title: '临江仙·破晓之决',
+    subtitle: '翰墨千秋，乾坤一掷',
+    poeticVerse: '滚滚长江东逝水，浪花淘尽英雄。是非成败转头空，青山依旧在，几度夕阳红。',
+    poeticAuthor: '—— 临江仙',
+    description: '破晓江畔，迎战第一大章终极宿敌「玄墨尊主·千渊」！拥有双阶段暗墨狂暴战姿，全军随君冲锋，水墨山河决胜负！',
+    storyIntro: '破晓在即，千渊亲临江畔。此战之后，山河或换新颜——全军，随君冲锋！',
+    ambientType: 'DAWN',
+    playerBaseHp: 2200,
+    enemyBaseHp: 2600,
+    initialInk: 350,
+    rewardJade: 500,
+    enemyWaveInterval: 18,
+    boss: {
+      name: '玄墨尊主·千渊',
+      title: '大章终局霸主',
+      hp: 2800,
+      attack: 85,
+      speed: 150,
+    },
+    baselineWaves: ['SWORD', 'ARCHER', 'GUARDIAN'],
+    enemySpawns: [
+      { time: 5, unitType: 'GUARDIAN', count: 2 },
+      { time: 20, unitType: 'ARCHER', count: 3 },
+      { time: 42, unitType: 'HARPIST', count: 2 },
+      { time: 68, unitType: 'SWORD', count: 5 },
+      { time: 95, unitType: 'GUARDIAN', count: 3 },
+      { time: 130, unitType: 'ARCHER', count: 4 },
+    ],
+  },
+];
+
+/* ============================================================
+   第二大章 《山河谣·蚀文惊变》
+   千渊陨落，其师「蚀文君」发动洗墨之乱：天地文章褪色，
+   文心四魄（诗/词/曲/赋）流散。云砚循残章南下，集魄铸脉。
+   ============================================================ */
+
+const CH2_LEVELS: LevelConfig[] = [
+  {
+    id: 6,
+    chapter: '山河谣·第一折',
+    title: '烟雨断桥',
+    subtitle: '灰雨洗字，初遇褪潮',
+    poeticVerse: '伞底烟波桥下客，一蓑灰雨褪春色。',
+    poeticAuthor: '—— 断桥烟雨',
+    description: '褪色笔吏的先锋已渡江南下，雨巷的诗句被一字字洗去，桥上行人抱着空白书卷。守住桥头墨阁，莫让褪色之潮越桥一步！',
+    storyIntro: '断桥烟雨，本该是词里最温柔的一笔。可如今雨丝是灰的，行人抱着空白的书卷匆匆而过——他们的名字已被洗去。',
+    ambientType: 'MIST',
+    playerBaseHp: 2400,
+    enemyBaseHp: 2900,
+    initialInk: 340,
+    rewardJade: 340,
+    enemyWaveInterval: 15,
+    baselineWaves: ['SWORD', 'ARCHER'],
+    enemySpawns: [
+      { time: 8, unitType: 'SWORD', count: 2 },
+      { time: 24, unitType: 'SWORD', count: 3 },
+      { time: 45, unitType: 'ARCHER', count: 2 },
+      { time: 66, unitType: 'SWORD', count: 3 },
+      { time: 88, unitType: 'ARCHER', count: 3 },
+      { time: 112, unitType: 'SWORD', count: 4 },
+    ],
+  },
+  {
+    id: 7,
+    chapter: '山河谣·第二折',
+    title: '枫林晚渡',
+    subtitle: '火墨燎原，渔歌护魄',
+    poeticVerse: '霜叶烧残红胜火，渔歌犹护一江秋。',
+    poeticAuthor: '—— 枫江渡',
+    description: '火墨顺着枫江蔓延，蚀文军欲焚渡夺魄。词魄藏在梢公的渔歌里——歌不停，词不灭。护住渡口，护住渔歌！',
+    storyIntro: '枫江渡口的暮色本是丹青妙笔，如今火墨顺江而下，霜枫烧作灰烬。老梢公立在船头唱着最后的渔歌——词魄就藏在那歌声里。',
+    ambientType: 'AUTUMN',
+    playerBaseHp: 2600,
+    enemyBaseHp: 3200,
+    initialInk: 360,
+    rewardJade: 400,
+    enemyWaveInterval: 15,
+    baselineWaves: ['SWORD', 'GUARDIAN'],
+    enemySpawns: [
+      { time: 6, unitType: 'SWORD', count: 3 },
+      { time: 24, unitType: 'GUARDIAN', count: 2 },
+      { time: 44, unitType: 'ARCHER', count: 3 },
+      { time: 64, unitType: 'HARPIST', count: 1 },
+      { time: 86, unitType: 'GUARDIAN', count: 2 },
+      { time: 108, unitType: 'SWORD', count: 5 },
+    ],
+  },
+  {
+    id: 8,
+    chapter: '山河谣·第三折',
+    title: '雷峰夕照',
+    subtitle: '风雷焚卷，诗魄蒙尘',
+    poeticVerse: '塔铃无语风雷急，纸上惊雷烬作灰。',
+    poeticAuthor: '—— 雷峰引',
+    description: '狂生「烬羽书生」携雷雨压塔，所写之字皆焚为灰，如今欲焚尽天下文章。击败他，夺回流散的诗魄！',
+    storyIntro: '雷峰塔的夕照被雷雨撕碎。塔顶立着一个焚稿的疯子——他写下的每一个字都烧成了灰。如今，他要把天下的字都烧成灰。',
+    ambientType: 'STORM',
+    playerBaseHp: 2800,
+    enemyBaseHp: 3500,
+    initialInk: 380,
+    rewardJade: 460,
+    enemyWaveInterval: 15,
+    baselineWaves: ['SWORD', 'ARCHER', 'GUARDIAN'],
+    boss: {
+      name: '烬羽书生·焚卷',
+      title: '洗墨麾下狂生',
+      hp: 3400,
+      attack: 95,
+      speed: 165,
+    },
+    bossUnit: 'GUARDIAN',
+    bossTime: 35,
+    enemySpawns: [
+      { time: 6, unitType: 'SWORD', count: 3 },
+      { time: 22, unitType: 'ARCHER', count: 3 },
+      { time: 42, unitType: 'GUARDIAN', count: 2 },
+      { time: 62, unitType: 'HARPIST', count: 1 },
+      { time: 84, unitType: 'SWORD', count: 4 },
+      { time: 108, unitType: 'GUARDIAN', count: 3 },
+    ],
+  },
+  {
+    id: 9,
+    chapter: '山河谣·第四折',
+    title: '寒潭鹤影',
+    subtitle: '冷月捞魄，守潭达旦',
+    poeticVerse: '寒潭渡鹤影，冷月葬花魂。',
+    poeticAuthor: '—— 潭月吟',
+    description: '曲魄沉在潭心，月圆之夜方能打捞。蚀文军的暗墨已在潭边渗开——守至天明，莫让污墨入潭！',
+    storyIntro: '寒潭是曲魄最后的容身之处。月圆之夜，潭心将浮出一页曲谱，映着鹤影翩跹。暗墨已在潭边渗开——天亮之前，务必守住。',
+    ambientType: 'MOON',
+    playerBaseHp: 3000,
+    enemyBaseHp: 3800,
+    initialInk: 400,
+    rewardJade: 520,
+    enemyWaveInterval: 16,
+    baselineWaves: ['ARCHER', 'GUARDIAN', 'HARPIST'],
+    enemySpawns: [
+      { time: 8, unitType: 'GUARDIAN', count: 2 },
+      { time: 26, unitType: 'ARCHER', count: 3 },
+      { time: 48, unitType: 'HARPIST', count: 2 },
+      { time: 70, unitType: 'GUARDIAN', count: 3 },
+      { time: 94, unitType: 'SWORD', count: 5 },
+      { time: 118, unitType: 'ARCHER', count: 4 },
+    ],
+  },
+  {
+    id: 10,
+    chapter: '山河谣·第五折',
+    title: '文枢归一',
+    subtitle: '洗墨之笔，万象归宗',
+    poeticVerse: '洗尽千章无一字，文枢殿上问归人。',
+    poeticAuthor: '—— 文枢谣',
+    description: '天地褪色的尽头，文枢殿前与蚀文君对写最后一篇山河文章。四魄在手，文心未凉——以剑为笔，写下那「归」字！',
+    storyIntro: '文枢殿立于天地褪色的尽头，殿前石阶的铭文正一字字消逝。蚀文君的洗墨之笔悬于半空——以剑锋为笔锋，与他对写！',
+    ambientType: 'VOID',
+    playerBaseHp: 3400,
+    enemyBaseHp: 4400,
+    initialInk: 440,
+    rewardJade: 800,
+    enemyWaveInterval: 17,
+    baselineWaves: ['SWORD', 'GUARDIAN', 'HARPIST'],
+    boss: {
+      name: '蚀文君·洗墨',
+      title: '洗墨之乱主使',
+      hp: 4200,
+      attack: 110,
+      speed: 150,
+    },
+    bossUnit: 'GUARDIAN',
+    bossTime: 25,
+    enemySpawns: [
+      { time: 5, unitType: 'GUARDIAN', count: 2 },
+      { time: 22, unitType: 'ARCHER', count: 3 },
+      { time: 44, unitType: 'HARPIST', count: 2 },
+      { time: 68, unitType: 'SWORD', count: 5 },
+      { time: 94, unitType: 'GUARDIAN', count: 3 },
+      { time: 122, unitType: 'ARCHER', count: 4 },
+      { time: 148, unitType: 'HARPIST', count: 2 },
+    ],
+  },
+];
+
+/* ============================================================
+   大章元数据全集（章前引子 / 卷首诗 / 通关尾声）
+   ============================================================ */
+
+export const STORY_CHAPTERS: StoryChapterMeta[] = [
+  {
+    id: 1,
+    key: 'fengya',
+    anthology: '风雅集',
+    name: '翰墨千秋',
+    verse: '一砚清霜写江山，剑破千峰墨染云。',
+    verseAuthor: '—— 风雅集·卷首',
+    intro: '幻墨残影自冰川苏醒，玄墨军团席卷山河。云砚剑仙以笔意御剑、以字诀出招，从踏雪寒梅到破晓江畔，五折连战，直破玄墨尊主·千渊——第一大章，翰墨千秋。',
+    epilogue: '千渊轰然崩解，玄墨军团如潮退去。然其残躯化作一缕玄烟遁入北天，临去留语：「师尊的洗墨之笔，将让你们的文章一字不存。」云砚握剑立于破晓江畔，望见北天月色正一寸寸褪成灰白。他忽然明白——这才是长卷的第一页。',
+    status: 'RELEASED',
+    levels: CH1_LEVELS,
+  },
+  {
+    id: 2,
+    key: 'shanhe',
+    anthology: '山河谣',
+    name: '蚀文惊变',
+    verse: '山河入梦字生尘，一夜西风褪色新。莫道文章千古事，笔锋所指即归人。',
+    verseAuthor: '—— 山河谣·卷首',
+    intro: '千渊陨落后第七日，江南的雨忽然褪成了灰白。书坊里的字迹一夜消失，戏台的曲谱化作白纸，连桥上的名字也从石碑上淡去——「洗墨之乱」开始了。玄墨尊主之师「蚀文君」携洗墨之笔现世，誓言洗净天下文章。文心四魄——诗、词、曲、赋——流散四方，是山河最后的颜色。云砚剑仙携剑南下：在天地褪尽之前，寻回每一魄，重铸文脉。',
+    epilogue: '洗墨之笔寸寸碎裂，褪去的文字如雪归林，纷纷飞回书页与石碑。文枢殿的铭文重新亮起，山河在暮色里一寸寸恢复了颜色。蚀文君消散前留下一叹：「原来文字洗不尽——它早已长进了人的骨血里。」云砚收剑北望：文心四魄虽归于文枢，北天深处却传来一缕断弦之音。新的墨潮，已在酝酿。',
+    status: 'RELEASED',
+    levels: CH2_LEVELS,
+  },
+  {
+    id: 3,
+    key: 'shuyu',
+    anthology: '漱玉词',
+    name: '断弦遗音',
+    verse: '弦断有谁听，墨枯词未成。',
+    verseAuthor: '—— 漱玉词·预告',
+    intro: '',
+    epilogue: '',
+    status: 'UPCOMING',
+    teaser: MAIN_STORY_OUTLINE[2].teaser,
+  },
+  {
+    id: 4,
+    key: 'biansai',
+    anthology: '边塞引',
+    name: '孤城万仞',
+    verse: '孤城遥望玉门关，墨护残碑万仞间。',
+    verseAuthor: '—— 边塞引·预告',
+    intro: '',
+    epilogue: '',
+    status: 'UPCOMING',
+    teaser: MAIN_STORY_OUTLINE[3].teaser,
+  },
+  {
+    id: 5,
+    key: 'lisa0',
+    anthology: '离骚赋',
+    name: '九歌天问',
+    verse: '路漫漫其修远兮，墨将上下而求索。',
+    verseAuthor: '—— 离骚赋·预告',
+    intro: '',
+    epilogue: '',
+    status: 'UPCOMING',
+    teaser: MAIN_STORY_OUTLINE[4].teaser,
+  },
+  {
+    id: 6,
+    key: 'taohua',
+    anthology: '桃花源',
+    name: '武陵迷津',
+    verse: '忽逢墨林夹岸，中无杂树，芳华褪尽。',
+    verseAuthor: '—— 桃花源·预告',
+    intro: '',
+    epilogue: '',
+    status: 'UPCOMING',
+    teaser: MAIN_STORY_OUTLINE[5].teaser,
+  },
+  {
+    id: 7,
+    key: 'changan',
+    anthology: '长安幻',
+    name: '盛世残卷',
+    verse: '云想衣裳花想容，一梦长安墨色中。',
+    verseAuthor: '—— 长安幻·预告',
+    intro: '',
+    epilogue: '',
+    status: 'UPCOMING',
+    teaser: MAIN_STORY_OUTLINE[6].teaser,
+  },
+  {
+    id: 8,
+    key: 'chibi',
+    anthology: '赤壁赋',
+    name: '江月问舟',
+    verse: '寄蜉蝣于天地，渺沧海之一墨。',
+    verseAuthor: '—— 赤壁赋·预告',
+    intro: '',
+    epilogue: '',
+    status: 'UPCOMING',
+    teaser: MAIN_STORY_OUTLINE[7].teaser,
+  },
+  {
+    id: 9,
+    key: 'momei',
+    anthology: '墨梅图',
+    name: '淡墨痕迹',
+    verse: '不要人夸好颜色，只留清气满乾坤。',
+    verseAuthor: '—— 墨梅图·预告',
+    intro: '',
+    epilogue: '',
+    status: 'UPCOMING',
+    teaser: MAIN_STORY_OUTLINE[8].teaser,
+  },
+  {
+    id: 10,
+    key: 'wenxin',
+    anthology: '文心雕龙',
+    name: '万象归宗',
+    verse: '文心者，天地之心也；墨道者，万象归宗之道。',
+    verseAuthor: '—— 文心雕龙·预告',
+    intro: '',
+    epilogue: '',
+    status: 'UPCOMING',
+    teaser: MAIN_STORY_OUTLINE[9].teaser,
+  },
+];
+
+/* ============================================================
+   工具函数（UI 与解锁链使用）
+   ============================================================ */
+
+/** 所有已启章节的平铺关卡（含第一大章与第二大章） */
+export const RELEASED_LEVELS: LevelConfig[] = STORY_CHAPTERS.flatMap(
+  (c) => c.levels ?? []
+);
+
+/** 已启章节的最大关卡 id（解锁链上界） */
+export const MAX_STORY_LEVEL_ID = Math.max(...RELEASED_LEVELS.map((l) => l.id));
+
+/** 按 id 取关卡 */
+export const getLevelById = (id: number): LevelConfig | undefined =>
+  RELEASED_LEVELS.find((l) => l.id === id);
+
+/** 取关卡所属大章 */
+export const getChapterByLevelId = (id: number): StoryChapterMeta | undefined =>
+  STORY_CHAPTERS.find((c) => c.status === 'RELEASED' && (c.levels ?? []).some((l) => l.id === id));
+
+/** 大章内折序（1 起）与大章序号，用于「第 X 章 · 第 Y 折」展示 */
+export const getChapterFoldPosition = (
+  levelId: number
+): { chapterNo: number; foldNo: number } | null => {
+  const ch = getChapterByLevelId(levelId);
+  if (!ch) return null;
+  const idx = (ch.levels ?? []).findIndex((l) => l.id === levelId);
+  return { chapterNo: ch.id, foldNo: idx + 1 };
+};
+
+/** 中文数字（章签用） */
+export const CN_NUMS = [
+  '', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖', '拾',
+];
