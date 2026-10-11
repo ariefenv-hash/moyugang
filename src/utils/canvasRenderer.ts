@@ -10,6 +10,22 @@ import {
   InkDragon,
   InkTreasure,
 } from '../types/game';
+import { UNIT_CONFIGS } from '../data/gameData';
+import {
+  StickPose,
+  makeDefaultPose,
+  lerpPose,
+  clonePose,
+  computeHeroPose,
+  computeWalkStep,
+  solveIK2,
+  lerp,
+  clamp01,
+  expoBlend,
+  easeOutCubic,
+  easeOutQuad,
+  easeInOutQuad,
+} from './animationSystem';
 
 export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D;
@@ -18,6 +34,46 @@ export class CanvasRenderer {
   /** 设备像素比：高分屏逻辑坐标 → 物理像素映射，画面更清晰 */
   private dpr: number = 1;
   private bgImage: HTMLImageElement | null = null;
+
+  /* ===== 程序化动作引擎内部状态（v3） ===== */
+  private frameDt: number = 1 / 60;
+  private lastGameTime: number = -1;
+  private heroPose: StickPose = makeDefaultPose();
+  private heroWalkPhase: number = 0;
+  private lastHeroX: number = 0;
+  private lastHeroAltZ: number = 0;
+  private lastFallV: number = 0;
+  private lastGhostX: number = 0;
+  private heroVX: number = 0;
+  private lastFacing: 1 | -1 = 1;
+  private turnBlend: number = 0;
+  private lastGrounded: boolean = true;
+  private landSquash: number = 0;
+  private prevTrailEmit: number = 0;
+  private afterimageTimer: number = 0;
+  private swordTrail: { x: number; y: number; tx: number; ty: number; life: number }[] = [];
+  private afterimages: {
+    x: number;
+    gy: number;
+    altZ: number;
+    facing: 1 | -1;
+    pose: StickPose;
+    life: number;
+  }[] = [];
+  private fxRings: {
+    x: number;
+    y: number;
+    r0: number;
+    r1: number;
+    life: number;
+    maxLife: number;
+    color: string;
+    lw: number;
+    flat: boolean;
+  }[] = [];
+  private capePts: { x: number; y: number; px: number; py: number }[] = [];
+  private ribbonPts: { x: number; y: number; px: number; py: number }[] = [];
+  private unitFx: WeakMap<UnitInstance, { walkPhase: number }> = new WeakMap();
 
   constructor(ctx: CanvasRenderingContext2D, width: number, height: number, bgImageSrc?: string) {
     this.ctx = ctx;
@@ -72,6 +128,16 @@ export class CanvasRenderer {
     inkSlowProgress: number = 0
   ) {
     const ctx = this.ctx;
+
+    // ===== 帧间隔（暂停/顿帧时 gameTime 不推进 → dt=0，全部动作特效自然凝滞） =====
+    const dt =
+      this.lastGameTime < 0
+        ? 1 / 60
+        : Math.max(0, Math.min(0.05, gameTime - this.lastGameTime));
+    this.lastGameTime = gameTime;
+    this.frameDt = dt;
+    this.stepFX(dt);
+
     // 每帧重置基准变换到逻辑坐标系（物理分辨率由 dpr 缩放）
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.save();
@@ -706,7 +772,333 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
-  // Enhanced Multi-Joint Skeletal Hero Animation
+  /* ============================================================
+     火柴人动作系统 v3 —— 程序化姿势引擎
+     （三段式攻击 / 双骨 IK / verlet 物理披风 / 剑气轨迹 / 残影 / 冲击环）
+     ============================================================ */
+
+  /** 每帧特效状态推进（轨迹/残影/冲击环衰减，dt=0 时自然凝滞） */
+  private stepFX(dt: number) {
+    if (dt <= 0) return;
+    for (let i = this.swordTrail.length - 1; i >= 0; i--) {
+      this.swordTrail[i].life -= dt;
+      if (this.swordTrail[i].life <= 0) this.swordTrail.splice(i, 1);
+    }
+    for (let i = this.afterimages.length - 1; i >= 0; i--) {
+      this.afterimages[i].life -= dt;
+      if (this.afterimages[i].life <= 0) this.afterimages.splice(i, 1);
+    }
+    for (let i = this.fxRings.length - 1; i >= 0; i--) {
+      this.fxRings[i].life -= dt;
+      if (this.fxRings[i].life <= 0) this.fxRings.splice(i, 1);
+    }
+    if (this.swordTrail.length > 40) this.swordTrail.splice(0, this.swordTrail.length - 40);
+    if (this.afterimages.length > 26) this.afterimages.splice(0, this.afterimages.length - 26);
+    if (this.fxRings.length > 32) this.fxRings.splice(0, this.fxRings.length - 32);
+  }
+
+  /** 双骨肢体绘制（显式两段角度：根角 + 肘弯相对角），返回末端（手）坐标 */
+  private drawTwoBoneAngles(
+    ctx: CanvasRenderingContext2D,
+    sx: number,
+    sy: number,
+    angleA: number,
+    angleB: number,
+    len1: number,
+    len2: number
+  ): { x: number; y: number } {
+    const midX = sx + Math.sin(angleA) * len1;
+    const midY = sy + Math.cos(angleA) * len1;
+    const endX = midX + Math.sin(angleA + angleB) * len2;
+    const endY = midY + Math.cos(angleA + angleB) * len2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(midX, midY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+    return { x: endX, y: endY };
+  }
+
+  /** 英雄 IK 双腿：脚掌目标点驱动，膝盖解剖学前弯，含脚掌 */
+  private drawHeroLegsIK(ctx: CanvasRenderingContext2D, pose: StickPose, lw: number, color: string) {
+    const legL1 = 15;
+    const legL2 = 14.5;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    // 后腿（远端淡色）
+    const ikB = solveIK2(pose.hipX - 1.5, pose.hipY, pose.backFootX, pose.backFootY, legL1, legL2, -1);
+    ctx.save();
+    ctx.globalAlpha *= 0.68;
+    ctx.beginPath();
+    ctx.moveTo(pose.hipX - 1.5, pose.hipY);
+    ctx.lineTo(ikB.midX, ikB.midY);
+    ctx.lineTo(ikB.endX, ikB.endY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ikB.endX, ikB.endY);
+    ctx.lineTo(ikB.endX + 4.2, ikB.endY + 0.6);
+    ctx.stroke();
+    ctx.restore();
+    // 前腿
+    const ikF = solveIK2(pose.hipX + 1.5, pose.hipY, pose.frontFootX, pose.frontFootY, legL1, legL2, -1);
+    ctx.beginPath();
+    ctx.moveTo(pose.hipX + 1.5, pose.hipY);
+    ctx.lineTo(ikF.midX, ikF.midY);
+    ctx.lineTo(ikF.endX, ikF.endY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ikF.endX, ikF.endY);
+    ctx.lineTo(ikF.endX + 4.6, ikF.endY + 0.7);
+    ctx.stroke();
+  }
+
+  /** verlet 物理披风（跟随与重叠动作原则：惯性拖尾 + 风场 + 布料约束） */
+  private updateAndDrawCape(
+    ctx: CanvasRenderingContext2D,
+    cameraX: number,
+    dt: number,
+    gameTime: number,
+    anchorX: number,
+    anchorY: number,
+    heroVX: number,
+    heroVY: number,
+    lift: number
+  ) {
+    if (this.capePts.length === 0) {
+      for (let i = 0; i < 5; i++) {
+        this.capePts.push({ x: anchorX, y: anchorY + i * 8.5, px: anchorX, py: anchorY + i * 8.5 });
+      }
+    }
+    if (dt > 0) {
+      const anchor = this.capePts[0];
+      anchor.x = anchorX;
+      anchor.y = anchorY;
+      anchor.px = anchorX;
+      anchor.py = anchorY;
+      const gravity = 560 * dt * dt;
+      const wind = (Math.sin(gameTime * 2.1) * 22 + Math.sin(gameTime * 0.9 + 2) * 14) * dt * dt;
+      for (let i = 1; i < this.capePts.length; i++) {
+        const p = this.capePts[i];
+        const vx = (p.x - p.px) * 0.965;
+        const vy = (p.y - p.py) * 0.965;
+        p.px = p.x;
+        p.py = p.y;
+        p.x += vx + wind - heroVX * dt * dt * 3.2;
+        p.y += vy + gravity - heroVY * dt * dt * 2.0 - lift * dt * dt * 260;
+      }
+      const seg = 8.5;
+      for (let iter = 0; iter < 3; iter++) {
+        for (let i = 1; i < this.capePts.length; i++) {
+          const a = this.capePts[i - 1];
+          const b = this.capePts[i];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const d = Math.sqrt(dx * dx + dy * dy) || 0.001;
+          const diff = (d - seg) / d;
+          if (i === 1) {
+            b.x -= dx * diff;
+            b.y -= dy * diff;
+          } else {
+            a.x += dx * diff * 0.5;
+            a.y += dy * diff * 0.5;
+            b.x -= dx * diff * 0.5;
+            b.y -= dy * diff * 0.5;
+          }
+        }
+      }
+    }
+    // 绘制：墨边 + 白披风双层描边，宽度渐变 + 布料飘动
+    const pts = this.capePts;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 1; i < pts.length; i++) {
+        const wBase = Math.max(1.4, 7.5 - i * 1.15);
+        ctx.strokeStyle = pass === 0 ? '#0f172a' : '#f8fafc';
+        ctx.lineWidth = pass === 0 ? wBase + 2.4 : wBase;
+        const flutter = Math.sin(gameTime * 8 + i * 1.7) * 1.6;
+        ctx.beginPath();
+        ctx.moveTo(pts[i - 1].x - cameraX, pts[i - 1].y);
+        ctx.lineTo(pts[i].x - cameraX + (i >= 2 ? flutter : 0), pts[i].y + (i >= 2 ? flutter * 0.4 : 0));
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  /** 发带 verlet（三节青色缎带，随移动与风力飘扬） */
+  private updateAndDrawRibbon(
+    ctx: CanvasRenderingContext2D,
+    cameraX: number,
+    dt: number,
+    gameTime: number,
+    ax: number,
+    ay: number,
+    heroVX: number,
+    heroVY: number
+  ) {
+    if (this.ribbonPts.length === 0) {
+      for (let i = 0; i < 3; i++) {
+        this.ribbonPts.push({ x: ax - i * 5.5, y: ay + i * 2, px: ax - i * 5.5, py: ay + i * 2 });
+      }
+    }
+    if (dt > 0) {
+      const a0 = this.ribbonPts[0];
+      a0.x = ax;
+      a0.y = ay;
+      a0.px = ax;
+      a0.py = ay;
+      const gravity = 300 * dt * dt;
+      const wind = (Math.sin(gameTime * 3.1) * 34 + Math.sin(gameTime * 1.3) * 18) * dt * dt;
+      for (let i = 1; i < this.ribbonPts.length; i++) {
+        const p = this.ribbonPts[i];
+        const vx = (p.x - p.px) * 0.94;
+        const vy = (p.y - p.py) * 0.94;
+        p.px = p.x;
+        p.py = p.y;
+        p.x += vx + wind - heroVX * dt * dt * 4.5;
+        p.y += vy + gravity - heroVY * dt * dt * 2.5;
+      }
+      const seg = 5.5;
+      for (let iter = 0; iter < 3; iter++) {
+        for (let i = 1; i < this.ribbonPts.length; i++) {
+          const a = this.ribbonPts[i - 1];
+          const b = this.ribbonPts[i];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const d = Math.sqrt(dx * dx + dy * dy) || 0.001;
+          const diff = (d - seg) / d;
+          if (i === 1) {
+            b.x -= dx * diff;
+            b.y -= dy * diff;
+          } else {
+            a.x += dx * diff * 0.5;
+            a.y += dy * diff * 0.5;
+            b.x -= dx * diff * 0.5;
+            b.y -= dy * diff * 0.5;
+          }
+        }
+      }
+    }
+    ctx.save();
+    ctx.strokeStyle = '#06b6d4';
+    ctx.globalAlpha = 0.92;
+    ctx.lineCap = 'round';
+    const widths = [2.4, 1.9, 1.3];
+    for (let i = 1; i < this.ribbonPts.length; i++) {
+      ctx.lineWidth = widths[i] || 1.2;
+      ctx.beginPath();
+      ctx.moveTo(this.ribbonPts[i - 1].x - cameraX, this.ribbonPts[i - 1].y);
+      ctx.lineTo(this.ribbonPts[i].x - cameraX, this.ribbonPts[i].y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** 剑气轨迹带（叠加发光：青色飘带 + 白热内芯，随出剑实时采样） */
+  private drawSwordTrail(cameraX: number) {
+    const n = this.swordTrail.length;
+    if (n < 2) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 1; i < n; i++) {
+      const a = this.swordTrail[i - 1];
+      const b = this.swordTrail[i];
+      const alpha = ((a.life + b.life) / 2 / 0.2) * 0.5;
+      if (alpha <= 0.02) continue;
+      ctx.fillStyle = `rgba(125, 211, 252, ${alpha})`;
+      ctx.beginPath();
+      ctx.moveTo(a.x - cameraX, a.y);
+      ctx.lineTo(a.tx - cameraX, a.ty);
+      ctx.lineTo(b.tx - cameraX, b.ty);
+      ctx.lineTo(b.x - cameraX, b.y);
+      ctx.closePath();
+      ctx.fill();
+      // 白热内芯
+      ctx.strokeStyle = `rgba(240, 250, 255, ${alpha * 0.55})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(a.x * 0.25 + a.tx * 0.75 - cameraX, a.y * 0.25 + a.ty * 0.75);
+      ctx.lineTo(b.x * 0.25 + b.tx * 0.75 - cameraX, b.y * 0.25 + b.ty * 0.75);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** 冲刺 / 重击残影（姿势快照幽灵剪影） */
+  private drawAfterimages(cameraX: number, laneMinY: number, laneMaxY: number) {
+    if (this.afterimages.length === 0) return;
+    const ctx = this.ctx;
+    for (const g of this.afterimages) {
+      const alpha = (g.life / 0.26) * 0.32;
+      if (alpha <= 0.015) continue;
+      const s = this.getDepthScale(g.gy, laneMinY, laneMaxY);
+      ctx.save();
+      ctx.translate(g.x - cameraX, g.gy - g.altZ);
+      ctx.scale(g.facing * s, s);
+      ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      const p = g.pose;
+      // 腿（简化折线）
+      ctx.beginPath();
+      ctx.moveTo(p.hipX, p.hipY);
+      ctx.lineTo(p.hipX + (p.frontFootX - p.hipX) * 0.5, (p.hipY + p.frontFootY) * 0.5);
+      ctx.lineTo(p.frontFootX, p.frontFootY);
+      ctx.moveTo(p.hipX, p.hipY);
+      ctx.lineTo(p.hipX + (p.backFootX - p.hipX) * 0.5, (p.hipY + p.backFootY) * 0.5);
+      ctx.lineTo(p.backFootX, p.backFootY);
+      // 躯干
+      const shX = p.hipX + Math.sin(p.torsoLean) * 22;
+      const shY = p.hipY - 22;
+      ctx.moveTo(p.hipX, p.hipY);
+      ctx.lineTo(shX, shY);
+      // 前臂 + 剑
+      const ex = shX + Math.sin(p.frontArmA) * 14;
+      const ey = shY + Math.cos(p.frontArmA) * 14;
+      const hx = ex + Math.sin(p.frontArmA + p.frontArmB) * 14;
+      const hy = ey + Math.cos(p.frontArmA + p.frontArmB) * 14;
+      ctx.moveTo(shX, shY);
+      ctx.lineTo(ex, ey);
+      ctx.lineTo(hx, hy);
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(hx + Math.cos(p.swordAngle) * 44, hy + Math.sin(p.swordAngle) * 44);
+      ctx.stroke();
+      // 头
+      ctx.beginPath();
+      ctx.arc(shX + 2, shY - 14, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /** 地效冲击环（落地尘环 / 重击冲击波，flat=椭圆贴地） */
+  private drawFxRings(cameraX: number) {
+    if (this.fxRings.length === 0) return;
+    const ctx = this.ctx;
+    ctx.save();
+    for (const r of this.fxRings) {
+      const t = 1 - r.life / r.maxLife;
+      const rad = lerp(r.r0, r.r1, easeOutCubic(t));
+      ctx.globalAlpha = Math.max(0, 1 - t) * 0.85;
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = Math.max(0.6, r.lw * (1 - t * 0.55));
+      ctx.beginPath();
+      if (r.flat) {
+        ctx.ellipse(r.x - cameraX, r.y, rad, rad * 0.34, 0, 0, Math.PI * 2);
+      } else {
+        ctx.arc(r.x - cameraX, r.y, rad, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ============================================================
+  // 剑笔仙 · 程序化骨骼渲染 v3
+  // ============================================================
   private drawSkeletalHero(
     hero: HeroInstance,
     cameraX: number,
@@ -715,7 +1107,10 @@ export class CanvasRenderer {
     gameTime: number
   ) {
     const screenX = hero.x - cameraX;
-    if (screenX < -120 || screenX > this.width + 120) return;
+    if (screenX < -160 || screenX > this.width + 160) {
+      this.lastHeroX = hero.x;
+      return;
+    }
 
     const ctx = this.ctx;
     const groundY = hero.y;
@@ -723,202 +1118,285 @@ export class CanvasRenderer {
     const heroY = groundY - altitudeZ;
     const scale = this.getDepthScale(hero.y, laneMinY, laneMaxY);
     const facing = hero.facing;
+    const dt = this.frameDt;
+    const prevAltZ = this.lastHeroAltZ;
 
-    // 1. Draw 2.5D Drop Shadow on ground
-    this.drawDropShadow(screenX, groundY, 24 * scale, altitudeZ);
+    // —— 速度估算 / 转身缓冲 / 步态相位 / 落地检测 ——
+    if (dt > 0) {
+      const rawVX = (hero.x - this.lastHeroX) / dt;
+      this.heroVX += (rawVX - this.heroVX) * 0.4;
+      if (facing !== this.lastFacing) {
+        this.turnBlend = 1;
+        this.lastFacing = facing;
+      }
+      this.turnBlend = Math.max(0, this.turnBlend - dt * 5.5);
+      if (hero.state === 'WALK' && hero.isGrounded) {
+        this.heroWalkPhase += dt * 11.5;
+      }
+      // 落地瞬间：挤压 + 尘环（Squash & Stretch 原则）
+      if (hero.isGrounded && !this.lastGrounded) {
+        const fallV = Math.abs(this.lastFallV);
+        this.landSquash = Math.min(0.26, 0.1 + fallV * 0.00045);
+        this.fxRings.push({
+          x: hero.x,
+          y: groundY,
+          r0: 5,
+          r1: 22 + fallV * 0.035,
+          life: 0.34,
+          maxLife: 0.34,
+          color: 'rgba(203, 213, 225, 0.75)',
+          lw: 2.6,
+          flat: true,
+        });
+        if (fallV > 320) {
+          for (let i = 0; i < 5; i++) {
+            this.fxRings.push({
+              x: hero.x + Math.sin(i * 2.4) * 14,
+              y: groundY - 2,
+              r0: 2,
+              r1: 7 + (i % 3) * 4,
+              life: 0.3,
+              maxLife: 0.3,
+              color: 'rgba(71, 85, 105, 0.55)',
+              lw: 1.6,
+              flat: true,
+            });
+          }
+        }
+      }
+      this.lastGrounded = hero.isGrounded;
+      this.landSquash = Math.max(0, this.landSquash - dt);
+    }
+    this.lastFallV = hero.vz || 0;
+    this.lastHeroX = hero.x;
+    this.lastHeroAltZ = altitudeZ;
 
-    ctx.save();
-    ctx.translate(screenX, heroY);
-    ctx.scale(facing * scale, scale);
+    // —— 目标姿势 → 指数平滑混合（帧率无关，攻击出手段加速跟随） ——
+    const targetPose = computeHeroPose(hero.state, hero.stateTime, gameTime, this.heroWalkPhase, hero.vz || 0);
 
-    // Flinch Recoil if taking damage
-    if (hero.flinchTimer > 0) {
-      ctx.rotate(-0.15);
-      ctx.translate(-5, 0);
+    if (this.landSquash > 0) {
+      const k = this.landSquash / 0.26;
+      targetPose.squashY *= 1 - 0.15 * k;
+      targetPose.squashX *= 1 + 0.13 * k;
+    }
+    if (!hero.isGrounded && (hero.vz || 0) > 140) {
+      targetPose.squashY *= 1.045;
+      targetPose.squashX *= 0.965;
+    }
+    if (this.turnBlend > 0) {
+      targetPose.squashX *= 1 - 0.12 * Math.sin(this.turnBlend * Math.PI);
     }
 
-    // Skeletal Gait Calculation
-    const isMoving = hero.state === 'WALK';
-    const walkFreq = 12;
-    const gaitPhase = isMoving ? gameTime * walkFreq : 0;
+    const striking = hero.state.startsWith('ATTACK_') && targetPose.trailEmit > 0.35;
+    const blendRate = striking ? 30 : hero.state.startsWith('ATTACK_') || hero.state === 'SKILL_DASH' ? 24 : 17;
+    this.heroPose = lerpPose(this.heroPose, targetPose, expoBlend(blendRate, Math.max(dt, 1 / 240)));
+    const pose = this.heroPose;
 
-    // Pelvis & Body Bobbing
-    const hipBob = isMoving ? Math.abs(Math.sin(gaitPhase)) * 4 : Math.sin(gameTime * 2) * 1.5;
-    const hipY = -28 + hipBob;
+    // —— 三式重斩命中瞬间：剑尖冲击波 ——
+    if (dt > 0) {
+      if (this.prevTrailEmit < 0.85 && pose.trailEmit >= 0.85 && hero.state === 'ATTACK_3') {
+        this.fxRings.push({
+          x: hero.x + facing * 40,
+          y: groundY - 30,
+          r0: 4,
+          r1: 30,
+          life: 0.28,
+          maxLife: 0.28,
+          color: 'rgba(186, 230, 253, 0.9)',
+          lw: 3,
+          flat: false,
+        });
+      }
+      this.prevTrailEmit = pose.trailEmit;
+    }
 
-    // 2. Billowing Multi-Segment Silk Cape (Fluid physics)
-    this.drawMultiSegmentCape(ctx, hipY - 20, isMoving, facing, hero.state, gameTime);
+    // —— 剑刃世界坐标（轨迹 / 残影采样点） ——
+    const shLX = pose.hipX + Math.sin(pose.torsoLean) * 22;
+    const shLY = pose.hipY - 22;
+    const elbX = shLX + Math.sin(pose.frontArmA) * 14;
+    const elbY = shLY + Math.cos(pose.frontArmA) * 14;
+    const handLX = elbX + Math.sin(pose.frontArmA + pose.frontArmB) * 14;
+    const handLY = elbY + Math.cos(pose.frontArmA + pose.frontArmB) * 14;
+    const tipLX = handLX + Math.cos(pose.swordAngle) * 46;
+    const tipLY = handLY + Math.sin(pose.swordAngle) * 46;
+    const handWX = hero.x + handLX * facing * scale;
+    const handWY = heroY + handLY * scale;
+    const tipWX = hero.x + tipLX * facing * scale;
+    const tipWY = heroY + tipLY * scale;
 
-    // 3. Multi-Joint Legs (Thigh -> Knee -> Shin -> Foot)
-    ctx.strokeStyle = '#09090b';
-    ctx.lineWidth = 4;
+    // —— 剑气轨迹采样 ——
+    if (dt > 0 && pose.trailEmit > 0.08) {
+      this.swordTrail.push({ x: handWX, y: handWY, tx: tipWX, ty: tipWY, life: 0.2 });
+    }
+
+    // —— 残影采样（重击挥砍 / 冲刺瞬移路径补插） ——
+    if (dt > 0 && (pose.trailEmit > 0.55 || hero.state === 'SKILL_DASH')) {
+      this.afterimageTimer -= dt;
+      if (this.afterimageTimer <= 0) {
+        this.afterimageTimer = 0.048;
+        const jumped = Math.abs(hero.x - this.lastGhostX);
+        if (hero.state === 'SKILL_DASH' && jumped > 40) {
+          const steps = Math.min(5, Math.max(2, Math.round(jumped / 55)));
+          for (let i = 1; i <= steps; i++) {
+            this.afterimages.push({
+              x: lerp(this.lastGhostX, hero.x, i / (steps + 1)),
+              gy: groundY,
+              altZ: altitudeZ,
+              facing,
+              pose: clonePose(pose),
+              life: 0.26,
+            });
+          }
+        } else {
+          this.afterimages.push({
+            x: hero.x,
+            gy: groundY,
+            altZ: altitudeZ,
+            facing,
+            pose: clonePose(pose),
+            life: 0.26,
+          });
+        }
+      }
+    }
+    if (dt > 0) this.lastGhostX = hero.x;
+
+    // 1. 地面投影
+    this.drawDropShadow(screenX, groundY, 24 * scale, altitudeZ);
+
+    // 2. 地效冲击环
+    this.drawFxRings(cameraX);
+
+    // 3. 残影（本体之下）
+    this.drawAfterimages(cameraX, laneMinY, laneMaxY);
+
+    // 4. 剑气轨迹带
+    this.drawSwordTrail(cameraX);
+
+    // 5. 披风 + 发带（世界空间物理模拟，画于身体之后）
+    const anchorWX = hero.x + shLX * facing * scale;
+    const anchorWY = heroY + shLY * scale;
+    const heroVY = dt > 0 ? (prevAltZ - altitudeZ) / dt : 0;
+    this.updateAndDrawCape(ctx, cameraX, dt, gameTime, anchorWX, anchorWY, this.heroVX, heroVY, pose.capeLift);
+    const headLX = shLX + 2 + pose.headTilt * 0.5;
+    const headLY = shLY - 14;
+    const knotWX = hero.x + headLX * facing * scale;
+    const knotWY = heroY + (headLY - 10) * scale;
+    this.updateAndDrawRibbon(ctx, cameraX, dt, gameTime, knotWX, knotWY, this.heroVX, heroVY);
+
+    // 6. 身体（局部空间：原点=脚底）
+    ctx.save();
+    ctx.translate(screenX, heroY);
+
+    const flinchK = hero.flinchTimer > 0 ? Math.min(1, hero.flinchTimer / 0.35) : 0;
+    ctx.rotate(-0.13 * flinchK + pose.bodyTilt);
+    ctx.translate(-4 * flinchK, 0);
+    ctx.scale(facing * scale * pose.squashX, scale * pose.squashY);
+
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    const leg1Swing = isMoving ? Math.sin(gaitPhase) * 0.7 : 0.05;
-    const leg2Swing = isMoving ? -Math.sin(gaitPhase) * 0.7 : -0.05;
+    // 后臂（远端淡色，先画）
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 3.6;
+    this.drawTwoBoneAngles(ctx, shLX, shLY, pose.backArmA, pose.backArmB, 13, 13);
 
-    // Left Leg (Back)
-    this.drawLimbBone(ctx, -2, hipY, leg1Swing, 14, 14);
+    // 双腿（IK 步态）
+    this.drawHeroLegsIK(ctx, pose, 4.2, '#09090b');
 
-    // Right Leg (Front)
-    this.drawLimbBone(ctx, 2, hipY, leg2Swing, 14, 14);
-
-    // 4. Torso & Robes (Spine bone)
-    const spineLean = isMoving ? 0.12 : 0;
-    const shoulderX = Math.sin(spineLean) * 22;
-    const shoulderY = hipY - 22;
-
+    // 躯干
+    ctx.strokeStyle = '#09090b';
+    ctx.lineWidth = 4.6;
     ctx.beginPath();
-    ctx.moveTo(0, hipY);
-    ctx.lineTo(shoulderX, shoulderY);
+    ctx.moveTo(pose.hipX, pose.hipY);
+    ctx.lineTo(shLX, shLY);
     ctx.stroke();
 
-    // Robe Sash / Belt in jade turquoise
+    // 玉色腰封
     ctx.fillStyle = '#06b6d4';
-    ctx.fillRect(-6, hipY - 4, 12, 4);
+    ctx.fillRect(pose.hipX - 6, pose.hipY - 4.5, 12, 4.2);
 
-    // 5. Head, Neck & Topknot
-    const headX = shoulderX + 2;
-    const headY = shoulderY - 14;
-
+    // 头 + 发髻
+    const headX = shLX + 2 + pose.headTilt * 0.5;
+    const headY = shLY - 14;
     ctx.fillStyle = '#09090b';
     ctx.beginPath();
     ctx.arc(headX, headY, 8.5, 0, Math.PI * 2);
     ctx.fill();
-
-    // Topknot & Flowing Ribbon
     ctx.beginPath();
     ctx.arc(headX, headY - 10, 4, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = '#06b6d4';
-    ctx.lineWidth = 2.2;
-    const ribbonWave = Math.sin(gameTime * 6) * 6;
-    ctx.beginPath();
-    ctx.moveTo(headX, headY - 10);
-    ctx.quadraticCurveTo(headX - 12 + ribbonWave * 0.5, headY - 12, headX - 22 + ribbonWave, headY - 6);
-    ctx.stroke();
-
-    // 6. Multi-Joint Arms & Luminous Brush-Sword
+    // 7. 前臂 + 墨锋
     ctx.strokeStyle = '#09090b';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 4.2;
+    const hand = this.drawTwoBoneAngles(ctx, shLX, shLY, pose.frontArmA, pose.frontArmB, 14, 14);
+    this.drawBrushSword(ctx, hand.x, hand.y, pose.swordAngle, pose.swordGlow);
 
-    // Handle Attack animations
-    if (hero.state === 'ATTACK_1') {
-      // Horizontal sweeping slash
-      this.drawLimbBone(ctx, shoulderX, shoulderY, -0.4, 16, 16);
-      this.drawBrushSword(ctx, shoulderX + 28, shoulderY - 8, 0.2, true);
-      this.drawInkSlashArc(ctx, 40, shoulderY - 8, 65, -0.6, 0.6);
-    } else if (hero.state === 'ATTACK_2') {
-      // Upward calligraphy stroke
-      this.drawLimbBone(ctx, shoulderX, shoulderY, -1.2, 16, 16);
-      this.drawBrushSword(ctx, shoulderX + 22, shoulderY - 26, -1.1, true);
-      this.drawInkSlashArc(ctx, 35, shoulderY - 26, 70, -1.3, 0.1);
-    } else if (hero.state === 'ATTACK_3') {
-      // Plunging heavy stroke
-      this.drawLimbBone(ctx, shoulderX, shoulderY, 0.6, 16, 16);
-      this.drawBrushSword(ctx, shoulderX + 32, shoulderY + 8, 0.9, true);
-      this.drawInkSlashArc(ctx, 40, shoulderY + 8, 80, 0.2, 1.4);
-    } else if (hero.state === 'ATTACK_AERIAL') {
-      // Airborne diving plunge
-      this.drawLimbBone(ctx, shoulderX, shoulderY, 1.4, 16, 16);
-      this.drawBrushSword(ctx, shoulderX + 20, shoulderY + 22, 1.57, true);
-    } else if (hero.state === 'SKILL_DASH') {
-      // Forward thrust
-      this.drawLimbBone(ctx, shoulderX, shoulderY, -0.1, 16, 16);
-      this.drawBrushSword(ctx, shoulderX + 36, shoulderY - 4, 0, true);
-    } else {
-      // Idle / Walking holding sword gracefully
-      const armSway = isMoving ? Math.sin(gaitPhase) * 0.3 : 0;
-      this.drawLimbBone(ctx, shoulderX, shoulderY, 0.5 + armSway, 14, 14);
-      this.drawBrushSword(ctx, shoulderX + 16, shoulderY + 12, 0.7, false);
+    // 8. 攻击墨痕弧光（随挥砍相位淡出）
+    if (hero.state.startsWith('ATTACK_') && pose.trailEmit > 0.12) {
+      ctx.save();
+      ctx.globalAlpha = pose.trailEmit * 0.85;
+      if (hero.state === 'ATTACK_1') {
+        this.drawInkSlashArc(ctx, shLX, shLY, 46, -1.15, 0.55, '125, 211, 252');
+      } else if (hero.state === 'ATTACK_2') {
+        this.drawInkSlashArc(ctx, shLX, shLY, 42, -1.35, 0.15, '125, 211, 252');
+      } else if (hero.state === 'ATTACK_3') {
+        this.drawInkSlashArc(ctx, shLX, shLY, 50, 0.1, 1.4, '125, 211, 252');
+      }
+      ctx.restore();
     }
 
-    // Shield Dome if active
+    // 9. 冲刺速度线
+    if (hero.state === 'SKILL_DASH') {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.5)';
+      ctx.lineWidth = 1.6;
+      const seed = Math.floor(gameTime * 24);
+      for (let i = 0; i < 5; i++) {
+        const ly = -10 - ((seed * 13 + i * 29) % 46);
+        const ln = 16 + ((seed + i * 7) % 22);
+        ctx.beginPath();
+        ctx.moveTo(-34 - ln - i * 6, ly);
+        ctx.lineTo(-34 - i * 6, ly);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 10. 护盾（旋转刻痕穹顶）
     if (hero.shieldHp > 0) {
       ctx.save();
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
       ctx.lineWidth = 2.5;
-      ctx.setLineDash([5, 5]);
+      ctx.setLineDash([9, 7]);
+      ctx.lineDashOffset = -gameTime * 30;
       ctx.beginPath();
-      ctx.arc(0, hipY - 10, 42, 0, Math.PI * 2);
+      ctx.arc(0, pose.hipY - 10, 42, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
 
     ctx.restore();
 
-    // Overhead HUD
-    this.drawHeroOverheadHUD(screenX, heroY - 82 * scale, hero, scale);
+    // 头顶 HUD
+    this.drawHeroOverheadHUD(screenX, heroY - 84 * scale, hero, scale);
   }
 
-  // Draw 2-joint limb bone (thigh/shin or arm/forearm)
-  private drawLimbBone(
-    ctx: CanvasRenderingContext2D,
-    startX: number,
-    startY: number,
-    rootAngle: number,
-    len1: number,
-    len2: number
-  ) {
-    const kneeX = startX + Math.sin(rootAngle) * len1;
-    const kneeY = startY + Math.cos(rootAngle) * len1;
-
-    // Joint 2 angle bends naturally forward/backward
-    const bendAngle = rootAngle + 0.35;
-    const footX = kneeX + Math.sin(bendAngle) * len2;
-    const footY = kneeY + Math.cos(bendAngle) * len2;
-
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(kneeX, kneeY);
-    ctx.lineTo(footX, footY);
-    ctx.stroke();
-  }
-
-  // Billowing Multi-Segment Silk Cape
-  private drawMultiSegmentCape(
-    ctx: CanvasRenderingContext2D,
-    attachY: number,
-    isMoving: boolean,
-    facing: number,
-    heroState: string,
-    gameTime: number
-  ) {
-    ctx.save();
-    const windSpeed = isMoving ? 8 : 4;
-    const wave = Math.sin(gameTime * windSpeed) * 10;
-
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.6;
-
-    ctx.beginPath();
-    ctx.moveTo(-4, attachY);
-    ctx.quadraticCurveTo(-18, attachY + 14, -28 + wave * 0.6, attachY + 28);
-    ctx.quadraticCurveTo(-38 + wave, attachY + 40, -42 + wave * 1.2, attachY + 46);
-    ctx.quadraticCurveTo(-26, attachY + 36, -6, attachY + 18);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  // Luminous Ink Slash Ribbon Arc
+  /** Luminous Ink Slash Ribbon Arc（支持敌我配色） */
   private drawInkSlashArc(
     ctx: CanvasRenderingContext2D,
     originX: number,
     originY: number,
     radius: number,
     startAngle: number,
-    endAngle: number
+    endAngle: number,
+    rgb: string = '56, 189, 248'
   ) {
     ctx.save();
-    const arcGrad = ctx.createRadialGradient(originX, originY, radius * 0.6, originX, originY, radius);
-    arcGrad.addColorStop(0, 'rgba(56, 189, 248, 0)');
-    arcGrad.addColorStop(0.7, 'rgba(56, 189, 248, 0.7)');
+    const arcGrad = ctx.createRadialGradient(originX, originY, radius * 0.55, originX, originY, radius);
+    arcGrad.addColorStop(0, `rgba(${rgb}, 0)`);
+    arcGrad.addColorStop(0.72, `rgba(${rgb}, 0.75)`);
     arcGrad.addColorStop(1, 'rgba(255, 255, 255, 0.95)');
 
     ctx.strokeStyle = arcGrad;
@@ -930,28 +1408,28 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
-  // Draw Brush-Sword
+  /** 墨锋剑（辉光强度 0-1 驱动剑锋光晕） */
   private drawBrushSword(
     ctx: CanvasRenderingContext2D,
     handX: number,
     handY: number,
     angle: number,
-    isSlashing: boolean
+    glow: number
   ) {
     ctx.save();
     ctx.translate(handX, handY);
     ctx.rotate(angle);
 
-    // Hilt & Jade guard
+    // 剑柄 & 玉格
     ctx.fillStyle = '#0f172a';
-    ctx.fillRect(-4, -2, 8, 4);
+    ctx.fillRect(-5, -2, 8, 4);
     ctx.fillStyle = '#06b6d4';
     ctx.beginPath();
     ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
     ctx.fill();
 
-    // Luminous Blade
-    const bladeGrad = ctx.createLinearGradient(0, 0, 42, 0);
+    // 光辉剑刃
+    const bladeGrad = ctx.createLinearGradient(0, 0, 46, 0);
     bladeGrad.addColorStop(0, '#f8fafc');
     bladeGrad.addColorStop(0.7, '#38bdf8');
     bladeGrad.addColorStop(1, '#0284c7');
@@ -959,26 +1437,93 @@ export class CanvasRenderer {
     ctx.fillStyle = bladeGrad;
     ctx.beginPath();
     ctx.moveTo(0, -2);
-    ctx.lineTo(34, -1.5);
-    ctx.lineTo(44, 0);
-    ctx.lineTo(34, 1.5);
+    ctx.lineTo(36, -1.6);
+    ctx.lineTo(46, 0);
+    ctx.lineTo(36, 1.6);
     ctx.lineTo(0, 2);
     ctx.closePath();
     ctx.fill();
 
-    if (isSlashing) {
-      ctx.fillStyle = '#38bdf8';
+    // 剑锋辉光
+    if (glow > 0.18) {
       ctx.shadowColor = '#38bdf8';
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 6 + glow * 16;
+      ctx.fillStyle = `rgba(125, 211, 252, ${0.25 + glow * 0.5})`;
       ctx.beginPath();
-      ctx.arc(44, 0, 4.5, 0, Math.PI * 2);
+      ctx.arc(46, 0, 2.5 + glow * 3, 0, Math.PI * 2);
       ctx.fill();
+      ctx.shadowBlur = 0;
     }
 
     ctx.restore();
   }
 
-  // Draw Skeletal Soldiers, Minions & Bosses in 2.5D
+
+  // ============================================================
+  // 骸影军团 · 程序化动作 v3（IK 行走 + 攻击三段式 + 兵种专属演出）
+  // ============================================================
+
+  /** 单位攻击阶段：命中后经过的秒数（由攻击冷却倒计时推算），未在攻击节奏返回 -1 */
+  private unitStrikeSince(unit: UnitInstance): number {
+    const cfg = UNIT_CONFIGS[unit.type];
+    const cdMax = 1 / Math.max(0.1, cfg.attackSpeed);
+    if (unit.attackCooldown <= 0) return -1;
+    return cdMax - unit.attackCooldown;
+  }
+
+  /** 单位 IK 双腿（行走步迹 / 站姿，膝盖前弯） */
+  private drawUnitLegsIK(
+    ctx: CanvasRenderingContext2D,
+    hipX: number,
+    hipY: number,
+    f: { x: number; y: number },
+    b: { x: number; y: number },
+    len: number,
+    lw: number,
+    color: string
+  ) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    const ikF = solveIK2(hipX + 1.2, hipY, f.x, f.y, len, len, -1);
+    const ikB = solveIK2(hipX - 1.2, hipY, b.x, b.y, len, len, -1);
+    // 后腿（远端淡色）
+    ctx.save();
+    ctx.globalAlpha *= 0.68;
+    ctx.beginPath();
+    ctx.moveTo(hipX - 1.2, hipY);
+    ctx.lineTo(ikB.midX, ikB.midY);
+    ctx.lineTo(ikB.endX, ikB.endY);
+    ctx.stroke();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.moveTo(hipX + 1.2, hipY);
+    ctx.lineTo(ikF.midX, ikF.midY);
+    ctx.lineTo(ikF.endX, ikF.endY);
+    ctx.stroke();
+  }
+
+  /** 单位短刃（折柳剑客佩剑，敌我描边配色） */
+  private drawShortBlade(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, accent: string) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(20, 0);
+    ctx.stroke();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(2, -1.2);
+    ctx.lineTo(17, -1.2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Draw Skeletal Soldiers, Minions & Bosses in 2.5D（程序化动作 v3）
   private drawSkeletalUnit(
     unit: UnitInstance,
     cameraX: number,
@@ -987,15 +1532,18 @@ export class CanvasRenderer {
     gameTime: number
   ) {
     const screenX = unit.x - cameraX;
-    if (screenX < -100 || screenX > this.width + 100) return;
+    if (screenX < -140 || screenX > this.width + 140) return;
 
     const ctx = this.ctx;
     const groundY = unit.y;
     const altitudeZ = unit.altitudeZ || 0;
     const unitY = groundY - altitudeZ;
-    const scale = this.getDepthScale(unit.y, laneMinY, laneMaxY);
+    const baseScale = this.getDepthScale(unit.y, laneMinY, laneMaxY);
+    const scale = baseScale * (unit.isBoss ? 1.32 : 1);
     const facing = unit.facing;
     const isEnemy = unit.isEnemy;
+    const dt = this.frameDt;
+    const TAU = Math.PI * 2;
 
     // 1. Drop shadow on ground
     this.drawDropShadow(screenX, groundY, 18 * scale, altitudeZ);
@@ -1003,7 +1551,14 @@ export class CanvasRenderer {
     // 1.5 Boss 二阶段狂暴暗红气场
     if (unit.isBoss && unit.enraged) {
       const pulse = 0.55 + Math.sin(gameTime * 7) * 0.2;
-      const auraGrad = ctx.createRadialGradient(screenX, unitY - 30 * scale, 8, screenX, unitY - 30 * scale, 62 * scale);
+      const auraGrad = ctx.createRadialGradient(
+        screenX,
+        unitY - 30 * scale,
+        8,
+        screenX,
+        unitY - 30 * scale,
+        62 * scale
+      );
       auraGrad.addColorStop(0, `rgba(220, 38, 38, ${0.34 * pulse})`);
       auraGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
       ctx.fillStyle = auraGrad;
@@ -1012,158 +1567,442 @@ export class CanvasRenderer {
       ctx.fill();
     }
 
+    // —— 步态相位累积（per-unit 池，避免起步脚底突变） ——
+    let fx = this.unitFx.get(unit);
+    if (!fx) {
+      fx = { walkPhase: unit.limbPhase || Math.random() * Math.PI * 2 };
+      this.unitFx.set(unit, fx);
+    }
+    const walking = unit.state === 'WALK' || unit.state === 'RETREAT';
+    if (dt > 0 && walking) {
+      const freq = Math.max(5, unit.speed * 0.075) * (unit.state === 'RETREAT' ? 1.25 : 1);
+      fx.walkPhase += dt * freq;
+    }
+    const step = walking ? computeWalkStep(fx.walkPhase, 8, 6) : null;
+    const footF = step ? { x: step.fx, y: step.fy } : { x: 4.5, y: 0 };
+    const footB = step ? { x: step.bx, y: step.by } : { x: -5.5, y: 0 };
+    const armSwing = step ? Math.sin(fx.walkPhase) * 0.4 : 0;
+    const bob = step ? step.hipLift : Math.sin(gameTime * 2.4 + (unit.limbPhase || 0)) * 1.1;
+    const since = unit.state === 'ATTACK' ? this.unitStrikeSince(unit) : -1;
+
     ctx.save();
     ctx.translate(screenX, unitY);
     ctx.scale(facing * scale, scale);
 
-    // Flinch recoil
-    if (unit.flinchTimer > 0) {
-      ctx.rotate(-0.12);
-      ctx.translate(-4, 0);
+    // 受击踉跄（旋转 + 后移）
+    const flinchK = unit.flinchTimer > 0 ? Math.min(1, unit.flinchTimer / 0.3) : 0;
+    if (flinchK > 0) {
+      ctx.rotate(-0.14 * flinchK);
+      ctx.translate(-4 * flinchK, 0);
     }
 
     const mainColor = isEnemy ? '#18181b' : '#09090b';
     const accentColor = isEnemy ? '#ef4444' : '#06b6d4';
 
-    const isMoving = unit.state === 'WALK' || unit.state === 'RETREAT';
-    const gaitPhase = isMoving ? gameTime * (unit.speed * 0.08) : 0;
-    const leg1Swing = isMoving ? Math.sin(gaitPhase) * 0.6 : 0;
-    const leg2Swing = isMoving ? -Math.sin(gaitPhase) * 0.6 : 0;
-
-    ctx.strokeStyle = mainColor;
-    ctx.lineWidth = 3.2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
     switch (unit.type) {
-      case 'SCRIBE':
-        // Legs
-        this.drawLimbBone(ctx, -2, -18, leg1Swing, 10, 10);
-        this.drawLimbBone(ctx, 2, -18, leg2Swing, 10, 10);
-        // Torso
+      /* ------------------------------------------------ 采墨侍：负罐佝偻 + 舀墨倾倒 ------------------------------------------------ */
+      case 'SCRIBE': {
+        const hipY = -18 + bob;
+        this.drawUnitLegsIK(ctx, 0, hipY, footF, footB, 10, 3, mainColor);
+        const lean = walking ? 0.12 : 0.05;
+        const shX = Math.sin(lean) * 15;
+        const shY = hipY - 15;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 3.2;
         ctx.beginPath();
-        ctx.moveTo(0, -18);
-        ctx.lineTo(0, -34);
+        ctx.moveTo(0, hipY);
+        ctx.lineTo(shX, shY);
         ctx.stroke();
-        // Head
         ctx.fillStyle = mainColor;
         ctx.beginPath();
-        ctx.arc(0, -42, 6, 0, Math.PI * 2);
+        ctx.arc(shX + 1, shY - 7, 5.8, 0, TAU);
         ctx.fill();
-        // Ink jar
-        ctx.fillStyle = (unit.carriedInk || 0) > 0 ? accentColor : '#57534e';
-        ctx.fillRect(-10, -32, 7, 13);
+        // 后臂随步伐摆动
+        ctx.lineWidth = 2.8;
+        this.drawTwoBoneAngles(ctx, shX, shY, 0.35 + armSwing * 0.5, 0.4, 7, 7);
+        // 墨罐（满罐发光）
+        const full = (unit.carriedInk || 0) > 0;
+        ctx.fillStyle = full ? accentColor : '#57534e';
+        if (full) {
+          ctx.shadowColor = accentColor;
+          ctx.shadowBlur = 8;
+        }
+        const jarY = hipY - 10;
+        ctx.fillRect(-12.2, jarY - 7, 6.5, 11);
+        ctx.shadowBlur = 0;
+        if (unit.state === 'MINE') {
+          // 采墨：俯身向泉舀墨 + 墨滴下坠
+          const dip = Math.sin(gameTime * 5) * 0.5 + 0.5;
+          const pe = this.drawTwoBoneAngles(ctx, shX, shY, 1.15 + dip * 0.25, 0.35, 8, 8);
+          for (let i = 0; i < 3; i++) {
+            const dropT = (gameTime * 1.6 + i * 0.33) % 1;
+            ctx.globalAlpha = 1 - dropT;
+            ctx.fillStyle = accentColor;
+            ctx.beginPath();
+            ctx.arc(pe.x + 1, pe.y + 4 + dropT * 14, 1.6, 0, TAU);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+        } else {
+          // 前臂随步伐反向摆
+          ctx.lineWidth = 2.8;
+          this.drawTwoBoneAngles(ctx, shX, shY, 0.5 - armSwing * 0.5, 0.45, 8, 8);
+        }
         break;
+      }
 
-      case 'SWORD':
-        // Legs
-        this.drawLimbBone(ctx, -2, -22, leg1Swing, 12, 12);
-        this.drawLimbBone(ctx, 2, -22, leg2Swing, 12, 12);
-        // Torso
+      /* ------------------------------------------------ 折柳剑客：三段挥砍（蓄 → 斩 → 收） ------------------------------------------------ */
+      case 'SWORD': {
+        const hipY = -22 + bob;
+        this.drawUnitLegsIK(ctx, 0, hipY, footF, footB, 12, 3.1, mainColor);
+        let lean = walking ? 0.12 : 0.04;
+        let hipOff = 0;
+        let swordA = 0.55;
+        let handA = 0.5;
+        let handB = 0.45;
+        if (since >= 0) {
+          const WIND = 0.13;
+          const HIT = 0.24;
+          const REC = 0.45;
+          if (since < WIND) {
+            const t = easeOutQuad(since / WIND);
+            lean = lerp(0.04, -0.2, t);
+            hipOff = lerp(0, -2, t);
+            handA = lerp(0.5, -1.3, t);
+            handB = 0.7;
+            swordA = lerp(0.55, -1.9, t);
+          } else if (since < HIT) {
+            const t = easeOutCubic((since - WIND) / (HIT - WIND));
+            lean = lerp(-0.2, 0.34, t);
+            hipOff = lerp(-2, 4, t);
+            handA = lerp(-1.3, 1.15, t);
+            handB = lerp(0.7, 0.1, t);
+            swordA = lerp(-1.9, 0.9, t);
+            ctx.save();
+            ctx.globalAlpha = 0.8;
+            this.drawInkSlashArc(ctx, 4, hipY - 16, 26, -1.2, 0.7, isEnemy ? '252, 165, 165' : '125, 211, 252');
+            ctx.restore();
+          } else if (since < REC) {
+            const t = easeInOutQuad(clamp01((since - HIT) / (REC - HIT)));
+            lean = lerp(0.34, 0.05, t);
+            hipOff = lerp(4, 0, t);
+            handA = lerp(1.15, 0.5, t);
+            handB = lerp(0.1, 0.45, t);
+            swordA = lerp(0.9, 0.55, t);
+          }
+        }
+        const shX = Math.sin(lean) * 19 + hipOff;
+        const shY = hipY - 19;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 3.4;
         ctx.beginPath();
-        ctx.moveTo(0, -22);
-        ctx.lineTo(0, -42);
+        ctx.moveTo(hipOff, hipY);
+        ctx.lineTo(shX, shY);
         ctx.stroke();
-        // Conical straw hat
+        // 头 + 斗笠
+        const headX = shX + 1.5;
+        const headY = shY - 7;
         ctx.fillStyle = mainColor;
         ctx.beginPath();
-        ctx.arc(0, -49, 6.5, 0, Math.PI * 2);
+        ctx.arc(headX, headY, 6.2, 0, TAU);
         ctx.fill();
         ctx.fillStyle = '#78716c';
         ctx.beginPath();
-        ctx.moveTo(-13, -51);
-        ctx.lineTo(0, -58);
-        ctx.lineTo(13, -51);
+        ctx.moveTo(headX - 12, headY - 7);
+        ctx.lineTo(headX, headY - 13.5);
+        ctx.lineTo(headX + 12, headY - 7);
         ctx.closePath();
         ctx.fill();
-        // Sword slash or idle
-        if (unit.state === 'ATTACK') {
-          ctx.strokeStyle = accentColor;
-          ctx.beginPath();
-          ctx.moveTo(0, -36);
-          ctx.lineTo(24, -36);
-          ctx.lineTo(46, -36);
-          ctx.stroke();
-        } else {
-          ctx.strokeStyle = '#cbd5e1';
-          ctx.beginPath();
-          ctx.moveTo(0, -36);
-          ctx.lineTo(12, -26);
-          ctx.lineTo(22, -14);
-          ctx.stroke();
-        }
+        // 后臂摆
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 2.9;
+        this.drawTwoBoneAngles(ctx, shX, shY, -0.2 - armSwing * 0.6, 0.35, 8.5, 8.5);
+        // 持剑臂 + 短刃
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 3.1;
+        const hand = this.drawTwoBoneAngles(ctx, shX, shY, handA, handB, 9, 9);
+        this.drawShortBlade(ctx, hand.x, hand.y, swordA, accentColor);
         break;
+      }
 
-      case 'ARCHER':
-        this.drawLimbBone(ctx, -2, -22, leg1Swing, 12, 12);
-        this.drawLimbBone(ctx, 2, -22, leg2Swing, 12, 12);
+      /* ------------------------------------------------ 抚竹射手：搭箭 → 满弦 → 撒放震颤 ------------------------------------------------ */
+      case 'ARCHER': {
+        const hipY = -22 + bob;
+        this.drawUnitLegsIK(ctx, 0, hipY, footF, footB, 12, 3.1, mainColor);
+        const cdMax = 1 / Math.max(0.1, UNIT_CONFIGS.ARCHER.attackSpeed);
+        let draw = 0;
+        let snap = 0;
+        let lean = walking ? 0.1 : 0.03;
+        if (since >= 0) {
+          if (since < 0.09) {
+            snap = 1 - since / 0.09;
+          } else {
+            draw = easeInOutQuad(clamp01((since - 0.12) / (cdMax * 0.72)));
+          }
+        }
+        lean += draw * 0.06 - snap * 0.12;
+        const shX = Math.sin(lean) * 19;
+        const shY = hipY - 19;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 3.4;
         ctx.beginPath();
-        ctx.moveTo(0, -22);
-        ctx.lineTo(0, -42);
+        ctx.moveTo(0, hipY);
+        ctx.lineTo(shX, shY);
         ctx.stroke();
         ctx.fillStyle = mainColor;
         ctx.beginPath();
-        ctx.arc(0, -49, 6.5, 0, Math.PI * 2);
+        ctx.arc(shX + 1.5, shY - 7, 6.2, 0, TAU);
         ctx.fill();
-        // Longbow
+        // 弓（前臂伸直持弓）
+        const bowX = shX + 13;
+        const bowY = shY - 2;
         ctx.strokeStyle = '#854d0e';
         ctx.lineWidth = 2.8;
         ctx.beginPath();
-        ctx.arc(16, -36, 18, -Math.PI * 0.42, Math.PI * 0.42);
+        ctx.arc(bowX, bowY, 16, -Math.PI * 0.44, Math.PI * 0.44);
         ctx.stroke();
-        break;
-
-      case 'GUARDIAN':
-        ctx.lineWidth = 4.2;
-        this.drawLimbBone(ctx, -4, -24, leg1Swing, 13, 13);
-        this.drawLimbBone(ctx, 4, -24, leg2Swing, 13, 13);
+        // 弓弦（拉弓 V 形后引 / 撒放震颤）
+        const tipY = 16 * Math.sin(Math.PI * 0.44);
+        const restX = bowX + 16 * Math.cos(Math.PI * 0.44);
+        const pullX = restX - draw * 13 - snap * Math.sin(gameTime * 60) * 2.5;
+        ctx.strokeStyle = snap > 0 ? 'rgba(226, 232, 240, 0.95)' : '#d6d3d1';
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(0, -24);
-        ctx.lineTo(0, -46);
+        ctx.moveTo(restX, bowY - tipY);
+        ctx.lineTo(pullX, bowY);
+        ctx.lineTo(restX, bowY + tipY);
         ctx.stroke();
+        // 箭（满弦搭箭）
+        if (draw > 0.25) {
+          ctx.strokeStyle = '#a8a29e';
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(pullX, bowY);
+          ctx.lineTo(restX + 14, bowY);
+          ctx.stroke();
+          ctx.fillStyle = '#e7e5e4';
+          ctx.beginPath();
+          ctx.moveTo(restX + 14, bowY - 2.4);
+          ctx.lineTo(restX + 19, bowY);
+          ctx.lineTo(restX + 14, bowY + 2.4);
+          ctx.closePath();
+          ctx.fill();
+        }
+        // 拉弦手
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(shX, shY);
+        ctx.lineTo(pullX - 1, bowY);
+        ctx.stroke();
+        // 撒放弓光
+        if (snap > 0) {
+          ctx.save();
+          ctx.globalAlpha = snap * 0.9;
+          this.drawInkSlashArc(ctx, bowX, bowY, 22, -0.5, 0.5, isEnemy ? '252, 165, 165' : '134, 239, 172');
+          ctx.restore();
+        }
+        break;
+      }
+
+      /* ------------------------------------------------ 墨岩卫：举盾蓄力 → 盾击前撞 → 长戈横扫 ------------------------------------------------ */
+      case 'GUARDIAN': {
+        const hipY = -24 + bob * 0.7;
+        this.drawUnitLegsIK(ctx, 0, hipY, footF, footB, 13, 4.2, mainColor);
+        let lean = walking ? 0.08 : 0.02;
+        let hipOff = 0;
+        let shieldLift = 0;
+        let shieldX = 9;
+        let halberdA = -1.35;
+        if (since >= 0) {
+          const BASH = 0.24;
+          const SWEEP = 0.55;
+          const REC = 0.85;
+          if (since < 0.16) {
+            const t = easeOutQuad(since / 0.16);
+            lean = lerp(0.02, -0.14, t);
+            hipOff = -2 * t;
+            shieldLift = t;
+          } else if (since < BASH) {
+            const t = easeOutCubic((since - 0.16) / (BASH - 0.16));
+            lean = lerp(-0.14, 0.3, t);
+            hipOff = lerp(-2, 5, t);
+            shieldLift = 1;
+            shieldX = 9 + t * 9;
+          } else if (since < SWEEP) {
+            const t = easeOutCubic((since - BASH) / (SWEEP - BASH));
+            halberdA = lerp(-1.5, 0.75, t);
+            shieldX = 14 - t * 4;
+            lean = lerp(0.3, 0.18, t);
+            hipOff = lerp(5, 3, t);
+            ctx.save();
+            ctx.globalAlpha = t * 0.75;
+            this.drawInkSlashArc(ctx, 6, hipY - 24, 30, -1.35, 0.65, isEnemy ? '252, 165, 165' : '125, 211, 252');
+            ctx.restore();
+          } else if (since < REC) {
+            const t = easeInOutQuad(clamp01((since - SWEEP) / (REC - SWEEP)));
+            halberdA = lerp(0.75, -1.35, t);
+            shieldX = lerp(10, 9, t);
+            lean = lerp(0.18, 0.02, t);
+            hipOff = lerp(3, 0, t);
+          }
+        }
+        const shX = Math.sin(lean) * 20 + hipOff;
+        const shY = hipY - 20;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 4.4;
+        ctx.beginPath();
+        ctx.moveTo(hipOff, hipY);
+        ctx.lineTo(shX, shY);
+        ctx.stroke();
+        // 头
         ctx.fillStyle = mainColor;
         ctx.beginPath();
-        ctx.arc(0, -54, 8, 0, Math.PI * 2);
+        ctx.arc(shX + 1.5, shY - 8, 7.6, 0, TAU);
         ctx.fill();
-        // Tower Shield
+        // Boss 冠饰（三尖刺冠）
+        if (unit.isBoss) {
+          ctx.fillStyle = accentColor;
+          for (let i = -1; i <= 1; i++) {
+            ctx.beginPath();
+            ctx.moveTo(shX + 1.5 + i * 5 - 2, shY - 13);
+            ctx.lineTo(shX + 1.5 + i * 5, shY - 21 - (i === 0 ? 4 : 0));
+            ctx.lineTo(shX + 1.5 + i * 5 + 2, shY - 13);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+        // 持盾臂
+        const shieldCY = shY + 14 - shieldLift * 16;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 3.6;
+        ctx.beginPath();
+        ctx.moveTo(shX, shY);
+        ctx.lineTo(shX + shieldX - 1, shieldCY);
+        ctx.stroke();
+        // 巨盾
         ctx.fillStyle = '#334155';
         ctx.strokeStyle = accentColor;
-        ctx.lineWidth = 2.5;
-        ctx.fillRect(10, -56, 16, 52);
-        ctx.strokeRect(10, -56, 16, 52);
-        // Halberd
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2.4;
         ctx.beginPath();
-        ctx.moveTo(-4, -12);
-        ctx.lineTo(unit.state === 'ATTACK' ? 38 : 14, unit.state === 'ATTACK' ? -38 : -72);
+        ctx.roundRect(shX + shieldX - 1, shieldCY - 26, 15, 52, 3);
+        ctx.fill();
         ctx.stroke();
-        break;
-
-      case 'HARPIST':
-        // Hovering Zither Maiden
-        const hover = Math.sin(gameTime * 3) * 4;
-        ctx.fillStyle = mainColor;
+        // 盾面纹
+        ctx.strokeStyle = isEnemy ? 'rgba(239, 68, 68, 0.5)' : 'rgba(56, 189, 248, 0.5)';
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.moveTo(0, -32 + hover);
-        ctx.lineTo(-9, 0 + hover);
-        ctx.lineTo(9, 0 + hover);
+        ctx.moveTo(shX + shieldX + 6.5, shieldCY - 17);
+        ctx.lineTo(shX + shieldX + 6.5, shieldCY + 17);
+        ctx.stroke();
+        // 长戈（握点 + 戈杆 + 戈刃）
+        const gripX = shX - 2;
+        const gripY = shY + 6;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 3.4;
+        ctx.beginPath();
+        ctx.moveTo(shX, shY);
+        ctx.lineTo(gripX, gripY);
+        ctx.stroke();
+        const dirX = Math.cos(halberdA);
+        const dirY = Math.sin(halberdA);
+        const poleEndX = gripX + dirX * 52;
+        const poleEndY = gripY + dirY * 52;
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.moveTo(gripX - dirX * 14, gripY - dirY * 14);
+        ctx.lineTo(poleEndX, poleEndY);
+        ctx.stroke();
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.moveTo(poleEndX + dirX * 2, poleEndY + dirY * 2);
+        ctx.lineTo(poleEndX + dirX * 10 - dirY * 3.5, poleEndY + dirY * 10 + dirX * 3.5);
+        ctx.lineTo(poleEndX + dirX * 14, poleEndY + dirY * 14);
+        ctx.lineTo(poleEndX + dirX * 10 + dirY * 3.5, poleEndY + dirY * 10 - dirX * 3.5);
         ctx.closePath();
         ctx.fill();
-        ctx.beginPath();
-        ctx.arc(0, -44 + hover, 6.5, 0, Math.PI * 2);
-        ctx.fill();
-        // Zither
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(12, -36 + hover, 26, 8);
         break;
+      }
+
+      /* ------------------------------------------------ 鸣筝琴师：悬浮裙摆 + 琴弦振颤 + 拨弦音环 ------------------------------------------------ */
+      case 'HARPIST': {
+        const hover = Math.sin(gameTime * 2.6 + (unit.limbPhase || 0)) * 4;
+        const sway = Math.sin(gameTime * 1.8 + (unit.limbPhase || 0)) * 0.06;
+        const baseY = -34 + hover;
+        // 裙摆（波浪下缘）
+        ctx.fillStyle = mainColor;
+        const hemWave = Math.sin(gameTime * 3.2) * 2.5;
+        ctx.beginPath();
+        ctx.moveTo(Math.sin(sway) * 10, baseY - 26);
+        ctx.lineTo(-11 + hemWave, baseY + 8);
+        ctx.quadraticCurveTo(0, baseY + 12, 11 + hemWave * 0.6, baseY + 8);
+        ctx.closePath();
+        ctx.fill();
+        // 躯干
+        const shX = Math.sin(sway) * 10 + 2;
+        const shY = baseY - 26;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 3.2;
+        ctx.beginPath();
+        ctx.moveTo(shX, shY + 2);
+        ctx.lineTo(shX + Math.sin(sway) * 4, shY - 10);
+        ctx.stroke();
+        // 头 + 发簪
+        ctx.fillStyle = mainColor;
+        ctx.beginPath();
+        ctx.arc(shX + 1, shY - 16, 6.4, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = accentColor;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(shX + 1, shY - 22);
+        ctx.lineTo(shX + 7 + Math.sin(gameTime * 2.2) * 1.5, shY - 26);
+        ctx.stroke();
+        // 古琴 + 四弦（拨弦后振颤衰减）
+        const zX = shX + 12;
+        const zY = shY - 2;
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.roundRect(zX - 2, zY - 4, 26, 9, 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 0.8;
+        const strumAmp = since >= 0 ? Math.max(0, 1 - since * 3) : 0;
+        for (let i = 0; i < 4; i++) {
+          const sy = zY - 2.6 + i * 1.8;
+          ctx.beginPath();
+          ctx.moveTo(zX, sy);
+          ctx.lineTo(zX + 22, sy + Math.sin(gameTime * 40 + i * 2) * strumAmp * 1.8);
+          ctx.stroke();
+        }
+        // 拨弦手扫过琴弦 + 音环
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 2.8;
+        if (since >= 0 && since < 0.3) {
+          const t = since / 0.3;
+          const sweep = lerp(0.2, 1.1, easeOutCubic(t));
+          this.drawTwoBoneAngles(ctx, shX, shY - 4, sweep, 0.5, 7.5, 7.5);
+          ctx.save();
+          ctx.globalAlpha = 1 - t;
+          this.drawInkSlashArc(ctx, zX + 10, zY, 12 + t * 10, -0.6, 0.6, '252, 211, 77');
+          ctx.restore();
+        } else {
+          this.drawTwoBoneAngles(ctx, shX, shY - 4, 0.55, 0.55, 7.5, 7.5);
+        }
+        break;
+      }
     }
 
     ctx.restore();
 
-    // Overhead HP Bar
-    this.drawUnitHpBar(screenX, unitY - 50 * scale, unit, scale);
+    // Overhead HP Bar（Boss 抬高避让冠饰）
+    this.drawUnitHpBar(screenX, unitY - (unit.isBoss ? 66 : 56) * scale, unit, scale);
   }
+
 
   // Draw Ancient Ink Well in 2.5D
   private drawInkWell(

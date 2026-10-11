@@ -1,0 +1,65 @@
+[
+  {
+    "url": "https://forum.gdevelop.io",
+    "name": "Is there a way to make the camera shake? - How do I?",
+    "snippet": "Feb 24, 2021 — I want to add an event that makes the screen seem to shake for a second and then return to where the camera was before. This is my attempt, ...",
+    "host_name": "forum.gdevelop.io",
+    "rank": 0,
+    "date": "Feb 24, 2021",
+    "favicon": ""
+  },
+  {
+    "url": "https://itch.io/games-like",
+    "name": "Games like Easy Image Trail - After Image Effect",
+    "snippet": "Easy Image Trail - After Image Effect ' Free Tool to make easy sprite trails! Cutting/Thrust and 4 different hit Effects. Bring your pixel art game to life with ...",
+    "host_name": "itch.io",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://tympanus.net/codrops/2021%2F07%2F21",
+    "name": "Creating a Typography Motion Trail Effect with Three.js",
+    "snippet": "Jul 21, 2021 — Learn how to use WebGL framebuffers via Three.js to create an interactive motion trail effect for text.",
+    "host_name": "tympanus.net",
+    "rank": 2,
+    "date": "Jul 21, 2021",
+    "favicon": ""
+  },
+  {
+    "url": "https://jonny.morrill.me/blog",
+    "name": "GameDev: How to Implement a “Camera Shake” Effect - Blog",
+    "snippet": "May 17, 2013 — In modern videogames, a camera, or \" screen \", shake can add some really nice aesthetic touch and tactility to your game at a very low cost. Read more",
+    "host_name": "jonny.morrill.me",
+    "rank": 3,
+    "date": "May 17, 2013",
+    "favicon": ""
+  },
+  {
+    "url": "https://itch.io/game-assets/tag-effects/tag-shake",
+    "name": "Top game assets tagged Effects and shake",
+    "snippet": "Find game assets tagged Effects and shake like GDevelop - Screen Shake Example on itch.io, the indie game hosting marketplace.",
+    "host_name": "itch.io",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.html5gamedevs.com/topic",
+    "name": "[SOLVED] Camera shake Animation on ArcFollowCamera",
+    "snippet": "Aug 26, 2018 — Hello everyone! How can I get a camera shake animation to work with ArcFollowCamera? I'd imagine this is useful for situations like a ball ... Read more",
+    "host_name": "www.html5gamedevs.com",
+    "rank": 5,
+    "date": "Aug 26, 2018",
+    "favicon": ""
+  },
+  {
+    "url": "https://syntheticpixel.itch.io/Game%20assets/Free",
+    "name": "Easy Image Trail - After Image Effect by SyntheticPixel - itch.io",
+    "snippet": "This script is designed to make adding graphical effects like image trails (also known as after images) as easy as possible to implement into your game . This ... Read more",
+    "host_name": "syntheticpixel.itch.io",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  }
+]

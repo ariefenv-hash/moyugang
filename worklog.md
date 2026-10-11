@@ -55,3 +55,23 @@ Stage Summary:
 - 交付新包：/home/z/my-project/download/ink_and_steel_v2.zip；验证截图 8 张（verify2_*.png）
 - 新增文件：FloatingJoystick.tsx / BlessingModal.tsx；修改 7 文件
 - 架构保持 Vite+React19+TS+Tailwind4，未做任何 Next.js 迁移（遵照用户强制要求）
+
+---
+Task ID: 4
+Agent: main (Super Z)
+Task: 结合网络搜索全面升级火柴人动作效果（更合理 + 更炫酷），保持 Vite 架构未迁移 Next.js
+
+Work Log:
+- 网络搜索 4 组关键词确认行业实践：动画十二原则（Anticipation/Squash&Stretch/Follow Through/Ease）、火柴人格斗=姿势库+程序化混合、打击感三件套（顿帧+残影轨迹+震屏）
+- 新建 src/utils/animationSystem.ts 程序化动画引擎：缓动库（outCubic/inCubic/inOutQuad/outQuad/outBack/outElastic + expoBlend 帧率无关指数平滑）、平面双骨 IK 求解器 solveIK2（余弦定理+弯曲方向）、StickPose 17 维可插值姿势 + lerpPose/clonePose、computeWalkStep 生物力学步迹（椭圆脚踪+双峰骨盆起伏）、computeHeroPose 全状态姿势库（IDLE 双频呼吸/WALK 程序化步态/JUMP 三段空姿/ATTACK_1 横扫·ATTACK_2 挑斩·ATTACK_3 重斩均三段式/AERIAL 倒栽/DASH 极限突进/SHIELD 结印/BARRAGE 引星/LOTUS 种莲/ULTIMATE 张臂/HURT 踉跄）
+- 重构 drawSkeletalHero：目标姿势→指数平滑混合（攻击出手段 blendRate 30 加速跟随）；IK 双腿含脚掌；落地检测=挤压+尘环+重落墨尘；起跳拉伸；转身缓冲横向微压；verlet 披风（5节布料约束+风场+速度拖拽+capeLift）与发带（3节青缎）；剑气轨迹带（剑刃世界坐标每帧采样，lighter 叠加青色飘带+白热内芯，0.2s 生命）；冲刺/重击残影（姿势快照幽灵剪影，瞬移路径插值补影）；三式重斩剑尖冲击环；冲刺速度线；护盾旋转刻痕
+- 重构 drawSkeletalUnit 五兵种：通用 IK 行走（per-unit WeakMap 步态相位池）+ 攻击节奏由 attackCooldown 反推 sinceStrike 驱动；SWORD 蓄剑→突斩（墨弧）→收势；ARCHER 满弦递拉→撒放震颤（弦抖动+弓光+搭箭可见）；GUARDIAN 举盾蓄力→盾击前撞→长戈横扫（Boss 1.32x 放大+三尖冠饰，血条避让）；SCRIBE 负罐佝偻行+采墨倾倒墨滴；HARPIST 悬浮裙摆+四弦振颤+拨弦音环；Boss 暗红气场保留
+- 渲染器 render() 统一 dt 计算（暂停/顿帧 gameTime 不推进→全部动作特效自然凝滞，墨滞时刻 0.45x 全局慢动作自动生效）
+- BattleView 零改动（全由现有 state/stateTime/attackCooldown 驱动）
+- 验证：tsc --noEmit 零错误；vite build 成功；agent-browser 冒烟（菜单→选折→战斗→招募→IK 行走→三段连击（剑气轨迹带+残影截图确认）→断水斩（突进姿势+速度线+暴击朱印 -118）→跳跃收腿+投影缩放→绝技弹幕+墨滞时刻→祝福三选一→败北结算→重开→390px 窄屏），控制台零错误
+- 截图 9 张：verify3_battle_idle / units_walk / hero_attack / hero_slash / c1 / c3 / dash / jump / ult / narrow*
+
+Stage Summary:
+- 交付：/home/z/my-project/download/ink_and_steel_v3.zip（33 文件）
+- 新文件 animationSystem.ts；canvasRenderer.ts 1567→2338 行（动作系统全面重写）
+- 架构保持 Vite+React19+TS+Tailwind4，未做任何 Next.js 迁移（遵照用户强制要求）
