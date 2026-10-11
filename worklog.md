@@ -217,3 +217,23 @@ Stage Summary:
 - 删除：src/components/Joystick.tsx / src/components/FloatingJoystick.tsx
 - 修改：vite.config.ts（prompt）/ src/main.tsx / src/App.tsx / src/components/BattleView.tsx / src/components/LoreModal.tsx
 - 操控三模式归一为挥毫手势单模式；PWA 具备自动版本巡检 + 玩家可控更新；架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js
+
+---
+Task ID: 11
+Agent: Super Z (main)
+Task: 推送项目到 GitHub 仓库 ariefenv-hash/moyugang（用户提供临时 PAT）
+
+Work Log:
+- 排查发现本地仓库无 remote 配置（此前推送失败根因），git 跟踪 1257 文件（含 skills/ 62MB、download/ 41MB、.env、tool-results 等无关内容）
+- 令牌验证通过，远程仓库为空仓库，可直接干净推送
+- git archive 从 HEAD 提取干净源码树（src/public/scripts/根配置，3.7MB）至 .push-tmp
+- 新写 .gitignore（排除 skills/download/tool-results/upload/dev-dist/*.marker/.clawhub/.push-tmp）与正式 README.md
+- 全新初始提交 2b5f323（51 files, 13650 insertions，作者 ariefenv-hash），以 credential helper 方式推送 main 成功（令牌未落盘、未入 remote 配置）
+- 打包 moyugang-v1.0.0-source.zip（2.6MB），创建 GitHub Release v1.0.0 并上传 zip 资产
+- 校验远程 main SHA = 本地 SHA（2b5f3235c454ec5ef1247cc4fbed447000a4935f）一致
+- 本地仓库：remote origin 已配置（无令牌）、.gitignore 已完善并提交、临时目录已清理
+
+Stage Summary:
+- https://github.com/ariefenv-hash/moyugang 已含完整游戏源码（main @ 2b5f323）
+- Release v1.0.0 附源码压缩包：moyugang-v1.0.0-source.zip
+- 提醒用户立即撤销临时 PAT
