@@ -299,3 +299,29 @@ Stage Summary:
 - 修改：canvasRenderer.ts / BattleView.tsx；新增 scripts/verify_xingyun.py
 - 提交：c050b87（半屏割裂修复）+ c39cd81（行云模式）+ 仓库净化提交
 - 架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js
+
+---
+Task ID: 15
+Agent: 主 agent (Super Z)
+Task: 下一阶段大升级——主线十章剧情架构 + 第二大章《山河谣·蚀文惊变》全五折实装（保持 Vite 架构未迁移 Next.js）
+
+Work Log:
+- 剧情架构（数据驱动，保证十章可扩展）：新建 src/data/story.ts —— MAIN_STORY_OUTLINE 十大章总纲（风雅集/山河谣已启，漱玉词→文心雕龙八卷未启预告）+ STORY_CHAPTERS 大章元数据（卷首诗/章前引子/通关尾声/折页组）+ 工具函数（RELEASED_LEVELS/MAX_STORY_LEVEL_ID/getChapterByLevelId/getChapterFoldPosition）；新增一章 = 追加一个对象，导航/解锁/存档全自动适配
+- types/game.ts：LevelConfig 增 storyIntro/bossUnit/bossTime/baselineWaves；ambientType 扩 MIST/AUTUMN/STORM/VOID；PlayerProgress 增 storySeen；新增 StoryChapterMeta/StoryOutlineEntry/ChapterStatus
+- 第二章五折（id 6-10）：烟雨断桥(灰雨洗字)/枫林晚渡(火墨渔歌)/雷峰夕照(中Boss烬羽书生·焚卷)/寒潭鹤影(守潭捞曲魄)/文枢归一(终Boss蚀文君·洗墨)；剧情线=千渊陨落→其师蚀文君发动洗墨之乱→集文心四魄(诗词曲赋)→文枢殿对写「归」字；第一章五折亦补折前引言，难度曲线 2400/2900→3400/4400
+- canvasRenderer：4 新氛围（天空/地面渐变 + VOID 蚀月冕环天体 + drawAmbientWeather 程序化天气层——MIST 雾带灰雨/AUTUMN 飘旋霜叶/STORM 斜骤雨+7.5s 周期惊雷折线/VOID 上浮褪字墨尘；纯 gameTime 函数暂停自然凝滞，行云模式 qualityLow 自动裁剪粒子）；render() 步骤 11.5 挂接
+- ChapterSelect 重构：十章册页章签横滚导航（已启/未启之卷态）+ 章头卷首诗 + 折页网格按章渲染 + 无尽卡仅第一章展示 + 未启之卷预告卡（候印）
+- 新组件 StoryIntroModal（章前引子卷轴：装裱立轴+卷宗引子+启卷印钮）；已解锁章首次切入自动弹出（storySeen 持久化防重复），未解锁章防剧透不自动弹、可「卷首」手动重温
+- BattleView：开战卷首语纸卷（8s 自散，pointer-events-none）；Boss 出场/基础波次全面数据驱动化（lv.bossUnit/bossTime/baselineWaves，去除 lv.id===5 硬编码）
+- App：跨章解锁链（Math.min(MAX_STORY_LEVEL_ID, id+1)）；终折大捷结算展示章节尾声 epilogue；下一折按钮跨章显示「启下一章」；菜单进度「第贰章·第壹折」中文数字；新成就雷峰塔倾/文枢归一；存档迁移 storySeen
+- gameData：CHAPTER_LEVELS 改为 story.ts 平铺兼容导出；ENDLESS_LEVEL id 6→999 让位第二章；成就 9→11
+- 验证：tsc --noEmit 零错误；vite build 成功；scripts/verify_story_ch2.py 专项 39/39 PASS（十章章签/引子卷轴自动弹出与防剧透策略/未启之卷预告/新玩家锁定/老玩家跨章存档迁移/MIST·STORM·VOID 氛围像素采样/卷首语/移动端 390px）；verify_weapon_chars.py 回归 PASS；生产构建无图全链路双端回归 PASS；控制台全程零错误
+- 修复：App 菜单折序中文数字统一（第1折→第壹折）；旧验证脚本补引子卷轴处理步骤
+
+Stage Summary:
+- 新文件：src/data/story.ts / src/components/StoryIntroModal.tsx / scripts/verify_story_ch2.py
+- 修改：types/game.ts / gameData.ts / canvasRenderer.ts / BattleView.tsx / ChapterSelect.tsx / VictoryDefeatModal.tsx / App.tsx / README.md
+- 提交 324a6f3；交付 download/ink_and_steel_v6_story.zip（2.6MB）
+- 截图：verify10_ch1_intro/ch2_intro/ch2_locked/upcoming/ch1_battle/mist_battle/storm_battle/void_battle/mobile_select（9 张）
+- 架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js
+- 待办：推送 GitHub 需用户提供新 PAT（推送后 Actions 自动部署 Pages）
