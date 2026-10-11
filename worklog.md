@@ -75,3 +75,19 @@ Stage Summary:
 - 交付：/home/z/my-project/download/ink_and_steel_v3.zip（33 文件）
 - 新文件 animationSystem.ts；canvasRenderer.ts 1567→2338 行（动作系统全面重写）
 - 架构保持 Vite+React19+TS+Tailwind4，未做任何 Next.js 迁移（遵照用户强制要求）
+
+---
+Task ID: 5
+Agent: main (Super Z)
+Task: 逛技能商店（ClawHub），寻找可增强游戏设计体验的前端设计技能并入库
+
+Work Log:
+- clawhub search 五组关键词（frontend design / ui ux / animation / game design / canvas / chinese aesthetic）
+- 甄选并安装 3 件：taste-literati-brush（宋清文人画美学 token）、game-world-design（游戏体验与世界设计，中文）、anthropic-frontend-design（官方技能，95 万装机，从 github.com/anthropics/skills tarball 提取至 skills/anthropic-frontend-design/）
+- skills.sh 镜像类技能（12-principles-of-animation / emilkowal-animations 等）ClawHub 无法直装；其中动画十二原则 v3 已实践落地，无需重复引入
+- 通读三件 SKILL.md 验货，确认与墨与钢铁项目适配度
+
+Stage Summary:
+- 新增技能：skills/taste-literati-brush、skills/game-world-design、skills/anthropic-frontend-design
+- 应用规划：①文人笔墨×官方前端设计=UI 视觉身份升级（装裱卷轴布局/墨色五阶/留白/题跋）②game-world-design=情节延伸前置产出 GAME_DESIGN 设计合同
+- 架构未动，纯技能库扩充
