@@ -1,0 +1,685 @@
+  /* ============================================================
+     火柴人动作系统 v3 —— 程序化姿势引擎
+     （三段式攻击 / 双骨 IK / verlet 物理披风 / 剑气轨迹 / 残影 / 冲击环）
+     ============================================================ */
+
+  /** 每帧特效状态推进（轨迹/残影/冲击环衰减，dt=0 时自然凝滞） */
+  private stepFX(dt: number) {
+    if (dt <= 0) return;
+    for (let i = this.swordTrail.length - 1; i >= 0; i--) {
+      this.swordTrail[i].life -= dt;
+      if (this.swordTrail[i].life <= 0) this.swordTrail.splice(i, 1);
+    }
+    for (let i = this.afterimages.length - 1; i >= 0; i--) {
+      this.afterimages[i].life -= dt;
+      if (this.afterimages[i].life <= 0) this.afterimages.splice(i, 1);
+    }
+    for (let i = this.fxRings.length - 1; i >= 0; i--) {
+      this.fxRings[i].life -= dt;
+      if (this.fxRings[i].life <= 0) this.fxRings.splice(i, 1);
+    }
+    if (this.swordTrail.length > 40) this.swordTrail.splice(0, this.swordTrail.length - 40);
+    if (this.afterimages.length > 26) this.afterimages.splice(0, this.afterimages.length - 26);
+    if (this.fxRings.length > 32) this.fxRings.splice(0, this.fxRings.length - 32);
+  }
+
+  /** 双骨肢体绘制（显式两段角度：根角 + 肘弯相对角），返回末端（手）坐标 */
+  private drawTwoBoneAngles(
+    ctx: CanvasRenderingContext2D,
+    sx: number,
+    sy: number,
+    angleA: number,
+    angleB: number,
+    len1: number,
+    len2: number
+  ): { x: number; y: number } {
+    const midX = sx + Math.sin(angleA) * len1;
+    const midY = sy + Math.cos(angleA) * len1;
+    const endX = midX + Math.sin(angleA + angleB) * len2;
+    const endY = midY + Math.cos(angleA + angleB) * len2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(midX, midY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+    return { x: endX, y: endY };
+  }
+
+  /** 英雄 IK 双腿：脚掌目标点驱动，膝盖解剖学前弯，含脚掌 */
+  private drawHeroLegsIK(ctx: CanvasRenderingContext2D, pose: StickPose, lw: number, color: string) {
+    const legL1 = 15;
+    const legL2 = 14.5;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    // 后腿（远端淡色）
+    const ikB = solveIK2(pose.hipX - 1.5, pose.hipY, pose.backFootX, pose.backFootY, legL1, legL2, -1);
+    ctx.save();
+    ctx.globalAlpha *= 0.68;
+    ctx.beginPath();
+    ctx.moveTo(pose.hipX - 1.5, pose.hipY);
+    ctx.lineTo(ikB.midX, ikB.midY);
+    ctx.lineTo(ikB.endX, ikB.endY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ikB.endX, ikB.endY);
+    ctx.lineTo(ikB.endX + 4.2, ikB.endY + 0.6);
+    ctx.stroke();
+    ctx.restore();
+    // 前腿
+    const ikF = solveIK2(pose.hipX + 1.5, pose.hipY, pose.frontFootX, pose.frontFootY, legL1, legL2, -1);
+    ctx.beginPath();
+    ctx.moveTo(pose.hipX + 1.5, pose.hipY);
+    ctx.lineTo(ikF.midX, ikF.midY);
+    ctx.lineTo(ikF.endX, ikF.endY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ikF.endX, ikF.endY);
+    ctx.lineTo(ikF.endX + 4.6, ikF.endY + 0.7);
+    ctx.stroke();
+  }
+
+  /** verlet 物理披风（跟随与重叠动作原则：惯性拖尾 + 风场 + 布料约束） */
+  private updateAndDrawCape(
+    ctx: CanvasRenderingContext2D,
+    cameraX: number,
+    dt: number,
+    gameTime: number,
+    anchorX: number,
+    anchorY: number,
+    heroVX: number,
+    heroVY: number,
+    lift: number
+  ) {
+    if (this.capePts.length === 0) {
+      for (let i = 0; i < 5; i++) {
+        this.capePts.push({ x: anchorX, y: anchorY + i * 8.5, px: anchorX, py: anchorY + i * 8.5 });
+      }
+    }
+    if (dt > 0) {
+      const anchor = this.capePts[0];
+      anchor.x = anchorX;
+      anchor.y = anchorY;
+      anchor.px = anchorX;
+      anchor.py = anchorY;
+      const gravity = 560 * dt * dt;
+      const wind = (Math.sin(gameTime * 2.1) * 22 + Math.sin(gameTime * 0.9 + 2) * 14) * dt * dt;
+      for (let i = 1; i < this.capePts.length; i++) {
+        const p = this.capePts[i];
+        const vx = (p.x - p.px) * 0.965;
+        const vy = (p.y - p.py) * 0.965;
+        p.px = p.x;
+        p.py = p.y;
+        p.x += vx + wind - heroVX * dt * dt * 3.2;
+        p.y += vy + gravity - heroVY * dt * dt * 2.0 - lift * dt * dt * 260;
+      }
+      const seg = 8.5;
+      for (let iter = 0; iter < 3; iter++) {
+        for (let i = 1; i < this.capePts.length; i++) {
+          const a = this.capePts[i - 1];
+          const b = this.capePts[i];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const d = Math.sqrt(dx * dx + dy * dy) || 0.001;
+          const diff = (d - seg) / d;
+          if (i === 1) {
+            b.x -= dx * diff;
+            b.y -= dy * diff;
+          } else {
+            a.x += dx * diff * 0.5;
+            a.y += dy * diff * 0.5;
+            b.x -= dx * diff * 0.5;
+            b.y -= dy * diff * 0.5;
+          }
+        }
+      }
+    }
+    // 绘制：墨边 + 白披风双层描边，宽度渐变 + 布料飘动
+    const pts = this.capePts;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 1; i < pts.length; i++) {
+        const wBase = Math.max(1.4, 7.5 - i * 1.15);
+        ctx.strokeStyle = pass === 0 ? '#0f172a' : '#f8fafc';
+        ctx.lineWidth = pass === 0 ? wBase + 2.4 : wBase;
+        const flutter = Math.sin(gameTime * 8 + i * 1.7) * 1.6;
+        ctx.beginPath();
+        ctx.moveTo(pts[i - 1].x - cameraX, pts[i - 1].y);
+        ctx.lineTo(pts[i].x - cameraX + (i >= 2 ? flutter : 0), pts[i].y + (i >= 2 ? flutter * 0.4 : 0));
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  /** 发带 verlet（三节青色缎带，随移动与风力飘扬） */
+  private updateAndDrawRibbon(
+    ctx: CanvasRenderingContext2D,
+    cameraX: number,
+    dt: number,
+    gameTime: number,
+    ax: number,
+    ay: number,
+    heroVX: number,
+    heroVY: number
+  ) {
+    if (this.ribbonPts.length === 0) {
+      for (let i = 0; i < 3; i++) {
+        this.ribbonPts.push({ x: ax - i * 5.5, y: ay + i * 2, px: ax - i * 5.5, py: ay + i * 2 });
+      }
+    }
+    if (dt > 0) {
+      const a0 = this.ribbonPts[0];
+      a0.x = ax;
+      a0.y = ay;
+      a0.px = ax;
+      a0.py = ay;
+      const gravity = 300 * dt * dt;
+      const wind = (Math.sin(gameTime * 3.1) * 34 + Math.sin(gameTime * 1.3) * 18) * dt * dt;
+      for (let i = 1; i < this.ribbonPts.length; i++) {
+        const p = this.ribbonPts[i];
+        const vx = (p.x - p.px) * 0.94;
+        const vy = (p.y - p.py) * 0.94;
+        p.px = p.x;
+        p.py = p.y;
+        p.x += vx + wind - heroVX * dt * dt * 4.5;
+        p.y += vy + gravity - heroVY * dt * dt * 2.5;
+      }
+      const seg = 5.5;
+      for (let iter = 0; iter < 3; iter++) {
+        for (let i = 1; i < this.ribbonPts.length; i++) {
+          const a = this.ribbonPts[i - 1];
+          const b = this.ribbonPts[i];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const d = Math.sqrt(dx * dx + dy * dy) || 0.001;
+          const diff = (d - seg) / d;
+          if (i === 1) {
+            b.x -= dx * diff;
+            b.y -= dy * diff;
+          } else {
+            a.x += dx * diff * 0.5;
+            a.y += dy * diff * 0.5;
+            b.x -= dx * diff * 0.5;
+            b.y -= dy * diff * 0.5;
+          }
+        }
+      }
+    }
+    ctx.save();
+    ctx.strokeStyle = '#06b6d4';
+    ctx.globalAlpha = 0.92;
+    ctx.lineCap = 'round';
+    const widths = [2.4, 1.9, 1.3];
+    for (let i = 1; i < this.ribbonPts.length; i++) {
+      ctx.lineWidth = widths[i] || 1.2;
+      ctx.beginPath();
+      ctx.moveTo(this.ribbonPts[i - 1].x - cameraX, this.ribbonPts[i - 1].y);
+      ctx.lineTo(this.ribbonPts[i].x - cameraX, this.ribbonPts[i].y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** 剑气轨迹带（叠加发光：青色飘带 + 白热内芯，随出剑实时采样） */
+  private drawSwordTrail(cameraX: number) {
+    const n = this.swordTrail.length;
+    if (n < 2) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 1; i < n; i++) {
+      const a = this.swordTrail[i - 1];
+      const b = this.swordTrail[i];
+      const alpha = ((a.life + b.life) / 2 / 0.2) * 0.5;
+      if (alpha <= 0.02) continue;
+      ctx.fillStyle = `rgba(125, 211, 252, ${alpha})`;
+      ctx.beginPath();
+      ctx.moveTo(a.x - cameraX, a.y);
+      ctx.lineTo(a.tx - cameraX, a.ty);
+      ctx.lineTo(b.tx - cameraX, b.ty);
+      ctx.lineTo(b.x - cameraX, b.y);
+      ctx.closePath();
+      ctx.fill();
+      // 白热内芯
+      ctx.strokeStyle = `rgba(240, 250, 255, ${alpha * 0.55})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(a.x * 0.25 + a.tx * 0.75 - cameraX, a.y * 0.25 + a.ty * 0.75);
+      ctx.lineTo(b.x * 0.25 + b.tx * 0.75 - cameraX, b.y * 0.25 + b.ty * 0.75);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** 冲刺 / 重击残影（姿势快照幽灵剪影） */
+  private drawAfterimages(cameraX: number, laneMinY: number, laneMaxY: number) {
+    if (this.afterimages.length === 0) return;
+    const ctx = this.ctx;
+    for (const g of this.afterimages) {
+      const alpha = (g.life / 0.26) * 0.32;
+      if (alpha <= 0.015) continue;
+      const s = this.getDepthScale(g.gy, laneMinY, laneMaxY);
+      ctx.save();
+      ctx.translate(g.x - cameraX, g.gy - g.altZ);
+      ctx.scale(g.facing * s, s);
+      ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      const p = g.pose;
+      // 腿（简化折线）
+      ctx.beginPath();
+      ctx.moveTo(p.hipX, p.hipY);
+      ctx.lineTo(p.hipX + (p.frontFootX - p.hipX) * 0.5, (p.hipY + p.frontFootY) * 0.5);
+      ctx.lineTo(p.frontFootX, p.frontFootY);
+      ctx.moveTo(p.hipX, p.hipY);
+      ctx.lineTo(p.hipX + (p.backFootX - p.hipX) * 0.5, (p.hipY + p.backFootY) * 0.5);
+      ctx.lineTo(p.backFootX, p.backFootY);
+      // 躯干
+      const shX = p.hipX + Math.sin(p.torsoLean) * 22;
+      const shY = p.hipY - 22;
+      ctx.moveTo(p.hipX, p.hipY);
+      ctx.lineTo(shX, shY);
+      // 前臂 + 剑
+      const ex = shX + Math.sin(p.frontArmA) * 14;
+      const ey = shY + Math.cos(p.frontArmA) * 14;
+      const hx = ex + Math.sin(p.frontArmA + p.frontArmB) * 14;
+      const hy = ey + Math.cos(p.frontArmA + p.frontArmB) * 14;
+      ctx.moveTo(shX, shY);
+      ctx.lineTo(ex, ey);
+      ctx.lineTo(hx, hy);
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(hx + Math.cos(p.swordAngle) * 44, hy + Math.sin(p.swordAngle) * 44);
+      ctx.stroke();
+      // 头
+      ctx.beginPath();
+      ctx.arc(shX + 2, shY - 14, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /** 地效冲击环（落地尘环 / 重击冲击波，flat=椭圆贴地） */
+  private drawFxRings(cameraX: number) {
+    if (this.fxRings.length === 0) return;
+    const ctx = this.ctx;
+    ctx.save();
+    for (const r of this.fxRings) {
+      const t = 1 - r.life / r.maxLife;
+      const rad = lerp(r.r0, r.r1, easeOutCubic(t));
+      ctx.globalAlpha = Math.max(0, 1 - t) * 0.85;
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = Math.max(0.6, r.lw * (1 - t * 0.55));
+      ctx.beginPath();
+      if (r.flat) {
+        ctx.ellipse(r.x - cameraX, r.y, rad, rad * 0.34, 0, 0, Math.PI * 2);
+      } else {
+        ctx.arc(r.x - cameraX, r.y, rad, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ============================================================
+  // 剑笔仙 · 程序化骨骼渲染 v3
+  // ============================================================
+  private drawSkeletalHero(
+    hero: HeroInstance,
+    cameraX: number,
+    laneMinY: number,
+    laneMaxY: number,
+    gameTime: number
+  ) {
+    const screenX = hero.x - cameraX;
+    if (screenX < -160 || screenX > this.width + 160) {
+      this.lastHeroX = hero.x;
+      return;
+    }
+
+    const ctx = this.ctx;
+    const groundY = hero.y;
+    const altitudeZ = hero.altitudeZ || 0;
+    const heroY = groundY - altitudeZ;
+    const scale = this.getDepthScale(hero.y, laneMinY, laneMaxY);
+    const facing = hero.facing;
+    const dt = this.frameDt;
+    const prevAltZ = this.lastHeroAltZ;
+
+    // —— 速度估算 / 转身缓冲 / 步态相位 / 落地检测 ——
+    if (dt > 0) {
+      const rawVX = (hero.x - this.lastHeroX) / dt;
+      this.heroVX += (rawVX - this.heroVX) * 0.4;
+      if (facing !== this.lastFacing) {
+        this.turnBlend = 1;
+        this.lastFacing = facing;
+      }
+      this.turnBlend = Math.max(0, this.turnBlend - dt * 5.5);
+      if (hero.state === 'WALK' && hero.isGrounded) {
+        this.heroWalkPhase += dt * 11.5;
+      }
+      // 落地瞬间：挤压 + 尘环（Squash & Stretch 原则）
+      if (hero.isGrounded && !this.lastGrounded) {
+        const fallV = Math.abs(this.lastFallV);
+        this.landSquash = Math.min(0.26, 0.1 + fallV * 0.00045);
+        this.fxRings.push({
+          x: hero.x,
+          y: groundY,
+          r0: 5,
+          r1: 22 + fallV * 0.035,
+          life: 0.34,
+          maxLife: 0.34,
+          color: 'rgba(203, 213, 225, 0.75)',
+          lw: 2.6,
+          flat: true,
+        });
+        if (fallV > 320) {
+          for (let i = 0; i < 5; i++) {
+            this.fxRings.push({
+              x: hero.x + Math.sin(i * 2.4) * 14,
+              y: groundY - 2,
+              r0: 2,
+              r1: 7 + (i % 3) * 4,
+              life: 0.3,
+              maxLife: 0.3,
+              color: 'rgba(71, 85, 105, 0.55)',
+              lw: 1.6,
+              flat: true,
+            });
+          }
+        }
+      }
+      this.lastGrounded = hero.isGrounded;
+      this.landSquash = Math.max(0, this.landSquash - dt);
+    }
+    this.lastFallV = hero.vz || 0;
+    this.lastHeroX = hero.x;
+    this.lastHeroAltZ = altitudeZ;
+
+    // —— 目标姿势 → 指数平滑混合（帧率无关，攻击出手段加速跟随） ——
+    const targetPose = computeHeroPose(hero.state, hero.stateTime, gameTime, this.heroWalkPhase, hero.vz || 0);
+
+    if (this.landSquash > 0) {
+      const k = this.landSquash / 0.26;
+      targetPose.squashY *= 1 - 0.15 * k;
+      targetPose.squashX *= 1 + 0.13 * k;
+    }
+    if (!hero.isGrounded && (hero.vz || 0) > 140) {
+      targetPose.squashY *= 1.045;
+      targetPose.squashX *= 0.965;
+    }
+    if (this.turnBlend > 0) {
+      targetPose.squashX *= 1 - 0.12 * Math.sin(this.turnBlend * Math.PI);
+    }
+
+    const striking = hero.state.startsWith('ATTACK_') && targetPose.trailEmit > 0.35;
+    const blendRate = striking ? 30 : hero.state.startsWith('ATTACK_') || hero.state === 'SKILL_DASH' ? 24 : 17;
+    this.heroPose = lerpPose(this.heroPose, targetPose, expoBlend(blendRate, Math.max(dt, 1 / 240)));
+    const pose = this.heroPose;
+
+    // —— 三式重斩命中瞬间：剑尖冲击波 ——
+    if (dt > 0) {
+      if (this.prevTrailEmit < 0.85 && pose.trailEmit >= 0.85 && hero.state === 'ATTACK_3') {
+        this.fxRings.push({
+          x: hero.x + facing * 40,
+          y: groundY - 30,
+          r0: 4,
+          r1: 30,
+          life: 0.28,
+          maxLife: 0.28,
+          color: 'rgba(186, 230, 253, 0.9)',
+          lw: 3,
+          flat: false,
+        });
+      }
+      this.prevTrailEmit = pose.trailEmit;
+    }
+
+    // —— 剑刃世界坐标（轨迹 / 残影采样点） ——
+    const shLX = pose.hipX + Math.sin(pose.torsoLean) * 22;
+    const shLY = pose.hipY - 22;
+    const elbX = shLX + Math.sin(pose.frontArmA) * 14;
+    const elbY = shLY + Math.cos(pose.frontArmA) * 14;
+    const handLX = elbX + Math.sin(pose.frontArmA + pose.frontArmB) * 14;
+    const handLY = elbY + Math.cos(pose.frontArmA + pose.frontArmB) * 14;
+    const tipLX = handLX + Math.cos(pose.swordAngle) * 46;
+    const tipLY = handLY + Math.sin(pose.swordAngle) * 46;
+    const handWX = hero.x + handLX * facing * scale;
+    const handWY = heroY + handLY * scale;
+    const tipWX = hero.x + tipLX * facing * scale;
+    const tipWY = heroY + tipLY * scale;
+
+    // —— 剑气轨迹采样 ——
+    if (dt > 0 && pose.trailEmit > 0.08) {
+      this.swordTrail.push({ x: handWX, y: handWY, tx: tipWX, ty: tipWY, life: 0.2 });
+    }
+
+    // —— 残影采样（重击挥砍 / 冲刺瞬移路径补插） ——
+    if (dt > 0 && (pose.trailEmit > 0.55 || hero.state === 'SKILL_DASH')) {
+      this.afterimageTimer -= dt;
+      if (this.afterimageTimer <= 0) {
+        this.afterimageTimer = 0.048;
+        const jumped = Math.abs(hero.x - this.lastGhostX);
+        if (hero.state === 'SKILL_DASH' && jumped > 40) {
+          const steps = Math.min(5, Math.max(2, Math.round(jumped / 55)));
+          for (let i = 1; i <= steps; i++) {
+            this.afterimages.push({
+              x: lerp(this.lastGhostX, hero.x, i / (steps + 1)),
+              gy: groundY,
+              altZ: altitudeZ,
+              facing,
+              pose: clonePose(pose),
+              life: 0.26,
+            });
+          }
+        } else {
+          this.afterimages.push({
+            x: hero.x,
+            gy: groundY,
+            altZ: altitudeZ,
+            facing,
+            pose: clonePose(pose),
+            life: 0.26,
+          });
+        }
+      }
+    }
+    if (dt > 0) this.lastGhostX = hero.x;
+
+    // 1. 地面投影
+    this.drawDropShadow(screenX, groundY, 24 * scale, altitudeZ);
+
+    // 2. 地效冲击环
+    this.drawFxRings(cameraX);
+
+    // 3. 残影（本体之下）
+    this.drawAfterimages(cameraX, laneMinY, laneMaxY);
+
+    // 4. 剑气轨迹带
+    this.drawSwordTrail(cameraX);
+
+    // 5. 披风 + 发带（世界空间物理模拟，画于身体之后）
+    const anchorWX = hero.x + shLX * facing * scale;
+    const anchorWY = heroY + shLY * scale;
+    const heroVY = dt > 0 ? (prevAltZ - altitudeZ) / dt : 0;
+    this.updateAndDrawCape(ctx, cameraX, dt, gameTime, anchorWX, anchorWY, this.heroVX, heroVY, pose.capeLift);
+    const headLX = shLX + 2 + pose.headTilt * 0.5;
+    const headLY = shLY - 14;
+    const knotWX = hero.x + headLX * facing * scale;
+    const knotWY = heroY + (headLY - 10) * scale;
+    this.updateAndDrawRibbon(ctx, cameraX, dt, gameTime, knotWX, knotWY, this.heroVX, heroVY);
+
+    // 6. 身体（局部空间：原点=脚底）
+    ctx.save();
+    ctx.translate(screenX, heroY);
+
+    const flinchK = hero.flinchTimer > 0 ? Math.min(1, hero.flinchTimer / 0.35) : 0;
+    ctx.rotate(-0.13 * flinchK + pose.bodyTilt);
+    ctx.translate(-4 * flinchK, 0);
+    ctx.scale(facing * scale * pose.squashX, scale * pose.squashY);
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // 后臂（远端淡色，先画）
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 3.6;
+    this.drawTwoBoneAngles(ctx, shLX, shLY, pose.backArmA, pose.backArmB, 13, 13);
+
+    // 双腿（IK 步态）
+    this.drawHeroLegsIK(ctx, pose, 4.2, '#09090b');
+
+    // 躯干
+    ctx.strokeStyle = '#09090b';
+    ctx.lineWidth = 4.6;
+    ctx.beginPath();
+    ctx.moveTo(pose.hipX, pose.hipY);
+    ctx.lineTo(shLX, shLY);
+    ctx.stroke();
+
+    // 玉色腰封
+    ctx.fillStyle = '#06b6d4';
+    ctx.fillRect(pose.hipX - 6, pose.hipY - 4.5, 12, 4.2);
+
+    // 头 + 发髻
+    const headX = shLX + 2 + pose.headTilt * 0.5;
+    const headY = shLY - 14;
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.arc(headX, headY, 8.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(headX, headY - 10, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 7. 前臂 + 墨锋
+    ctx.strokeStyle = '#09090b';
+    ctx.lineWidth = 4.2;
+    const hand = this.drawTwoBoneAngles(ctx, shLX, shLY, pose.frontArmA, pose.frontArmB, 14, 14);
+    this.drawBrushSword(ctx, hand.x, hand.y, pose.swordAngle, pose.swordGlow);
+
+    // 8. 攻击墨痕弧光（随挥砍相位淡出）
+    if (hero.state.startsWith('ATTACK_') && pose.trailEmit > 0.12) {
+      ctx.save();
+      ctx.globalAlpha = pose.trailEmit * 0.85;
+      if (hero.state === 'ATTACK_1') {
+        this.drawInkSlashArc(ctx, shLX, shLY, 46, -1.15, 0.55, '125, 211, 252');
+      } else if (hero.state === 'ATTACK_2') {
+        this.drawInkSlashArc(ctx, shLX, shLY, 42, -1.35, 0.15, '125, 211, 252');
+      } else if (hero.state === 'ATTACK_3') {
+        this.drawInkSlashArc(ctx, shLX, shLY, 50, 0.1, 1.4, '125, 211, 252');
+      }
+      ctx.restore();
+    }
+
+    // 9. 冲刺速度线
+    if (hero.state === 'SKILL_DASH') {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.5)';
+      ctx.lineWidth = 1.6;
+      const seed = Math.floor(gameTime * 24);
+      for (let i = 0; i < 5; i++) {
+        const ly = -10 - ((seed * 13 + i * 29) % 46);
+        const ln = 16 + ((seed + i * 7) % 22);
+        ctx.beginPath();
+        ctx.moveTo(-34 - ln - i * 6, ly);
+        ctx.lineTo(-34 - i * 6, ly);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 10. 护盾（旋转刻痕穹顶）
+    if (hero.shieldHp > 0) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([9, 7]);
+      ctx.lineDashOffset = -gameTime * 30;
+      ctx.beginPath();
+      ctx.arc(0, pose.hipY - 10, 42, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.restore();
+
+    // 头顶 HUD
+    this.drawHeroOverheadHUD(screenX, heroY - 84 * scale, hero, scale);
+  }
+
+  /** Luminous Ink Slash Ribbon Arc（支持敌我配色） */
+  private drawInkSlashArc(
+    ctx: CanvasRenderingContext2D,
+    originX: number,
+    originY: number,
+    radius: number,
+    startAngle: number,
+    endAngle: number,
+    rgb: string = '56, 189, 248'
+  ) {
+    ctx.save();
+    const arcGrad = ctx.createRadialGradient(originX, originY, radius * 0.55, originX, originY, radius);
+    arcGrad.addColorStop(0, `rgba(${rgb}, 0)`);
+    arcGrad.addColorStop(0.72, `rgba(${rgb}, 0.75)`);
+    arcGrad.addColorStop(1, 'rgba(255, 255, 255, 0.95)');
+
+    ctx.strokeStyle = arcGrad;
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(originX, originY, radius, startAngle, endAngle);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** 墨锋剑（辉光强度 0-1 驱动剑锋光晕） */
+  private drawBrushSword(
+    ctx: CanvasRenderingContext2D,
+    handX: number,
+    handY: number,
+    angle: number,
+    glow: number
+  ) {
+    ctx.save();
+    ctx.translate(handX, handY);
+    ctx.rotate(angle);
+
+    // 剑柄 & 玉格
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-5, -2, 8, 4);
+    ctx.fillStyle = '#06b6d4';
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 光辉剑刃
+    const bladeGrad = ctx.createLinearGradient(0, 0, 46, 0);
+    bladeGrad.addColorStop(0, '#f8fafc');
+    bladeGrad.addColorStop(0.7, '#38bdf8');
+    bladeGrad.addColorStop(1, '#0284c7');
+
+    ctx.fillStyle = bladeGrad;
+    ctx.beginPath();
+    ctx.moveTo(0, -2);
+    ctx.lineTo(36, -1.6);
+    ctx.lineTo(46, 0);
+    ctx.lineTo(36, 1.6);
+    ctx.lineTo(0, 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // 剑锋辉光
+    if (glow > 0.18) {
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 6 + glow * 16;
+      ctx.fillStyle = `rgba(125, 211, 252, ${0.25 + glow * 0.5})`;
+      ctx.beginPath();
+      ctx.arc(46, 0, 2.5 + glow * 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+  }

@@ -1,0 +1,296 @@
+@import "tailwindcss";
+
+/* ============================================================
+   墨韵战纪 · 纸墨主题（Literati Paper & Ink Theme）
+   依据 taste-literati-brush（宋清文人画规范）× frontend-design 反模板校准：
+   - 纸为冷调绢白（刻意避开 AI 模板的暖奶油底）
+   - 墨分四阶：焦/浓/重/淡，佐以朱砂印泥与黛青
+   - 层级由装裱结构（绫边·天头·墨线）承载，不用圆角卡片+阴影
+   ============================================================ */
+
+/* ===== 霞鹜文楷（本地子集，25MB → ~800KB/字重） ===== */
+@font-face {
+  font-family: 'LXGW WenKai';
+  src: url('./assets/fonts/WenKaiRegular.subset.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'LXGW WenKai';
+  src: url('./assets/fonts/WenKaiMedium.subset.woff2') format('woff2');
+  font-weight: 500 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ===== 主题令牌 ===== */
+@theme {
+  /* 字体：一文楷到底，标题字重靠 Medium 撑起 */
+  --font-sans: 'LXGW WenKai', 'Noto Serif SC', 'PingFang SC', 'Microsoft YaHei', serif;
+  --font-serif: 'LXGW WenKai', 'Noto Serif SC', 'Songti SC', 'STSong', serif;
+
+  /* 书法三体（仅用于题跋/诗句等装饰性文本，UI 信息层仍以文楷保证可读性） */
+  --font-brush-kai: 'Ma Shan Zheng', 'LXGW WenKai', 'Noto Serif SC', serif;   /* 毛笔楷：大标题 */
+  --font-brush-xing: 'Zhi Mang Xing', 'LXGW WenKai', 'Noto Serif SC', serif;  /* 行书：签条题跋 */
+  --font-brush-cao: 'Liu Jian Mao Cao', 'LXGW WenKai', 'Noto Serif SC', serif;/* 狂草：战报高光 */
+
+  /* 宣纸（冷调绢白系） */
+  --color-paper: #e9e3d4;
+  --color-paper-soft: #f1ecdf;
+  --color-paper-deep: #dcd4c0;
+  --color-paper-edge: #c9bfa9;
+  --color-paper-dim: #a89f88;
+
+  /* 墨色四阶 */
+  --color-ink-strong: #141519;
+  --color-ink: #23262b;
+  --color-ink-mid: #575c64;
+  --color-ink-light: #90959b;
+
+  /* 裱绫（深青绢） */
+  --color-silk: #2a3236;
+  --color-silk-deep: #1f2629;
+
+  /* 朱砂印泥 */
+  --color-cinnabar: #a63a2a;
+  --color-cinnabar-deep: #7f2b1f;
+
+  /* 黛青（交互色） */
+  --color-daiqing: #3d5a66;
+  --color-daiqing-deep: #2c424c;
+
+  /* 矿物辅色 */
+  --color-shilv: #52705b;      /* 石绿 */
+  --color-zheshi: #8a5a38;     /* 赭石 */
+  --color-qingjin: #4a6280;    /* 青金 */
+  --color-tenghuang: #a87b2a;  /* 藤黄（星印） */
+}
+
+/* ===== 自定义动画 ===== */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes seal-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(1.5) rotate(-8deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.94) rotate(-2deg);
+  }
+  100% {
+    transform: scale(1) rotate(-2deg);
+  }
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.28s ease-out both;
+}
+
+@utility animate-seal-stamp {
+  animation: seal-stamp 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+/* ===== 纸面质感：绢白 + 宣纸纹理 + 角部墨晕 ===== */
+.paper-grain {
+  background-color: var(--color-paper);
+  background-image:
+    radial-gradient(1100px 460px at 88% -8%, rgba(255, 255, 255, 0.42), transparent 62%),
+    radial-gradient(880px 420px at -6% 108%, rgba(122, 112, 84, 0.12), transparent 62%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/><feComponentTransfer><feFuncA type='linear' slope='0.045'/></feComponentTransfer></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
+}
+
+/* ===== 装裱立轴面板：纸心 + 绫边 + 墨线 ===== */
+.scroll-mount {
+  background-color: var(--color-paper);
+  box-shadow:
+    0 0 0 1px rgba(20, 21, 25, 0.62),
+    0 0 0 7px var(--color-silk),
+    0 0 0 8px rgba(233, 227, 212, 0.14),
+    0 32px 64px -20px rgba(0, 0, 0, 0.62);
+}
+.scroll-mount-thin {
+  background-color: var(--color-paper);
+  box-shadow:
+    0 0 0 1px rgba(20, 21, 25, 0.62),
+    0 0 0 5px var(--color-silk),
+    0 0 0 6px rgba(233, 227, 212, 0.14),
+    0 24px 48px -18px rgba(0, 0, 0, 0.6);
+}
+
+/* 纸面小面板（折页/简牍/纸签） */
+.panel-paper {
+  background-color: var(--color-paper-soft);
+  border: 1px solid rgba(20, 21, 25, 0.4);
+  border-radius: 2px;
+}
+.panel-paper-deep {
+  background-color: var(--color-paper-deep);
+  border: 1px solid rgba(20, 21, 25, 0.32);
+  border-radius: 2px;
+}
+/* 夜面（无尽卷等墨色折页） */
+.panel-night {
+  background: linear-gradient(170deg, #20262b 0%, #141519 100%);
+  border: 1px solid rgba(233, 227, 212, 0.2);
+  border-radius: 2px;
+}
+
+/* ===== 印章 ===== */
+.seal {
+  background: var(--color-cinnabar);
+  color: #f3eddd;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(243, 237, 221, 0.52),
+    0 1px 2px rgba(127, 43, 31, 0.35);
+  transform: rotate(-2deg);
+}
+.seal-ghost {
+  background: transparent;
+  color: var(--color-ink-light);
+  border: 1.5px solid rgba(144, 149, 155, 0.55);
+  border-radius: 3px;
+  transform: rotate(-2deg);
+}
+
+/* ===== 按钮：朱砂印式 / 墨线描边式 / 落款式 ===== */
+.btn-seal {
+  background: var(--color-cinnabar);
+  color: #f3eddd;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(243, 237, 221, 0.38),
+    0 2px 8px rgba(127, 43, 31, 0.38);
+  transition: background-color 0.15s ease, transform 0.12s ease;
+}
+.btn-seal:hover {
+  background: var(--color-cinnabar-deep);
+}
+.btn-seal:active {
+  transform: translateY(1px) scale(0.99);
+}
+.btn-seal:disabled {
+  background: var(--color-paper-edge);
+  color: var(--color-paper-dim);
+  box-shadow: inset 0 0 0 1.5px rgba(20, 21, 25, 0.12);
+  cursor: not-allowed;
+}
+
+.btn-ink {
+  background: transparent;
+  border: 1px solid rgba(20, 21, 25, 0.55);
+  color: var(--color-ink);
+  border-radius: 2px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.btn-ink:hover {
+  background: rgba(20, 21, 25, 0.06);
+  border-color: rgba(20, 21, 25, 0.85);
+}
+.btn-ink:active {
+  transform: translateY(1px);
+}
+
+.btn-ink-quiet {
+  background: transparent;
+  color: var(--color-ink-mid);
+  border-radius: 2px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.btn-ink-quiet:hover {
+  color: var(--color-ink);
+  background: rgba(20, 21, 25, 0.05);
+}
+
+/* 夜面按钮（战场 HUD 语境） */
+.btn-night {
+  background: rgba(35, 38, 43, 0.92);
+  border: 1px solid rgba(233, 227, 212, 0.22);
+  color: #e6e1d3;
+  border-radius: 2px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.btn-night:hover {
+  background: rgba(52, 57, 63, 0.95);
+  border-color: rgba(233, 227, 212, 0.45);
+}
+
+/* ===== 线 ===== */
+.rule-ink {
+  border-color: rgba(20, 21, 25, 0.3);
+}
+.rule-ink-strong {
+  border-color: rgba(20, 21, 25, 0.65);
+}
+/* 朱丝栏：文书红格双线 */
+.rule-zhusi {
+  border-bottom: 1px solid rgba(166, 58, 42, 0.55);
+  box-shadow: 0 3px 0 -2px rgba(166, 58, 42, 0.28);
+}
+
+/* ===== 竖排题跋 ===== */
+.verse-v {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 0.32em;
+}
+
+/* ===== 纸面滚动条（弹层内） ===== */
+.paper-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #a79e88 var(--color-paper-deep);
+}
+.paper-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.paper-scroll::-webkit-scrollbar-track {
+  background: var(--color-paper-deep);
+}
+.paper-scroll::-webkit-scrollbar-thumb {
+  background: #a79e88;
+  border-radius: 0;
+}
+
+/* ===== 全局滚动条（战场夜面） ===== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #4a4f57 #1c1917;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: #1c1917;
+}
+*::-webkit-scrollbar-thumb {
+  background: #4a4f57;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #5d636b;
+}
+
+/* ===== 移动端安全区适配（iOS 刘海屏底部） ===== */
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
