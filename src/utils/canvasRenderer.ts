@@ -135,7 +135,9 @@ export class CanvasRenderer {
     inkDragons: InkDragon[] = [],
     treasures: InkTreasure[] = [],
     inkSlowProgress: number = 0,
-    inkSplats: InkSplat[] = []
+    inkSplats: InkSplat[] = [],
+    comboTier: string = 'NONE',
+    comboCount: number = 0
   ) {
     const ctx = this.ctx;
 
@@ -190,9 +192,9 @@ export class CanvasRenderer {
       level.boss?.name
     );
 
-    // 6. Draw Hero Inspiring Aura on Ground (Under feet)
+    // 6. Draw Hero Inspiring Aura on Ground (Under feet)——连墨段位驱动光环升级
     if (hero.state !== 'DEAD') {
-      this.drawHeroAura25D(hero, cameraX, laneMinY, laneMaxY, gameTime);
+      this.drawHeroAura25D(hero, cameraX, laneMinY, laneMaxY, gameTime, comboTier, comboCount);
     }
 
     // 7. 2.5D Y-Depth Sorting for Characters and Drops
@@ -904,41 +906,75 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
-  // Draw Hero Inspiring Aura (风雅领域) in 2.5D
+  // Draw Hero Inspiring Aura (风雅领域) in 2.5D——随连墨段位升级色彩/半径/转速
   private drawHeroAura25D(
     hero: HeroInstance,
     cameraX: number,
     laneMinY: number,
     laneMaxY: number,
-    gameTime: number
+    gameTime: number,
+    comboTier: string = 'NONE',
+    comboCount: number = 0
   ) {
     const screenX = hero.x - cameraX;
     const groundY = hero.y;
     const ctx = this.ctx;
     ctx.save();
 
+    // 段位 → 光环色谱与强度（ NONE 青蓝 → 行云流水准金 → 笔走龙蛇橙 → 出神入化绯 → 翰墨通神鎏金）
+    const tierStyle: Record<string, { core: string; mid: string; ring: string; glow: number }> = {
+      NONE: { core: 'rgba(56, 189, 248, 0.14)', mid: 'rgba(56, 189, 248, 0.05)', ring: 'rgba(250, 204, 21, 0.35)', glow: 1 },
+      ENTRY: { core: 'rgba(56, 189, 248, 0.15)', mid: 'rgba(56, 189, 248, 0.05)', ring: 'rgba(250, 204, 21, 0.4)', glow: 1 },
+      PROGRESS: { core: 'rgba(94, 234, 212, 0.16)', mid: 'rgba(94, 234, 212, 0.06)', ring: 'rgba(250, 204, 21, 0.48)', glow: 1 },
+      FLOW: { core: 'rgba(250, 204, 21, 0.16)', mid: 'rgba(250, 204, 21, 0.06)', ring: 'rgba(251, 191, 36, 0.55)', glow: 1.1 },
+      DRAGON: { core: 'rgba(249, 115, 22, 0.17)', mid: 'rgba(249, 115, 22, 0.07)', ring: 'rgba(251, 146, 60, 0.62)', glow: 1.2 },
+      DIVINE: { core: 'rgba(220, 38, 38, 0.18)', mid: 'rgba(220, 38, 38, 0.08)', ring: 'rgba(248, 113, 113, 0.68)', glow: 1.3 },
+      TRANSCEND: { core: 'rgba(250, 204, 21, 0.22)', mid: 'rgba(253, 224, 71, 0.1)', ring: 'rgba(253, 224, 71, 0.78)', glow: 1.45 },
+    };
+    const style = tierStyle[comboTier] ?? tierStyle.NONE;
+
     const scale = this.getDepthScale(hero.y, laneMinY, laneMaxY);
-    const radiusX = 220 * scale;
+    // 连击数微涨光环半径（最多 +18%），高段位呼吸感更强
+    const growFactor = 1 + Math.min(0.18, Math.max(0, comboCount) * 0.004);
+    const pulse = 1 + Math.sin(gameTime * (4 + style.glow * 2.4)) * 0.03 * style.glow;
+    const radiusX = 220 * scale * growFactor * pulse;
     const radiusY = radiusX * 0.35;
 
     // Glowing ground ellipse
     ctx.beginPath();
     ctx.ellipse(screenX, groundY, radiusX, radiusY, 0, 0, Math.PI * 2);
     const grad = ctx.createRadialGradient(screenX, groundY, radiusX * 0.15, screenX, groundY, radiusX);
-    grad.addColorStop(0, 'rgba(56, 189, 248, 0.14)');
-    grad.addColorStop(0.7, 'rgba(56, 189, 248, 0.05)');
-    grad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+    grad.addColorStop(0, style.core);
+    grad.addColorStop(0.7, style.mid);
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Calligraphy dash boundary
-    ctx.strokeStyle = 'rgba(250, 204, 21, 0.35)';
-    ctx.lineWidth = 1.8;
+    // Calligraphy dash boundary（转速随段位加快）
+    ctx.strokeStyle = style.ring;
+    ctx.lineWidth = 1.8 + style.glow * 0.5;
     ctx.setLineDash([8, 12]);
-    ctx.lineDashOffset = -gameTime * 25;
+    ctx.lineDashOffset = -gameTime * (25 + style.glow * 14);
     ctx.beginPath();
     ctx.ellipse(screenX, groundY, radiusX, radiusY, 0, 0, Math.PI * 2);
     ctx.stroke();
+
+    // 翰墨通神：外环再起一圈反向旋镒的鎏金细环 + 身后「连」字水印（行云模式略过省帧）
+    if (comboTier === 'TRANSCEND' && !this.qualityLow) {
+      ctx.strokeStyle = 'rgba(253, 224, 71, 0.5)';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([3, 14]);
+      ctx.lineDashOffset = gameTime * 40;
+      ctx.beginPath();
+      ctx.ellipse(screenX, groundY, radiusX * 1.14, radiusY * 1.14, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.font = `bold ${Math.round(64 * scale)}px "KaiTi", "STKaiti", serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = `rgba(253, 224, 71, ${0.1 + Math.sin(gameTime * 5) * 0.04})`;
+      ctx.fillText('连', screenX, groundY - 90 * scale);
+    }
 
     ctx.restore();
   }

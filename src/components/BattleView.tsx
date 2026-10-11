@@ -12,6 +12,7 @@ import {
   InkLotusTrap,
   SealStamp,
   CalligraphyCombo,
+  ComboTier,
   WeatherEvent,
   BattleResultStats,
   BlessingDef,
@@ -68,6 +69,17 @@ import {
   Type,
   Umbrella,
 } from 'lucide-react';
+
+/** 连墨段位表：连击越高，墨水与伤害双倍率同步提升（连招体验核心） */
+const COMBO_TIERS: { min: number; tier: ComboTier; text: string; ink: number; dmg: number }[] = [
+  { min: 45, tier: 'TRANSCEND', text: '翰墨通神', ink: 2.0, dmg: 1.35 },
+  { min: 30, tier: 'DIVINE', text: '出神入化', ink: 1.6, dmg: 1.26 },
+  { min: 20, tier: 'DRAGON', text: '笔走龙蛇', ink: 1.4, dmg: 1.18 },
+  { min: 12, tier: 'FLOW', text: '行云流水', ink: 1.25, dmg: 1.12 },
+  { min: 7, tier: 'PROGRESS', text: '渐入佳境', ink: 1.15, dmg: 1.08 },
+  { min: 3, tier: 'ENTRY', text: '初窥门径', ink: 1.05, dmg: 1.04 },
+];
+const tierInfoFor = (count: number) => COMBO_TIERS.find((t) => count >= t.min);
 
 /** 字诀模式：已收笔画的墨稿预览（青晕 + 墨芯双描，停笔判定前可见所书之字） */
 const drawCharStrokesPreview = (
@@ -192,8 +204,16 @@ export const BattleView: React.FC<BattleViewProps> = ({
     maxTimer: 2.8,
     ratingText: '',
     inkBonusMultiplier: 1.0,
+    dmgMult: 1.0,
   });
   const [combo, setCombo] = useState<CalligraphyCombo>(comboRef.current);
+
+  // ===== 衔招系统：普攻命中后 1.1s 内接技能 → 增伤 22%（真相源 lastMeleeHitAtRef） =====
+  const lastMeleeHitAtRef = useRef(-999);
+  const [chainReady, setChainReady] = useState(false);
+  const chainTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ===== 字诀文思连段：8s 内连续写中 → 每段 +10% 增伤（至多 +30%） =====
+  const charChainRef = useRef({ count: 0, lastAt: -999 });
 
   // Dynamic Weather Event（真相源 weatherRef）
   const weatherRef = useRef<WeatherEvent | null>(null);
@@ -794,15 +814,26 @@ export const BattleView: React.FC<BattleViewProps> = ({
     sound.playCharCast(match.grade);
     triggerHaptic(match.grade === 'SHEN' ? [20, 30, 20] : 20);
     triggerSealStamp(heroRef.current.x, heroRef.current.y - 72, match.char);
+
+    // 文思连段：8s 内连续写中 → 每段 +10% 增伤（至多 +30%），连写流玩家额外受益
+    const nowT = gameTimeRef.current;
+    const cc = charChainRef.current;
+    cc.count = nowT - cc.lastAt <= 8 ? cc.count + 1 : 1;
+    cc.lastAt = nowT;
+    const chainBonus = Math.min(0.3, (cc.count - 1) * 0.1);
+
     setCharHint({
       text: `「${match.char}」`,
-      sub: `${match.gradeText} · ${match.name}（${match.poetic}）`,
+      sub:
+        cc.count >= 2
+          ? `${match.gradeText} · ${match.name}（${match.poetic}）· 文思${cc.count}段 增伤+${Math.round(chainBonus * 100)}%`
+          : `${match.gradeText} · ${match.name}（${match.poetic}）`,
     });
     safeTimeout(
       () => setCharHint((prev) => (prev?.text === `「${match.char}」` ? null : prev)),
       2400
     );
-    castCharAbility(match);
+    castCharAbility(match, chainBonus);
   };
 
   const scheduleCharCommit = () => {
@@ -836,78 +867,101 @@ export const BattleView: React.FC<BattleViewProps> = ({
     sound.playPluck(329.63, 0.3);
   };
 
-  const castCharAbility = (match: CharMatchResult) => {
+  const castCharAbility = (match: CharMatchResult, chainBonus: number = 0) => {
     const hero = heroRef.current;
     if (hero.state === 'DEAD') return;
+    // 文思连段加成叠加到字诀评级威力上
+    const mult = match.powerMult + chainBonus;
     switch (match.ability) {
       case 'dash_slash':
-        triggerSkillDashSlash(undefined, match.powerMult);
+        triggerSkillDashSlash(undefined, mult);
         break;
       case 'bamboo_shield':
-        triggerSkillBambooShield(match.powerMult);
+        triggerSkillBambooShield(mult);
         break;
       case 'starlight_barrage':
-        triggerSkillStarlightBarrage(match.powerMult);
+        triggerSkillStarlightBarrage(mult);
         break;
       case 'lotus_trap':
-        triggerSkillInkLotus(hero.x + hero.facing * 40, hero.y, match.powerMult);
+        triggerSkillInkLotus(hero.x + hero.facing * 40, hero.y, mult);
         break;
       case 'river_waves':
-        triggerSkillRiverWaves(match.powerMult);
+        triggerSkillRiverWaves(mult);
         break;
       case 'heart_heal':
-        triggerSkillHeartHeal(match.powerMult);
+        triggerSkillHeartHeal(mult);
         break;
       case 'ultimate_landscape':
-        triggerSkillUltimate(match.powerMult);
+        triggerSkillUltimate(mult);
         break;
     }
+  };
+
+  // ===== 连招助手：连墨伤害倍率 / 衔招武装与消耗 =====
+  const getComboDmgMult = () => comboRef.current.dmgMult ?? 1.0;
+
+  /** 普攻命中后武装衔招窗口（1.1s），HUD 亮「衔」徽记 */
+  const armChain = () => {
+    lastMeleeHitAtRef.current = gameTimeRef.current;
+    setChainReady(true);
+    if (chainTimeoutRef.current) clearTimeout(chainTimeoutRef.current);
+    chainTimeoutRef.current = safeTimeout(() => setChainReady(false), 1250);
+  };
+
+  /** 攻击性技能调用：若处于衔招窗口则增伤 22% 并盖「衔」印，窗口随之消耗 */
+  const takeChainBonus = (): number => {
+    if (gameTimeRef.current - lastMeleeHitAtRef.current <= 1.15) {
+      lastMeleeHitAtRef.current = -999;
+      setChainReady(false);
+      if (chainTimeoutRef.current) {
+        clearTimeout(chainTimeoutRef.current);
+        chainTimeoutRef.current = null;
+      }
+      const hero = heroRef.current;
+      triggerSealStamp(hero.x, hero.y - 64, '衔');
+      triggerHaptic(16);
+      heroEnergyRef.current = Math.min(100, heroEnergyRef.current + 6);
+      damageNumbersRef.current.push({
+        id: `chain_${Math.random()}`,
+        x: hero.x,
+        y: hero.y - hero.altitudeZ - 88,
+        text: '衔招！',
+        color: '#fbbf24',
+        alpha: 1,
+        scale: 1.15,
+        life: 0.85,
+      });
+      sound.playPluck(880, 0.35);
+      return 1.22;
+    }
+    return 1;
   };
 
   // Add Hit to Calligraphy Combo Counter
   const registerHit = (isCritical = false) => {
     const prev = comboRef.current;
     const nextCount = prev.count + 1;
-    let nextTier = prev.tier;
-    let ratingText = prev.ratingText;
-    let mult = 1.0;
-
-    if (nextCount >= 45) {
-      nextTier = 'TRANSCEND';
-      ratingText = '翰墨通神';
-      mult = 2.0;
-    } else if (nextCount >= 30) {
-      nextTier = 'DIVINE';
-      ratingText = '出神入化';
-      mult = 1.6;
-    } else if (nextCount >= 20) {
-      nextTier = 'DRAGON';
-      ratingText = '笔走龙蛇';
-      mult = 1.4;
-    } else if (nextCount >= 12) {
-      nextTier = 'FLOW';
-      ratingText = '行云流水';
-      mult = 1.25;
-    } else if (nextCount >= 7) {
-      nextTier = 'PROGRESS';
-      ratingText = '渐入佳境';
-      mult = 1.15;
-    } else if (nextCount >= 3) {
-      nextTier = 'ENTRY';
-      ratingText = '初窥门径';
-      mult = 1.05;
-    }
+    const info = tierInfoFor(nextCount);
+    const nextTier: ComboTier = info?.tier ?? prev.tier;
+    const ratingText = info?.text ?? prev.ratingText;
+    const mult = info?.ink ?? 1.0;
+    const dmgMult = info?.dmg ?? 1.0;
 
     // 祝福「连墨永驻」：判定窗口延长
     const comboMaxTimer = 2.8 * blessingMultsRef.current.comboTimer;
+    // 暴击奖励：判定窗延长 0.45s（至多 1.35 倍），高伤暴击更从容续连
+    const timer = isCritical
+      ? Math.min(comboMaxTimer * 1.35, comboMaxTimer + 0.45)
+      : comboMaxTimer;
 
     const next: CalligraphyCombo = {
       count: nextCount,
       tier: nextTier,
-      timer: comboMaxTimer,
+      timer,
       maxTimer: comboMaxTimer,
       ratingText,
       inkBonusMultiplier: mult,
+      dmgMult,
     };
     comboRef.current = next;
 
@@ -1077,7 +1131,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     const killShot = unit.hp <= 0 && unit.isEnemy;
     const heavyHit = isCritical || dmg > 80 || killShot;
     unit.flinchTimer = heavyHit ? 0.32 : 0.2;
-    registerHit(isCritical);
+    // 连墨只计「我方攻势」：敌军受击才累积；我方部队挨打不再给连击充值（修复被动连墨漏洞）
+    if (unit.isEnemy) registerHit(isCritical);
 
     // ===== 打击感分级：轻击/重击/暴击/击杀 → 顿帧·震屏·触觉逐级加码 =====
     if (killShot) {
@@ -1285,25 +1340,81 @@ export const BattleView: React.FC<BattleViewProps> = ({
     hero.comboResetTimer = 1.0;
 
     const reachX = 90;
-    const reachDepth = 48;
+    const reachDepth = 56;
     const isHeavy = hero.comboIndex === 2;
     // 暴击系统：残月生辉大幅提升暴击率（1.6倍伤害 + 朱印刻章）
     const critChance = weatherRef.current?.type === 'LUNAR_GLOW' ? 0.35 : 0.18;
     const isCrit = Math.random() < critChance;
     const isUmbrella = weaponIdRef.current === 'QINGLUO_SAN';
-    // 青罗伞略轻（×0.95），青霜剑全力；伞三式为范围旋击
+    // 青罗伞略轻（×0.95），青霜剑全力；伞三式为范围旋击；连墨段位驱动伤害倍率
     const attackDmg =
-      hero.attack * (isHeavy ? 1.85 : 1.0) * (isCrit ? 1.6 : 1) * (isUmbrella ? 0.95 : 1);
+      hero.attack *
+      (isHeavy ? 1.85 : 1.0) *
+      (isCrit ? 1.6 : 1) *
+      (isUmbrella ? 0.95 : 1) *
+      getComboDmgMult();
+
+    // ===== 突进补位：指定目标不在攻击圈内时自动跨步贴近，杜绝「点了却打空」 =====
+    if (targetWorldX !== undefined) {
+      const hasTargetInReach = unitsRef.current.some(
+        (u) =>
+          u.isEnemy &&
+          u.hp > 0 &&
+          (u.x - hero.x) * hero.facing >= -10 &&
+          (u.x - hero.x) * hero.facing <= reachX &&
+          Math.abs(u.y - hero.y) <= reachDepth
+      );
+      if (!hasTargetInReach) {
+        let best: UnitInstance | null = null;
+        let bestD = Infinity;
+        unitsRef.current.forEach((u) => {
+          if (!u.isEnemy || u.hp <= 0) return;
+          const d = Math.hypot(u.x - hero.x, u.y - hero.y);
+          if (d <= 280 && d < bestD) {
+            bestD = d;
+            best = u;
+          }
+        });
+        if (best) {
+          const tb = best as UnitInstance;
+          const dirX = Math.sign(tb.x - hero.x) || hero.facing;
+          const lungeX = Math.max(-140, Math.min(140, tb.x - hero.x - dirX * 46));
+          hero.x = Math.max(100, Math.min(WORLD_WIDTH - 120, hero.x + lungeX));
+          // 对位并线：跨步同时贴到目标所在泳道（保证跨步后必能衔接命中）
+          hero.y = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, tb.y));
+          // 跨步残影：三道笔势掠痕
+          for (let i = 0; i < 6; i++) {
+            particlesRef.current.push({
+              id: `p_lunge_${Math.random()}`,
+              x: hero.x - dirX * (10 + i * 16),
+              y: hero.y,
+              altitudeZ: 18 + Math.random() * 26,
+              vx: -dirX * (90 + Math.random() * 60),
+              vy: (Math.random() - 0.5) * 30,
+              vz: 10 + Math.random() * 30,
+              color: '#e7e5e4',
+              size: 1.6 + Math.random() * 1.6,
+              alpha: 0.8,
+              life: 0.32,
+              maxLife: 0.32,
+              type: 'SLASH',
+            });
+          }
+        }
+      }
+    }
 
     if (isHeavy && isUmbrella) {
       // 青罗伞三式「旋伞回雪」：周身伞影回旋，四方击退（范围 108）
       triggerSealStamp(hero.x, hero.y - 46, '旋');
       const spinR = 108;
+      let spinHit = false;
       unitsRef.current.forEach((u) => {
         if (u.isEnemy && u.hp > 0) {
           const d = Math.hypot(u.x - hero.x, u.y - hero.y);
           if (d <= spinR) {
             applyDamage(u, attackDmg, isCrit, hero.x, hero.y);
+            spinHit = true;
             const ang = Math.atan2(u.y - hero.y, u.x - hero.x);
             u.x += Math.cos(ang) * 46;
             u.y = Math.max(
@@ -1313,6 +1424,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           }
         }
       });
+      if (spinHit) armChain();
       for (let i = 0; i < 14; i++) {
         const ang = (i / 14) * Math.PI * 2;
         particlesRef.current.push({
@@ -1332,18 +1444,22 @@ export const BattleView: React.FC<BattleViewProps> = ({
         });
       }
     } else {
+      let slashHit = false;
       unitsRef.current.forEach((u) => {
         if (u.isEnemy && u.hp > 0) {
           const dx = (u.x - hero.x) * hero.facing;
           const dy = Math.abs(u.y - hero.y);
           if (dx >= -10 && dx <= reachX && dy <= reachDepth) {
             applyDamage(u, attackDmg, isCrit || isHeavy, hero.x, hero.y);
+            slashHit = true;
             if (isHeavy) {
               u.x += hero.facing * 40;
             }
           }
         }
       });
+      // 命中即武装衔招窗口：普攻→技能的连招节奏由此成立
+      if (slashHit) armChain();
     }
 
     const baseDist = (WORLD_WIDTH - 100 - hero.x) * hero.facing;
@@ -1378,6 +1494,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
     sound.playSlash(true);
     triggerSealStamp(hero.x + 80 * hero.facing, hero.y - 30, isUmbrella ? '旋' : '断');
 
+    // 衔招：普攻命中后短时间内接技 → 增伤；连墨段位再乘伤害倍率
+    const chainMult = takeChainBonus();
+
     hero.state = 'SKILL_DASH';
     hero.stateTime = 0;
     hero.isInvulnerable = true;
@@ -1397,7 +1516,13 @@ export const BattleView: React.FC<BattleViewProps> = ({
     const bandY = isUmbrella ? 70 : 50;
     unitsRef.current.forEach((u) => {
       if (u.isEnemy && u.hp > 0 && u.x >= minX && u.x <= maxX && Math.abs(u.y - hero.y) <= bandY) {
-        applyDamage(u, hero.attack * (isUmbrella ? 2.5 : 2.8) * powerMult, true, hero.x, hero.y);
+        applyDamage(
+          u,
+          hero.attack * (isUmbrella ? 2.5 : 2.8) * powerMult * chainMult * getComboDmgMult(),
+          true,
+          hero.x,
+          hero.y
+        );
         if (isUmbrella) u.x += hero.facing * 26;
       }
     });
@@ -1458,6 +1583,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     applySkillCd('starlight_barrage', 7.0);
 
+    // 衔招 + 连墨伤害倍率（发射时快照，弹幕飞行中不再变化）
+    const chainMult = takeChainBonus();
+    const barrageDmg = hero.attack * 0.95 * powerMult * chainMult * getComboDmgMult();
+
     for (let i = 0; i < 8; i++) {
       safeTimeout(() => {
         if (!heroRef.current) return;
@@ -1473,7 +1602,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           vx: Math.cos(spreadAngle) * speed * heroRef.current.facing,
           vy: Math.sin(spreadAngle) * (speed * 0.2),
           vz: 0,
-          damage: hero.attack * 0.95 * powerMult,
+          damage: barrageDmg,
           isEnemy: false,
           type: 'QUILL',
           pierce: true,
@@ -1496,6 +1625,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
     triggerSealStamp(spawnX, spawnY - 20, '妙');
     applySkillCd('lotus_trap', 10.0);
 
+    // 衔招 + 连墨伤害倍率
+    const chainMult = takeChainBonus();
+
     lotusTrapsRef.current.push({
       id: `lotus_${Date.now()}`,
       x: spawnX,
@@ -1505,7 +1637,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       duration: 12.0,
       maxDuration: 12.0,
       isBloomed: false,
-      dmgPerSec: 15 * powerMult,
+      dmgPerSec: 15 * powerMult * chainMult * getComboDmgMult(),
     });
   };
 
@@ -1530,17 +1662,21 @@ export const BattleView: React.FC<BattleViewProps> = ({
     setHeroEnergy(0);
     applySkillCd('ultimate_landscape', 28.0);
 
+    // 衔招 + 连墨伤害倍率：绝招亦纳连招体系
+    const chainMult = takeChainBonus();
+    const ultDmgMult = chainMult * getComboDmgMult();
+
     setStageBanner('临江仙 · 水墨山河天地开');
     safeTimeout(() => setStageBanner(null), 3000);
 
     unitsRef.current.forEach((u) => {
       if (u.isEnemy && u.hp > 0) {
-        applyDamage(u, hero.attack * 4.8 * powerMult, true, hero.x, hero.y);
+        applyDamage(u, hero.attack * 4.8 * powerMult * ultDmgMult, true, hero.x, hero.y);
         u.x += 50;
       }
     });
 
-    applyDamage('ENEMY_BASE', hero.attack * 3.5 * powerMult);
+    applyDamage('ENEMY_BASE', hero.attack * 3.5 * powerMult * ultDmgMult);
 
     unitsRef.current.forEach((u) => {
       if (!u.isEnemy) {
@@ -1589,6 +1725,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
     hero.stateTime = 0;
     applySkillCd('river_waves', 9.0);
 
+    // 衔招 + 连墨伤害倍率（波发射时快照）
+    const chainMult = takeChainBonus();
+    const waveDmgBase = powerMult * chainMult * getComboDmgMult();
+
     [-64, 0, 64].forEach((dy, i) => {
       safeTimeout(() => {
         const h = heroRef.current;
@@ -1604,7 +1744,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           vx: 400 * h.facing,
           vy: 0,
           vz: 0,
-          damage: h.attack * 1.7 * powerMult,
+          damage: h.attack * 1.7 * waveDmgBase,
           isEnemy: false,
           type: 'INK_BLADE',
           pierce: true,
@@ -1810,8 +1950,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
 
       case 'CIRCLE': {
-        // 「圆」- 竹影墨盾 or 墨荷灵阵
-        if (skillCds.bamboo_shield <= 0) {
+        // 「圆」- 竹影墨盾 or 墨荷灵阵（读 ref 真相，避免节流 state 滞后误判）
+        if (skillCdsRef.current.bamboo_shield <= 0) {
           triggerSkillBambooShield();
           flashGestureBadge('「圆」', '竹影护体');
         } else {
@@ -1915,6 +2055,30 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
     dbg.__inkGestureDebug.heroPos = () => ({ x: heroRef.current.x, y: heroRef.current.y });
     dbg.__inkGestureDebug.isCharMode = () => charModeRef.current;
+    // 连招体系观测：连墨段位/伤害倍率/衔招窗口/文思段数/最近敌军（无头实测用）
+    dbg.__inkGestureDebug.comboInfo = () => ({
+      count: comboRef.current.count,
+      tier: comboRef.current.tier,
+      timer: Math.round(comboRef.current.timer * 1000) / 1000,
+      maxTimer: Math.round(comboRef.current.maxTimer * 1000) / 1000,
+      dmgMult: comboRef.current.dmgMult,
+      chainReady: gameTimeRef.current - lastMeleeHitAtRef.current <= 1.15,
+      charChain: charChainRef.current.count,
+      heroAlive: heroRef.current.state !== 'DEAD',
+      nearestEnemy: (() => {
+        let best: { x: number; y: number; dist: number } | null = null;
+        unitsRef.current.forEach((u) => {
+          if (u.isEnemy && u.hp > 0) {
+            const d = Math.hypot(u.x - heroRef.current.x, u.y - heroRef.current.y);
+            if (!best || d < best.dist) best = { x: Math.round(u.x), y: Math.round(u.y), dist: Math.round(d) };
+          }
+        });
+        return best;
+      })(),
+      heroX: Math.round(heroRef.current.x),
+      cameraX: Math.round(cameraX.current),
+      friendlyCount: unitsRef.current.filter((u) => !u.isEnemy && u.hp > 0).length,
+    });
     // 原生捕获层指针轨迹（诊断指针捕获/弃笔；元素级去重防重渲染重复绑定）
     const cv = canvasRef.current as (HTMLCanvasElement & { __inkTraceBound?: boolean }) | null;
     if (cv && !cv.__inkTraceBound) {
@@ -2056,7 +2220,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
           inkDragonsRef.current,
           treasuresRef.current,
           inkSlowTimerRef.current > 0 ? inkSlowTimerRef.current / INK_SLOW_DURATION : 0,
-          inkSplatsRef.current
+          inkSplatsRef.current,
+          comboRef.current.tier,
+          comboRef.current.count
         );
 
         // Render Real-time Calligraphy Brush Trail on screen
@@ -2126,16 +2292,38 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
     }
 
-    // Combo Decay（ref 衰减，命中时即时同步）
+    // Combo Decay（ref 衰减；行云流水(12连)以上断连保留四成墨势，减少重爬挫败）
     const cb = comboRef.current;
     if (cb.timer > 0) {
       cb.timer -= dt;
       if (cb.timer <= 0) {
-        cb.count = 0;
-        cb.tier = 'NONE';
-        cb.timer = 0;
-        cb.ratingText = '';
-        cb.inkBonusMultiplier = 1.0;
+        if (cb.count >= 12) {
+          const kept = Math.max(3, Math.floor(cb.count * 0.4));
+          const keptInfo = tierInfoFor(kept);
+          cb.count = kept;
+          cb.tier = keptInfo?.tier ?? 'NONE';
+          cb.timer = 0;
+          cb.ratingText = keptInfo?.text ?? '';
+          cb.inkBonusMultiplier = keptInfo?.ink ?? 1.0;
+          cb.dmgMult = keptInfo?.dmg ?? 1.0;
+          damageNumbersRef.current.push({
+            id: `dmg_${Math.random()}`,
+            x: hero.x,
+            y: hero.y - hero.altitudeZ - 96,
+            text: '墨势回落',
+            color: '#a8a29e',
+            alpha: 1,
+            scale: 0.95,
+            life: 0.9,
+          });
+        } else {
+          cb.count = 0;
+          cb.tier = 'NONE';
+          cb.timer = 0;
+          cb.ratingText = '';
+          cb.inkBonusMultiplier = 1.0;
+          cb.dmgMult = 1.0;
+        }
       }
     }
 
@@ -3124,13 +3312,17 @@ export const BattleView: React.FC<BattleViewProps> = ({
           <div className="pt-1 border-t border-stone-800 text-[10px] text-stone-400 space-y-1">
             <p>* 电脑端键盘（WASD/J/Q/W/E/R/Space）全程原生支持！</p>
             <p className="text-amber-300/80">
+              ★ 连招体系：连墨越高伤害越高（伤×至多1.35）· 暴击延长连墨窗 · 断连保留四成墨势 ·
+              普攻命中后 1.1 秒内接技能触发「衔招」增伤22% · 8秒内连写字诀叠「文思」每段+10%
+            </p>
+            <p className="text-amber-300/80">
               ★ 连墨 45 触发「墨龙卷」· 集齐文房四宝触发「文光焕彩」· 残血自动入「墨滞时刻」
             </p>
           </div>
         </div>
       )}
 
-      {/* Active Calligraphy Combo Rating HUD */}
+      {/* Active Calligraphy Combo Rating HUD —— 连墨段位 + 伤害倍率 + 衔招徽记 */}
       {combo.count >= 3 && (
         <div className="absolute top-14 right-6 z-30 pointer-events-none flex flex-col items-end animate-fade-in">
           <div className="flex items-center gap-2 px-3 py-1 bg-stone-950/80 border border-amber-600/60 rounded-xl backdrop-blur-sm shadow-xl">
@@ -3141,13 +3333,24 @@ export const BattleView: React.FC<BattleViewProps> = ({
             <span className="text-xs font-serif font-bold text-amber-100">
               【{combo.ratingText}】
             </span>
+            <span className="text-[10px] font-bold text-orange-300 font-mono">
+              伤 ×{combo.dmgMult.toFixed(2)}
+            </span>
           </div>
           <div className="w-24 h-1 bg-stone-800 rounded-full mt-1 overflow-hidden">
             <div
               className="h-full bg-amber-400 transition-all duration-75"
-              style={{ width: `${(combo.timer / combo.maxTimer) * 100}%` }}
+              style={{ width: `${Math.min(100, (combo.timer / combo.maxTimer) * 100)}%` }}
             />
           </div>
+          {chainReady && (
+            <div className="mt-1 flex items-center gap-1 px-2 py-0.5 bg-stone-950/85 border border-amber-400/70 rounded-lg backdrop-blur-sm animate-fade-in">
+              <Zap className="w-3 h-3 text-amber-300" />
+              <span className="text-[10px] font-bold text-amber-200 font-serif tracking-wider">
+                衔 · 技能增伤中
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -3461,7 +3664,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
               </li>
             </ol>
             <p className="mt-2 pt-2 border-t rule-ink text-[10px] text-ink-light">
-              提示：ESC / P 暂停 · V 切武器（剑/伞）· 「字诀」逐笔写汉字施法（之山火水川心王）· 连墨45召墨龙 · 集齐文房四宝获「文光焕彩」
+              提示：ESC / P 暂停 · V 切武器（剑/伞）· 「字诀」逐笔写汉字施法（之山火水川心王）· 连墨越高伤害越高 · 普攻后快速接技能触发「衔招」· 连墨45召墨龙
             </p>
           </div>
         </div>

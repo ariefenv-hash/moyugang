@@ -130,6 +130,8 @@ export interface CalligraphyCombo {
   maxTimer: number;
   ratingText: string;
   inkBonusMultiplier: number;
+  /** 连墨伤害倍率：连击越高，剑仙普攻与技能伤害越高（柔性连断后按保留段位回落） */
+  dmgMult: number;
 }
 
 export interface WeatherEvent {

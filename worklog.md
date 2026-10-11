@@ -364,3 +364,23 @@ Stage Summary:
 - 修改：BattleView.tsx / charRecognizer.ts / gestureRecognizer.ts / test_char_recognizer.ts；新增 verify_gesture_smooth.py
 - 提交 a1f1085（本地 main，领先远端 2 个提交，推送需新 PAT）
 - 待办：推送 GitHub 需用户提供新令牌（推送后 Actions 自动部署 Pages）
+
+---
+Task ID: 18
+Agent: 主 agent (Super Z)
+Task: 修复所有可发现问题 + 连招体验大升级（用户补发 PAT 要求上线）
+
+Work Log:
+- 连招体系七件套升级：①连墨伤害倍率（段位表 COMBO_TIERS 重构，墨水/伤害双倍率：初窥×1.04 → 翰墨通神×1.35，普攻+断水/笔阵/三江引/墨荷/临江仙全技能接入）②柔性连断（行云流水12连以上超时不归零，保留四成墨势按段位回落+「墨势回落」浮字）③暴击延窗（暴击判定窗+0.45s 至多1.35倍）④衔招系统（普攻命中后 1.1s 内接技能增伤 22% + 盖「衔」印 + 返绝意6点，HUD「衔·技能增伤中」徽记）⑤字诀文思连段（8s 内连写每段+10% 至多+30%，施法浮签显示段数）⑥突进补位（点远处敌人自动跨步≤140px 并并线到目标泳道，杜绝「点了却打空」）⑦连击光环升级（canvasRenderer drawHeroAura25D 七段位色谱/半径+18% 呼吸/转速，翰墨通神鎏金双环+「连」字水印，行云模式裁剪）
+- 真 bug 修复：applyDamage 此前对任何单位受击都 registerHit——敌军殴打我方开局自带部队也在给连墨充值（被动连墨漏洞）；改为仅敌军受击累积
+- 其他修复：HUD 连击计时条超窗溢出钳制 min(100,%)；画圆手势改读 skillCdsRef 真相（原用节流 state 有滞后误判）；攻击纵向判定带 48→56
+- HUD/文案：连墨徽章新增「伤 ×倍率」实时显示；操控心诀补连招体系三行说明；新手教学提示行同步
+- 测试钩子扩展（仅 DEV）：__inkGestureDebug.comboInfo()（连墨段位/倍率/衔招窗/文思段/最近敌军/友军数/相机）
+- 新增 scripts/verify_combo.py 无头实测 21 项全 PASS：连墨累积/HUD 文本与真相源一致/段位↔倍率映射/暴击延窗采样(ratio 1.161)/衔招亮起与消耗/柔性连断(14→保留5→续击不归零)/突进补位(dist179 dx133 combo5→6)/文思2段·3段/移动端 4 项/全程 0 JS 异常
+- 回归：手势强化 22/22、剧情第二章 39/39、字诀武器 VERIFY PASS、识别器单测全 PASS、tsc 零错误、vite build 成功
+- 测试基建教训：祝福三选一弹窗会凝滞模拟（连墨计时冻结）需轮询点击；战局随机性用「自纠偏逼近/拉开」与目标驱动 farm 化解；开局敌军行军 ~15s 需先等敌入圈再开测
+
+Stage Summary:
+- 修改：BattleView.tsx（连招七件套+bug修复+钩子）/ types/game.ts（CalligraphyCombo.dmgMult）/ canvasRenderer.ts（段位光环）
+- 新增：scripts/verify_combo.py（21 项连招实测）
+- 提交待推送（本轮连同 Task 17 的 a1f1085 一并推上线）
