@@ -28,10 +28,20 @@ export class GestureRecognizer {
   private points: StrokePoint[] = [];
   private isTracing = false;
   private strokeColor = '#09090b';
+  /** 收笔时刻：余墨渐隐用（endStroke 后笔迹不再瞬间消失） */
+  private endedAt = 0;
 
   public startStroke(x: number, y: number) {
     this.points = [{ x, y, time: performance.now() }];
     this.isTracing = true;
+    this.endedAt = 0;
+  }
+
+  /** 弃笔：浏览器接管（pointercancel/系统手势）时丢弃半截笔画，不触发任何技能 */
+  public cancelStroke() {
+    this.isTracing = false;
+    this.points = [];
+    this.endedAt = 0;
   }
 
   public addPoint(x: number, y: number) {
@@ -60,6 +70,7 @@ export class GestureRecognizer {
     }
 
     this.isTracing = false;
+    this.endedAt = performance.now();
     const pts = this.points;
     const len = pts.length;
     const start = pts[0];
@@ -76,8 +87,8 @@ export class GestureRecognizer {
       pathLength += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
     }
 
-    // 1. Single Tap or Very Short Click
-    if (pathLength < 24 && duration < 350) {
+    // 1. Single Tap or Very Short Click（长按≤600ms 同样算点按：深思熟虑的点敌不丢）
+    if (pathLength < 24 && duration < 600) {
       return {
         type: 'TAP',
         name: '点',
@@ -89,11 +100,12 @@ export class GestureRecognizer {
       };
     }
 
-    // 2. Check for Circle Gesture (圆 - 墨韵周天 / 竹影盾) —— 判定放宽，战斗中更易施出
+    // 2. Check for Circle Gesture (圆 - 墨韵周天 / 竹影盾) —— 判定放宽，战斗中更易施出；
+    //    闭合比收紧 0.45→0.33：玩家自然写的「Z」（首尾距/路径≈0.4）不再被抢判为圆
     if (pathLength > 120 && len >= 8) {
       // Circle check: start and end are close, but path is substantial
       const startEndDist = Math.hypot(end.x - start.x, end.y - start.y);
-      if (startEndDist < pathLength * 0.45) {
+      if (startEndDist < pathLength * 0.33) {
         // Calculate bounding box
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         pts.forEach(p => {
@@ -105,7 +117,8 @@ export class GestureRecognizer {
         const boxW = maxX - minX;
         const boxH = maxY - minY;
         const aspect = boxW / Math.max(1, boxH);
-        if (aspect >= 0.35 && aspect <= 2.8 && boxW > 32 && boxH > 32) {
+        // 椭圆容差放宽（拇指弧常为扁椭圆）：0.33–3.0
+        if (aspect >= 0.33 && aspect <= 3.0 && boxW > 32 && boxH > 32) {
           return {
             type: 'CIRCLE',
             name: '圆',
@@ -142,16 +155,18 @@ export class GestureRecognizer {
       }
     }
 
-    // 4. Directional Swipes —— 快速轻扫 flick 支持高速短轨迹，慢划则要求更长路径
+    // 4. Directional Swipes —— 快速轻扫 flick 支持高速短轨迹，慢划则要求更长路径；
+    //    快扫允许更斜的角度（1.22），慢划维持 1.35 防误触
     const flickFast = duration < 220;
     const minSwipeLen = flickFast ? 30 : 45;
+    const axisRatio = flickFast ? 1.22 : 1.35;
     if (pathLength > minSwipeLen && duration < 650) {
       const absDx = Math.abs(totalDx);
       const absDy = Math.abs(totalDy);
       const dirThresh = flickFast ? 30 : 40;
 
       // Horizontal swipe (横 - 断水斩)
-      if (absDx > absDy * 1.35) {
+      if (absDx > absDy * axisRatio) {
         return {
           type: 'SWIPE_HORIZONTAL',
           name: '横',
@@ -165,7 +180,7 @@ export class GestureRecognizer {
       }
 
       // Vertical Down swipe (竖 - 笔落惊风 / 凌空斩)
-      if (totalDy > absDx * 1.35 && totalDy > dirThresh) {
+      if (totalDy > absDx * axisRatio && totalDy > dirThresh) {
         return {
           type: 'SWIPE_DOWN',
           name: '竖',
@@ -179,7 +194,7 @@ export class GestureRecognizer {
       }
 
       // Vertical Up swipe (提 - 轻功腾跃)
-      if (totalDy < -absDx * 1.35 && totalDy < -dirThresh) {
+      if (totalDy < -absDx * axisRatio && totalDy < -dirThresh) {
         return {
           type: 'SWIPE_UP',
           name: '提',
@@ -206,11 +221,21 @@ export class GestureRecognizer {
   }
 
   // Draw Wet Calligraphy Brush Trail directly onto canvas
+  // 运笔中全量实时墨迹；收笔后 240ms 余墨渐隐（书写结束有收笔余韵，视觉连续）
   public drawBrushTrail(ctx: CanvasRenderingContext2D) {
     const pts = this.points;
     if (pts.length < 2) return;
 
+    // 收笔渐隐：超过 240ms 不再绘制；运笔中不透明
+    let alpha = 1;
+    if (!this.isTracing) {
+      const age = performance.now() - this.endedAt;
+      if (age > 240) return;
+      alpha = 1 - age / 240;
+    }
+
     ctx.save();
+    ctx.globalAlpha = alpha;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
@@ -241,8 +266,8 @@ export class GestureRecognizer {
       ctx.lineWidth = strokeWidth + 6;
       ctx.stroke();
 
-      // Occasional ink splatter drop along the brush
-      if (i % 5 === 0 && Math.random() < 0.4) {
+      // Occasional ink splatter drop along the brush（仅运笔中；余墨期重绘会闪烁，跳过）
+      if (this.isTracing && i % 5 === 0 && Math.random() < 0.4) {
         ctx.fillStyle = '#09090b';
         ctx.beginPath();
         const splashX = p2.x + (Math.random() - 0.5) * (strokeWidth + 12);

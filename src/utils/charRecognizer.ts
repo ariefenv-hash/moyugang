@@ -166,6 +166,10 @@ const GRADE_SHEN = 0.048;
 const GRADE_MIAO = 0.068;
 /** 有效笔画最短轨迹（像素；心字短点也可成笔） */
 const MIN_STROKE_PX = 6;
+/** 自信早判分数线（无笔画惩罚原始距离；达到即无需停笔等待，立即施放）
+ *  标定依据：规整书写实测 ≤0.033；缺整笔的残余点云实测 ≥0.05（如缺右竖的山 0.0517）——
+ *  取 0.045 干净分离「笔正」与「缺笔」，防止标准笔顺被中途抢发 */
+export const CHAR_EARLY_COMMIT_SCORE = 0.045;
 
 /** 字诀共几笔（取模板最大笔画数，UI 提示用） */
 export const CHAR_MAX_STROKES = CHAR_TEMPLATES.reduce(
@@ -277,7 +281,7 @@ function greedyCloudDist(a: CharStrokePoint[], b: CharStrokePoint[]): number {
 const ORI_BUCKETS = [-0.3, -0.15, 0, 0.15, 0.3];
 const TEMPLATE_CLOUDS = CHAR_TEMPLATES.flatMap((t) => {
   const variants: number[][][][] = [t.strokes, ...(t.alt ?? [])];
-  return variants.map((strokes) => {
+  return variants.map((strokes, vi) => {
     const raw: CharStrokePoint[] = [];
     strokes.forEach((stroke) => {
       const pts = stroke.map(([x, y]) => ({ x, y }));
@@ -288,6 +292,7 @@ const TEMPLATE_CLOUDS = CHAR_TEMPLATES.flatMap((t) => {
     return {
       def: t,
       strokeCount: strokes.length,
+      isPrimary: vi === 0,
       clouds: ORI_BUCKETS.map((rad) => rotateCloud(norm, rad)),
     };
   });
@@ -296,6 +301,59 @@ const TEMPLATE_CLOUDS = CHAR_TEMPLATES.flatMap((t) => {
 export interface CharStrokeInput {
   /** 每一笔的轨迹点（屏幕坐标即可，内部统一归一化） */
   strokes: CharStrokePoint[][];
+}
+
+/**
+ * 自信早判预览：免停笔即时施放的依据。
+ * 与 recognizeChar 同管线，但返回「无笔画惩罚的原始距离」及模板元信息。
+ * 判据：最佳字的「主模板笔数」== 有效笔数，且 rawScore 足够小 → 立即施放。
+ * 注：$P 点云对同字连笔变体天然不敏感（同字形），标准笔顺的最佳匹配
+ * 常落在自身 alt 变体上——因此只看「字的主模板笔数」而非命中变体是否主模板；
+ * 变体快写（笔数少于主模板）则笔数不等 → 不早判，由 550ms 停笔判定兜底。
+ */
+export interface CharPeekResult {
+  char: string;
+  /** 最佳模板的无惩罚原始点云距离 */
+  rawScore: number;
+  /** 最佳字主模板的笔数（早判要求 validCount 与之一致） */
+  primaryStrokes: number;
+  /** 有效笔数（≥MIN_STROKE_PX 的轨迹） */
+  validCount: number;
+}
+
+export function peekCharMatch(input: CharStrokeInput): CharPeekResult | null {
+  const valid = input.strokes.filter(
+    (s) => s.length >= 2 && pathLength(s) >= MIN_STROKE_PX
+  );
+  if (valid.length === 0) return null;
+
+  const raw: CharStrokePoint[] = [];
+  const per = Math.max(6, Math.round(RESAMPLE_N / valid.length));
+  valid.forEach((s) => {
+    resample(s, per).forEach((p) => raw.push(p));
+  });
+  const cloud = normalize(resample(raw, RESAMPLE_N));
+
+  let bestScore = Infinity;
+  let best: (typeof TEMPLATE_CLOUDS)[number] | null = null;
+  for (const tpl of TEMPLATE_CLOUDS) {
+    for (let bi = 0; bi < tpl.clouds.length; bi++) {
+      const d1 = greedyCloudDist(cloud, tpl.clouds[bi]);
+      const d2 = greedyCloudDist(rotateCloud(cloud, -ORI_BUCKETS[bi]), tpl.clouds[2]);
+      const d = Math.min(d1, d2);
+      if (d < bestScore) {
+        bestScore = d;
+        best = tpl;
+      }
+    }
+  }
+  if (!best) return null;
+  return {
+    char: best.def.char,
+    rawScore: bestScore,
+    primaryStrokes: best.def.strokes.length,
+    validCount: valid.length,
+  };
 }
 
 /**

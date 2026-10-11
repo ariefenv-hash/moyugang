@@ -2,7 +2,7 @@
 // 1) 分形中点位移仿真真实手写（笔画弯曲/圆角/抖动/歪斜/缩放）
 // 2) 同字命中 + 异字误配余量分析
 // 3) 乱画（圆圈、Z 乱折、螺旋、单横）必须拒绝
-import { recognizeChar, listCharGuides } from '../src/utils/charRecognizer';
+import { recognizeChar, listCharGuides, peekCharMatch, CHAR_EARLY_COMMIT_SCORE } from '../src/utils/charRecognizer';
 
 let seedState = 42;
 function rand() {
@@ -181,3 +181,46 @@ run('十字(2笔)', recognizeChar({ strokes: cross }), null);
 console.log('\n=== 6. 边界 ===');
 console.log(`空输入: ${recognizeChar({ strokes: [] }) === null ? 'PASS' : 'WRONG'}`);
 console.log(`过短笔画: ${recognizeChar({ strokes: [[{ x: 10, y: 10 }, { x: 14, y: 12 }]] }) === null ? 'PASS' : 'WRONG'}`);
+
+console.log('\n=== 7. 自信早判 peekCharMatch（笔正即发，免停笔等待） ===');
+function earlyOk(p: ReturnType<typeof peekCharMatch>): boolean {
+  return !!p && p.validCount === p.primaryStrokes && p.rawScore <= CHAR_EARLY_COMMIT_SCORE;
+}
+function peekLog(name: string, p: ReturnType<typeof peekCharMatch>, expectEarly: boolean) {
+  const early = earlyOk(p);
+  const ok = early === expectEarly ? 'PASS' : 'WRONG';
+  console.log(`${name}: ${ok}${p ? ` (best=${p.char} raw=${p.rawScore.toFixed(4)} vc=${p.validCount}/ps=${p.primaryStrokes})` : ' (null)'}`);
+}
+// 7a. 山 标准三笔规整 → 应早判
+seedState = 1100;
+peekLog('山·标准三笔→早判', peekCharMatch({ strokes: handwrite(shan.strokes, 0.008, 3, 3, 1.0, 0.01, 0) }), true);
+// 7b. 山 只写两笔（中竖+底横，缺右竖）→ 笔数≠主模板 → 不早判（防标准笔顺被抢发）
+seedState = 1101;
+peekLog('山·缺笔两画→不早判', peekCharMatch({ strokes: handwrite([shan.strokes[0], shan.strokes[1]], 0.008, 3, 3, 1.0, 0.01, 0) }), false);
+// 7c. 之一笔连笔快写 → 变体笔数(1)＜主模板笔数(3) → 不早判（550ms 停笔判定兜底）
+seedState = 1102;
+peekLog('之·连笔一笔→不早判', peekCharMatch({ strokes: handwrite(zhiCursive, 0.012, 5, 8, 0.9, 0.03, 0.03) }), false);
+// 7d. 之 标准三笔规整（最佳常落在自身 alt 变体，同字形）→ 主模板笔数相等 → 应早判
+seedState = 1103;
+peekLog('之·标准三笔→早判', peekCharMatch({ strokes: handwrite(zhi.strokes, 0.008, 3, 3, 1.0, 0.01, 0) }), true);
+// 7e. 心/川 规整 → 应早判
+seedState = 1104;
+peekLog('心·标准四笔→早判', peekCharMatch({ strokes: handwrite(xin.strokes, 0.008, 3, 3, 1.0, 0.01, 0) }), true);
+seedState = 1105;
+peekLog('川·标准三笔→早判', peekCharMatch({ strokes: handwrite(chuan.strokes, 0.008, 3, 3, 1.0, 0.01, 0) }), true);
+// 7f. 乱画圆圈 → 原始距离远超阈值 → 不早判
+seedState = 1106;
+peekLog('乱画圆圈→不早判', peekCharMatch({ strokes: [circle] }), false);
+// 7g. 十字两笔 → 无同笔数主模板 → 不早判
+seedState = 1107;
+peekLog('十字两笔→不早判', peekCharMatch({ strokes: cross }), false);
+// 7h. 心 缺一笔（3 画）→ 笔数≠4 → 不早判，防误发
+seedState = 1108;
+peekLog('心·缺笔三画→不早判', peekCharMatch({ strokes: handwrite([xin.strokes[0], xin.strokes[1], xin.strokes[2]], 0.008, 3, 3, 1.0, 0.01, 0) }), false);
+// 7i. 川 缺一笔（2 画）→ 笔数≠3 → 不早判
+seedState = 1109;
+peekLog('川·缺笔两画→不早判', peekCharMatch({ strokes: handwrite([chuan.strokes[0], chuan.strokes[1]], 0.008, 3, 3, 1.0, 0.01, 0) }), false);
+
+// 7j. 山 三笔（中竖+左竖+底横，缺右竖）——缺整笔的残余点云距离需 > 早判阈值，否则标准四笔书写会被中途抢发
+seedState = 1110;
+peekLog('山·缺右竖三画→不早判', peekCharMatch({ strokes: handwrite([shan.strokes[0], shan.strokes[1].slice(0, 3), [shan.strokes[1][3], shan.strokes[1][4]]], 0.008, 3, 3, 1.0, 0.01, 0) }), false);

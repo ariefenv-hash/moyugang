@@ -31,7 +31,9 @@ import { sound } from '../utils/audio';
 import { GestureRecognizer, GestureResult } from '../utils/gestureRecognizer';
 import {
   recognizeChar,
+  peekCharMatch,
   CHAR_MAX_STROKES,
+  CHAR_EARLY_COMMIT_SCORE,
   CharStrokePoint,
   CharMatchResult,
 } from '../utils/charRecognizer';
@@ -110,6 +112,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
   onTutorialDone,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** 活动指针隔离：只处理起笔那根指针，第二指/掌缘不毁点集 */
+  const activePointerIdRef = useRef<number | null>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
   // 画布尺寸同步器：游戏循环每帧自检，防地址栏伸缩/旋转/分屏导致的位图与渲染器逻辑尺寸脱耦
   const syncCanvasSizeRef = useRef<(() => void) | null>(null);
@@ -258,7 +262,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
   }, [storyHead]);
 
   // Recent Recognized Calligraphy Gesture Badge (e.g. 「横 · 断水东流」)
-  const [gestureBadge, setGestureBadge] = useState<{ text: string; sub: string } | null>(null);
+  const [gestureBadge, setGestureBadge] = useState<{ text: string; sub: string; seq: number } | null>(null);
+  /** 徽章序号：每次点亮自增，清除时按序号比对——彻底根治「行」「周」等文案与手势名不一致导致的永不清散 */
+  const gestureBadgeSeqRef = useRef(0);
 
   // ===== 字诀模式（汉字识别手势）：逐笔集字，停笔自动判定，朱印评级定威力 =====
   const charModeRef = useRef(false);
@@ -293,6 +299,19 @@ export const BattleView: React.FC<BattleViewProps> = ({
     timeoutsRef.current.add(id);
     return id;
   }, []);
+
+  /** 点亮手势徽章（序号自增，到时按序号清除——文案与手势名不一致也能正确消散） */
+  const flashGestureBadge = useCallback(
+    (text: string, sub: string, ms = 1800) => {
+      const seq = ++gestureBadgeSeqRef.current;
+      setGestureBadge({ text, sub, seq });
+      safeTimeout(
+        () => setGestureBadge((prev) => (prev?.seq === seq ? null : prev)),
+        ms
+      );
+    },
+    [safeTimeout]
+  );
 
   // ===== 升级效果实装：冷却缩短（每级 -8%，上限5级）与风雅领域共鸣增幅 =====
   const cdMult = Math.max(0.6, 1 - progress.heroUpgrades.cooldownLevel * 0.08);
@@ -369,15 +388,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
     if (hero.state !== 'DEAD') {
       hero.speed = Math.round(HERO_INITIAL_STATS.speed * (next === 'QINGLUO_SAN' ? 1.07 : 1));
     }
-    setGestureBadge({
-      text: next === 'QINGLUO_SAN' ? '「伞」' : '「剑」',
-      sub: next === 'QINGLUO_SAN' ? '青罗伞 · 一伞烟雨' : '墨锋青霜 · 剑气纵横',
-    });
-    safeTimeout(
-      () =>
-        setGestureBadge((prev) =>
-          prev?.text === '「伞」' || prev?.text === '「剑」' ? null : prev
-        ),
+    flashGestureBadge(
+      next === 'QINGLUO_SAN' ? '「伞」' : '「剑」',
+      next === 'QINGLUO_SAN' ? '青罗伞 · 一伞烟雨' : '墨锋青霜 · 剑气纵横',
       1600
     );
     sound.playPluck(next === 'QINGLUO_SAN' ? 880 : 659.25, 0.5);
@@ -765,7 +778,15 @@ export const BattleView: React.FC<BattleViewProps> = ({
     const match = recognizeChar({ strokes });
     if (!match) {
       sound.playCharFail();
-      setCharHint({ text: '墨渍', sub: '未成字 · 七诀：之 山 火 水 川 心 王' });
+      // 墨渍引导：足够接近某字时提示「近『X』形」，帮助玩家修正
+      const near = peekCharMatch({ strokes });
+      setCharHint({
+        text: '墨渍',
+        sub:
+          near && near.rawScore <= 0.16
+            ? `未成字 · 近「${near.char}」形 · 七诀：之 山 火 水 川 心 王`
+            : '未成字 · 七诀：之 山 火 水 川 心 王',
+      });
       safeTimeout(() => setCharHint((prev) => (prev?.text === '墨渍' ? null : prev)), 1500);
       return;
     }
@@ -1678,11 +1699,25 @@ export const BattleView: React.FC<BattleViewProps> = ({
   //  · 所有指针 → 挥毫手势（点按/横竖提/画圆/折线/拖动/字诀书字）
   //  · 技能按钮（DOM 层，不穿透到画布）
   const handlePointerDown = (e: React.PointerEvent) => {
+    // 多指守卫：已有笔在运（书写/手势）时忽略其他指针，防掌缘/第二指毁掉点集
+    if (activePointerIdRef.current !== null) return;
+    activePointerIdRef.current = e.pointerId;
+
     // Canvas client bounds
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
+
+    // 指针捕获：笔画滑出画布（扫到 HUD/屏边）不断笔
+    const cv = canvasRef.current;
+    if (cv?.setPointerCapture) {
+      try {
+        cv.setPointerCapture(e.pointerId);
+      } catch {
+        /* 部分虚拟设备不支持，忽略 */
+      }
+    }
 
     // 字诀模式：新笔入字时取消待判定的收笔计时
     if (charModeRef.current && charCommitTimerRef.current) {
@@ -1694,6 +1729,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    // 多指守卫：只跟踪起笔指针
+    if (activePointerIdRef.current !== e.pointerId) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const clientX = e.clientX - rect.left;
@@ -1704,8 +1741,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
     gestureRecognizer.current.addPoint(clientX, clientY);
 
     // If dragging slowly in gesture mode, continuously lead the hero!
+    // 字诀模式豁免：专注书写，角色不被笔尖牵引（防写一字全场乱跑）
     const pts = gestureRecognizer.current.getPoints();
-    if (pts.length > 5) {
+    if (!charModeRef.current && pts.length > 5) {
       const worldX = clientX + cameraX.current;
       const clampedY = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, clientY));
       heroTargetMove.current = { x: worldX, y: clampedY };
@@ -1731,11 +1769,11 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
         if (hitEnemy) {
           triggerHeroAttack(worldEndX, worldY);
-          setGestureBadge({ text: '「点」', sub: '落墨点煞' });
+          flashGestureBadge('「点」', '落墨点煞');
         } else {
           // Tap ground -> Glide move to position
           heroTargetMove.current = { x: worldEndX, y: worldY };
-          setGestureBadge({ text: '「行」', sub: '步移景从' });
+          flashGestureBadge('「行」', '步移景从');
           sound.playPluck(523.25, 0.3);
         }
         break;
@@ -1744,7 +1782,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       case 'SWIPE_HORIZONTAL': {
         // 「横」- 断水斩 (Dash Slash)
         triggerSkillDashSlash(gesture.direction as any);
-        setGestureBadge({ text: '「横」', sub: gesture.poeticCalligraphy });
+        flashGestureBadge('「横」', gesture.poeticCalligraphy);
         break;
       }
 
@@ -1760,14 +1798,14 @@ export const BattleView: React.FC<BattleViewProps> = ({
         } else {
           triggerHeroAttack();
         }
-        setGestureBadge({ text: '「竖」', sub: '笔落惊风' });
+        flashGestureBadge('「竖」', '笔落惊风');
         break;
       }
 
       case 'SWIPE_UP': {
         // 「提」- 轻功揽月 (Jump Leap)
         triggerHeroJump();
-        setGestureBadge({ text: '「提」', sub: '轻功揽月' });
+        flashGestureBadge('「提」', '轻功揽月');
         break;
       }
 
@@ -1775,10 +1813,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
         // 「圆」- 竹影墨盾 or 墨荷灵阵
         if (skillCds.bamboo_shield <= 0) {
           triggerSkillBambooShield();
-          setGestureBadge({ text: '「圆」', sub: '竹影护体' });
+          flashGestureBadge('「圆」', '竹影护体');
         } else {
           triggerSkillInkLotus(worldStartX, worldY);
-          setGestureBadge({ text: '「周」', sub: '墨荷灵阵' });
+          flashGestureBadge('「周」', '墨荷灵阵');
         }
         break;
       }
@@ -1786,7 +1824,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       case 'ZIGZAG': {
         // 「折 / 撇捺」- 星河引毫 (Starlight Quill Barrage)
         triggerSkillStarlightBarrage();
-        setGestureBadge({ text: '「折」', sub: '星河引毫' });
+        flashGestureBadge('「折」', '星河引毫');
         break;
       }
 
@@ -1795,28 +1833,57 @@ export const BattleView: React.FC<BattleViewProps> = ({
         break;
       }
     }
-
-    // Clear gesture badge after 1.8s（比对徽章全文「名」，否则永不清散）
-    safeTimeout(() => {
-      setGestureBadge((prev) => (prev?.text === `「${gesture.name}」` ? null : prev));
-    }, 1800);
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    // 多指守卫：只处理起笔那根指针
+    if (activePointerIdRef.current !== e.pointerId) return;
+    activePointerIdRef.current = null;
+    const captured = canvasRef.current;
+    if (captured?.hasPointerCapture?.(e.pointerId)) {
+      try {
+        captured.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
+
     // 字诀模式：先截取轨迹点再走集字管线；不触发经典手势（避免写字被误判为滑动）
     if (charModeRef.current) {
       const strokePts = gestureRecognizer.current
         .getPoints()
         .map((p) => ({ x: p.x, y: p.y }));
-      const gesture = gestureRecognizer.current.endStroke();
-      if (strokePts.length >= 2 && gesture) {
+      gestureRecognizer.current.endStroke();
+      // 有效笔长门槛（与识别器 MIN_STROKE_PX 同源）：误触/掌缘不成笔，不污染集字
+      let pathLen = 0;
+      for (let i = 1; i < strokePts.length; i++) {
+        pathLen += Math.hypot(
+          strokePts[i].x - strokePts[i - 1].x,
+          strokePts[i].y - strokePts[i - 1].y
+        );
+      }
+      if (strokePts.length >= 2 && pathLen >= 6) {
         charStrokesRef.current.push(strokePts);
         setCharStrokeCount(charStrokesRef.current.length);
         if (charStrokesRef.current.length >= CHAR_MAX_STROKES) {
           commitCharStrokes();
         } else {
-          scheduleCharCommit();
+          // 自信早判：最佳字的主模板笔数与有效笔数一致且写得足够正 → 立即施放；
+          // 变体快写（笔数少于主模板）笔数不等 → 不早判，550ms 停笔判定兜底
+          const peek = peekCharMatch({ strokes: charStrokesRef.current });
+          if (
+            peek &&
+            peek.validCount === peek.primaryStrokes &&
+            peek.rawScore <= CHAR_EARLY_COMMIT_SCORE
+          ) {
+            commitCharStrokes();
+          } else {
+            scheduleCharCommit();
+          }
         }
+      } else if (charStrokesRef.current.length > 0) {
+        // 误触/掌缘不成笔：恢复此前被 pointerdown 暂停的待判定，已写笔画不悬挂
+        scheduleCharCommit();
       }
       return;
     }
@@ -1828,6 +1895,46 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     executeGesture(gesture);
   };
+
+  // 浏览器接管（系统手势/来电/通知下滑）→ 弃笔：半截笔画不触发任何技能
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    if (activePointerIdRef.current !== e.pointerId) return;
+    activePointerIdRef.current = null;
+    gestureRecognizer.current.cancelStroke();
+  };
+
+  // 无头测试钩子（仅 dev 构建暴露，生产零开销）：验证书写不带跑角色等手势行为
+  if (import.meta.env.DEV) {
+    const dbg = window as unknown as Record<string, any>;
+    if (!dbg.__inkGestureDebug) {
+      dbg.__inkGestureDebug = {
+        heroPos: () => ({ x: 0, y: 0 }),
+        isCharMode: () => false,
+        trace: [] as unknown[],
+      };
+    }
+    dbg.__inkGestureDebug.heroPos = () => ({ x: heroRef.current.x, y: heroRef.current.y });
+    dbg.__inkGestureDebug.isCharMode = () => charModeRef.current;
+    // 原生捕获层指针轨迹（诊断指针捕获/弃笔；元素级去重防重渲染重复绑定）
+    const cv = canvasRef.current as (HTMLCanvasElement & { __inkTraceBound?: boolean }) | null;
+    if (cv && !cv.__inkTraceBound) {
+      cv.__inkTraceBound = true;
+      const rec = (ev: string) => (e: PointerEvent) => {
+        dbg.__inkGestureDebug.trace.push({
+          ev,
+          x: Math.round(e.clientX),
+          y: Math.round(e.clientY),
+          id: e.pointerId,
+          t: Math.round(performance.now()),
+        });
+        if (dbg.__inkGestureDebug.trace.length > 48) dbg.__inkGestureDebug.trace.shift();
+      };
+      cv.addEventListener('pointerdown', rec('down'), true);
+      cv.addEventListener('pointermove', rec('move'), true);
+      cv.addEventListener('pointerup', rec('up'), true);
+      cv.addEventListener('pointercancel', rec('cancel'), true);
+    }
+  }
 
   // Main 60FPS Game Loop（依赖清空：内部全部读 ref，不再因状态变化销毁重建）
   // updateSimulation 通过 ref 晚绑定（定义于本 effect 之后）
@@ -2876,8 +2983,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        className="w-full h-full block touch-none cursor-crosshair"
+        onPointerCancel={handlePointerCancel}
+        onContextMenu={(e) => e.preventDefault()}
+        className="w-full h-full block touch-none select-none cursor-crosshair"
       />
 
       {/* 文房四宝收集进度 + 已获墨灵祝福 */}
@@ -2951,7 +3059,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
         <div className="absolute top-56 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
           <div className="px-4 py-1.5 bg-stone-950/85 border border-amber-600/50 rounded-xl backdrop-blur-md flex items-center gap-2">
             <span className="text-xs font-serif text-amber-200 tracking-wider">
-              ✍ 已书 {charStrokeCount} 笔 · 停笔即判定
+              ✍ 已书 {charStrokeCount} 笔 · 笔正即发 · 停笔亦判
             </span>
             <span className="text-[10px] font-serif text-amber-200/60 hidden md:inline">
               之断水 · 山墨盾 · 火笔阵 · 水墨荷 · 川三江 · 心归元 · 王临江
@@ -3009,8 +3117,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
             <p className="text-amber-200">「之」→ 断水斩 ·「山」→ 竹影墨盾 ·「火」→ 星河笔阵</p>
             <p className="text-amber-200">「水」→ 墨荷灵阵 ·「川」→ 三江引 ·「心」→ 墨心归元</p>
             <p className="text-amber-200">「王」→ 临江仙（需绝意满）</p>
+            <p className="text-[10px] text-stone-400">笔顺随意、大小随意；笔数齐且写得正立即施放（无需久停）；「之」「山」支持连笔快写</p>
+            <p className="text-[10px] text-stone-400">书写时角色站定不被笔尖牵引；写错了点浮签上的「退笔 / 重写」</p>
             <p className="text-[10px] text-stone-400">字写得越正评级越高：神品 ×1.35 · 妙品 ×1.15 · 能品 ×1.0</p>
-            <p className="text-[10px] text-stone-400">「之」「山」支持连笔快写；写错了点浮签上的「退笔 / 重写」</p>
           </div>
           <div className="pt-1 border-t border-stone-800 text-[10px] text-stone-400 space-y-1">
             <p>* 电脑端键盘（WASD/J/Q/W/E/R/Space）全程原生支持！</p>
