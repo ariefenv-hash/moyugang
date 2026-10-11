@@ -111,6 +111,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
+  // 画布尺寸同步器：游戏循环每帧自检，防地址栏伸缩/旋转/分屏导致的位图与渲染器逻辑尺寸脱耦
+  const syncCanvasSizeRef = useRef<(() => void) | null>(null);
 
   // Sound Mute State
   const [isMuted, setIsMuted] = useState(sound.getMuted());
@@ -518,7 +520,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
     const handleResize = () => {
@@ -527,6 +529,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
       const logicalW = parent.clientWidth;
       const logicalH = parent.clientHeight;
+      if (logicalW <= 0 || logicalH <= 0) return; // 布局未就绪时跳过，防脏尺寸入侵
       canvas.width = Math.round(logicalW * dpr);
       canvas.height = Math.round(logicalH * dpr);
       viewWRef.current = logicalW;
@@ -540,14 +543,25 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
     };
 
+    syncCanvasSizeRef.current = handleResize;
     handleResize();
     window.addEventListener('resize', handleResize);
+    // 移动浏览器地址栏伸缩/旋转常不触发 window resize，补挂可视视口监听
+    window.visualViewport?.addEventListener('resize', handleResize);
 
     rendererRef.current = new CanvasRenderer(
       ctx,
       viewWRef.current,
       viewHRef.current,
       bgInkMountains
+    );
+    // 【关键修复】构造后立即告知 dpr：此前 resize 仅在 window resize 事件中调用，
+    // 首次 handleResize 时渲染器尚未存在 → dpr 永久为 1 → 高分屏只绘入位图左上 1/4，
+    // 清屏区外被画卷每帧 0.25 alpha 叠印成鬼影亮画（真机半屏割裂根因）
+    rendererRef.current.resize(
+      viewWRef.current,
+      viewHRef.current,
+      Math.min(2, Math.max(1, window.devicePixelRatio || 1))
     );
 
     // Initial units
@@ -557,6 +571,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     // 卸载清理：超时登记 + BGM 停止
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.visualViewport?.removeEventListener('resize', handleResize);
+      syncCanvasSizeRef.current = null;
       timeoutsRef.current.forEach((id) => clearTimeout(id));
       timeoutsRef.current.clear();
       sound.stopBGM();
@@ -1787,12 +1803,34 @@ export const BattleView: React.FC<BattleViewProps> = ({
   // Main 60FPS Game Loop（依赖清空：内部全部读 ref，不再因状态变化销毁重建）
   // updateSimulation 通过 ref 晚绑定（定义于本 effect 之后）
   const updateSimulationRef = useRef<(dt: number) => void>(() => {});
+  const lastSizeCheckRef = useRef(0);
   useEffect(() => {
     let animId: number;
 
     const gameLoop = (timestamp: number) => {
       const dt = Math.min(0.1, (timestamp - lastTimeRef.current) / 1000);
       lastTimeRef.current = timestamp;
+
+      // 画布自愈：元素/位图/dpr 任一脱耦立即重同步（地址栏伸缩・旋转・分屏・缩放全兼容），250ms 节流防强制回流
+      {
+        const cv = canvasRef.current;
+        const sync = syncCanvasSizeRef.current;
+        if (cv && sync && timestamp - lastSizeCheckRef.current > 250) {
+          lastSizeCheckRef.current = timestamp;
+          const cw = cv.clientWidth;
+          const ch = cv.clientHeight;
+          const dprNow = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+          if (
+            cw > 0 && ch > 0 &&
+            (cw !== viewWRef.current ||
+              ch !== viewHRef.current ||
+              cv.width !== Math.round(cw * dprNow) ||
+              cv.height !== Math.round(ch * dprNow))
+          ) {
+            sync();
+          }
+        }
+      }
 
       if (hitStopTimerRef.current > 0) {
         hitStopTimerRef.current -= dt;
@@ -2622,7 +2660,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
   };
 
   return (
-    <div className="relative w-full h-screen bg-stone-950 select-none overflow-hidden font-sans">
+    <div
+      className="relative w-full h-screen bg-stone-950 select-none overflow-hidden font-sans"
+      style={{ height: '100dvh' }}
+    >
       {/* Top Bar Header */}
       <header className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between gap-4 px-4 md:px-6 py-2.5 bg-stone-950/85 backdrop-blur-md border-b border-stone-800">
         <div className="flex items-center gap-3">

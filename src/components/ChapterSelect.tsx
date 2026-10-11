@@ -49,8 +49,9 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
       <div className="absolute inset-0 opacity-10 pointer-events-none mix-blend-multiply">
         <img
           src={bgInkMountains}
-          alt="Ink background"
+          alt="远山淡墨"
           referrerPolicy="no-referrer"
+          onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
           className="w-full h-full object-cover object-center grayscale contrast-125"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-paper/30 via-transparent to-paper" />

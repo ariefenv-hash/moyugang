@@ -510,12 +510,15 @@ export class CanvasRenderer {
     ctx.fillRect(0, 0, this.width, laneMinY + 40);
 
     // Background Image Art（等比 cover 绘制：窄屏/宽屏均不拉伸变形，底部对齐地平线，横向平铺视差）
+    // 裁掉原画右侧题字栏（防字样钤印随平铺重复），奇偶块水平镜像令接缝天衣无缝；
+    // u0 取模周期为 2×tileW（镜像图案的真实周期），相机连续滚动时相位零跳变
     if (this.bgImage && this.bgImage.naturalWidth > 0) {
       ctx.save();
       ctx.globalAlpha = 0.25;
       const img = this.bgImage;
+      const srcW = Math.round(img.naturalWidth * 0.9);
       const skyH = laneMinY + 60;
-      const imgAR = img.naturalWidth / img.naturalHeight;
+      const imgAR = srcW / img.naturalHeight;
       const targetAR = this.width / Math.max(1, skyH);
       // cover 逻辑：铺满目标区域所需的最小等比缩放
       let drawW: number, drawH: number;
@@ -528,11 +531,22 @@ export class CanvasRenderer {
       }
       // 底部对齐地平线（山景根部贴地），超高部分向天空裁切
       const drawY = skyH - drawH;
-      // 横向平铺 + 视差滚动
       const tileW = drawW;
-      const bgOffset = -((cameraX * 0.15) % tileW);
-      for (let x = bgOffset; x < this.width; x += tileW) {
-        ctx.drawImage(img, x, drawY, tileW, drawH);
+      const pattern = tileW * 2;
+      const u0 = (((cameraX * 0.15) % pattern) + pattern) % pattern;
+      const jStart = Math.floor(u0 / tileW);
+      const jEnd = Math.floor((u0 + this.width) / tileW);
+      for (let j = jStart; j <= jEnd; j++) {
+        const sx = j * tileW - u0;
+        if (((j % 2) + 2) % 2 === 0) {
+          ctx.drawImage(img, 0, 0, srcW, img.naturalHeight, sx, drawY, tileW, drawH);
+        } else {
+          ctx.save();
+          ctx.translate(sx + tileW, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(img, 0, 0, srcW, img.naturalHeight, 0, drawY, tileW, drawH);
+          ctx.restore();
+        }
       }
       ctx.restore();
     }

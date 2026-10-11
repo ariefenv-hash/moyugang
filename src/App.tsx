@@ -239,8 +239,9 @@ export default function App() {
           <div className="absolute inset-x-0 top-0 h-64 md:h-80 pointer-events-none overflow-hidden">
             <img
               src={bgInkMountains}
-              alt="Ink mountains"
+              alt="远山淡墨"
               referrerPolicy="no-referrer"
+              onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
               className="w-full h-full object-cover object-top opacity-18 grayscale contrast-125 mix-blend-multiply"
             />
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-paper/35 to-paper" />
@@ -396,6 +397,7 @@ export default function App() {
                     src={bgHeroAvatar}
                     alt="云砚·青莲剑仙"
                     referrerPolicy="no-referrer"
+                    onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                     className="w-full h-full object-cover object-center contrast-110"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-ink-strong/85 via-transparent to-transparent" />

@@ -258,3 +258,25 @@ Stage Summary:
 - 修改：weaponSystem / canvasRenderer / charRecognizer / BattleView / LoreModal / gameData / vite.config
 - 线上：GitHub Pages 正式运行（main 推送自动部署）；架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js
 - 提醒用户撤销临时 PAT（本轮再次使用后）
+
+---
+Task ID: 13
+Agent: 主 agent (Super Z)
+Task: 无图浏览器全链路实测 + 真机半屏割裂/黑底修复（渲染器 dpr 脱耦根因）
+
+Work Log:
+- 像素级分析用户 Lemur 浏览器截图：右半 (238,230,214,alpha253)=画卷反复叠印鬼影、下半 (0,0,0,0) 全透明透出 stone-950
+- 根因：handleResize 首次运行时 rendererRef 尚为 null（构造函数不接收 dpr）→ 渲染器 dpr 永久=1 → setTransform(1) 下画面只绘入位图左上 1/4，clearRect 同样只清 1/4，drawImage 画卷(tileW>位图宽)溢出清屏区每帧 0.25 alpha 叠印成不透明亮画。桌面 dpr=1 恰好掩盖此 bug（历史测试全绿的原因）
+- 修复四件套：①渲染器构造后立即 resize(逻辑尺寸,dpr) ②gameLoop 内 250ms 节流画布自愈（clientWidth/Height+位图+dpr 三重比对，脱耦即重同步）③visualViewport resize 监听（地址栏伸缩/旋转不触发 window resize 的浏览器兜底）④canvas getContext alpha:false 根绝透明透底
+- 战斗根节点 h-screen → 内联 100dvh（移动浏览器地址栏不再遮挡底部技能键簇）
+- 超宽屏平铺接缝根治：裁掉原画右侧题字栏(srcW×0.9 防字样钤印重复) + 奇偶镜像平铺 + u0 取模周期 2×tileW（镜像图案真实周期，相机滚动相位零跳变）
+- 3 处 <img> 加 onError 隐藏 + 中文 alt（无图模式优雅降级）
+- 重要发现：dev 模式图片属 ES 模块图，拦截=白屏（dev 特性）；对生产构建(vite preview 4173 守护进程)完成无图实测
+- 无图(拦截全部图片)全链路实测 PASS：桌面 1280x800 + 移动 360x780@2x 双端——菜单/心诀/印谱/墨阁/选折/战斗/招募扣墨(190→143)/WASD/三连击/横划/画圆/字诀写「山」/V 切武器/ESC 暂停开合/AFK 败北结算(击破·连墨·用时)/再试一局/撤离/无尽锁定提示，0 真实 JS 异常
+- 有图终验 PASS：360x780 画卷连续无接缝；1720x760 超宽屏镜像平铺天衣无缝；视口 736→800 动态变化位图自愈精确跟随(selfheal_ok=true)
+
+Stage Summary:
+- 修改：BattleView.tsx（画布自愈+dpr 即时告知+100dvh+alpha:false）/ canvasRenderer.ts（镜像平铺+题字裁剪）/ App.tsx / ChapterSelect.tsx（img 兜底）
+- 新增脚本：repro_mobile_split.py / interrogate_dom.py / start_preview_daemon.py / noimg_full_playthrough.py / final_visual_verify.py
+- 截图：final_mobile_battle / final_mobile_736 / final_mobile_800 / final_ultrawide_battle / final_ultrawide_scrolled / noimg_*（12 张）
+- 架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js
