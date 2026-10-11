@@ -1,6 +1,0 @@
-{
-  "name": "墨韵战纪：风雅篇 (Ink & Steel)",
-  "description": "文艺优雅的水墨火柴人战争策略游戏。操控独创风雅剑仙主角，施展落墨剑气、星河笔阵与山河绝技，统领文墨军阵，征战五大诗意关卡。",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
