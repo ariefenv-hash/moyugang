@@ -110,6 +110,8 @@ export interface InkLotusTrap {
   duration: number;
   maxDuration: number;
   isBloomed: boolean;
+  /** 每秒灼伤（字诀评级可放大） */
+  dmgPerSec?: number;
 }
 
 export type ComboTier =
@@ -324,4 +326,16 @@ export interface InkDragon {
   maxLife: number;
   /** 已命中单位 id，防重复伤害 */
   hitIds: Set<string>;
+}
+
+/** 地面墨渍贴花（击杀/重击飞溅留下的水墨痕迹，随时间淡去） */
+export interface InkSplat {
+  id: string;
+  x: number;
+  y: number;
+  r: number;
+  /** 形状随机种子（旋转 + 瓣形抖动，保证每帧渲染一致） */
+  seed: number;
+  life: number;
+  maxLife: number;
 }

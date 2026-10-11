@@ -412,6 +412,86 @@ class SoundEngine {
     this.playPluck(587.33, 0.4);
   }
 
+  // 击杀反馈：墨爆闷响 + 液体飞溅（区别于普通命中，强化"斩落"实感）
+  public playSlay() {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx || !this.master) return;
+
+    try {
+      const now = this.ctx.currentTime;
+
+      // 低频闷响（斩落的重量感）
+      const sub = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      sub.type = 'triangle';
+      sub.frequency.setValueAtTime(95, now);
+      sub.frequency.exponentialRampToValueAtTime(36, now + 0.26);
+      subGain.gain.setValueAtTime(0.3, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      sub.connect(subGain);
+      subGain.connect(this.master);
+      sub.start(now);
+      sub.stop(now + 0.28);
+
+      // 湿墨飞溅噪声（低通扫频，像一大滴墨砸在纸上）
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.24);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.26));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(900, now);
+      filter.frequency.exponentialRampToValueAtTime(140, now + 0.22);
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.26, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(this.master);
+      noise.start(now);
+    } catch {}
+  }
+
+  // 字诀成字：按评级升调的琴音（神品最清越）
+  public playCharCast(grade: 'SHEN' | 'MIAO' | 'NENG') {
+    if (this.isMuted) return;
+    const base = grade === 'SHEN' ? 659.25 : grade === 'MIAO' ? 523.25 : 440;
+    this.playPluck(base, 0.9);
+    if (grade !== 'NENG') {
+      setTimeout(() => this.playPluck(base * 1.25, 1.1), 80);
+    }
+    if (grade === 'SHEN') {
+      setTimeout(() => this.playPluck(base * 1.5, 1.3), 170);
+    }
+  }
+
+  // 字诀失败：墨渍糊纸的闷声
+  public playCharFail() {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx || !this.master) return;
+
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(72, now + 0.16);
+      gain.gain.setValueAtTime(0.16, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.connect(gain);
+      gain.connect(this.master);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    } catch {}
+  }
+
   // Victory fanfare
   public playVictory() {
     if (this.isMuted) return;

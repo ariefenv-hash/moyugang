@@ -155,3 +155,24 @@ Stage Summary:
 - 书法三体接入：楷→标题 / 行→题跋 / 草→战报，UI 信息层仍以文楷保证可读性
 - scripts/patch_avatar_seal.py 可复用（像素级文字/印章移除方案，替代不可靠的 AI 删除式编辑）
 - 未动游戏架构，未迁移 Next.js
+
+---
+Task ID: 8
+Agent: 主 agent (Super Z)
+Task: 字诀汉字识别手势 + 打击感强化 + 矢量武器系统（用户确认暂不迁移 Next.js）
+
+Work Log:
+- 新建 src/utils/charRecognizer.ts：$P 点云识别器变体（弧长重采样 48 点 + 包围盒对角线归一化 + ±0.3rad 五桶旋转 + 双向贪心最近邻），五字模板（之→断水斩 / 山→竹影墨盾 / 火→星河笔阵 / 水→墨荷灵阵 / 王→临江仙），笔画顺序无关
+- 逻辑设计（用户强调"注意逻辑"）：字诀为独立模式开关（顶栏按钮 / C 键），开启后所有笔画进集字缓冲、不触发经典手势（杜绝写字被误判为滑动）；停笔 550ms 自动判定、集满模板笔画数立即判定；笔画数失配惩罚（差≥2笔 ×1.6、差1笔 ×1.18，连笔断笔宽容）；朱印评级 神品(≤0.048)×1.35 / 妙品(≤0.068)×1.15 / 能品×1.0，>0.085 驳回为「墨渍」
+- 算法级验证 scripts/test_char_recognizer.ts：分形中点位移仿真手写（弯曲/噪声/15°斜/缩放），五字规整+潦草全 PASS，乱画圆圈/Z折/螺旋/单横/三横无竖/十字全拒绝，宁拒勿误
+- 新建 src/utils/weaponSystem.ts：SVG path → Path2D 矢量武器注册表，墨锋·青霜剑（剑刃渐变剑脊/上刃高光/菱形玉格/缠绳剑茎/剑首/朱红三缕剑穗，辉光驱动剑锋端火），getWeaponReach=54px 供轨迹/残影采样对齐；注册表留扩充位（青罗伞/惊鸿枪等）
+- canvasRenderer：drawBrushSword 改接矢量武器；剑尖采样 46→54；残影剑长同步；地面墨渍贴花 drawInkSplats（多瓣墨团+卫星墨点，seed 确定性，透视压扁，render 步骤 2.5）；drawSkeletalUnit 受击白闪（flinchTimer>0.1 加性椭圆）；伤害数字 pop-in overshoot（前0.1s 1.55x回落）
+- 打击感分级（applyDamage 重构）：轻击 顿帧28ms/震2.5、重击 50ms/震6/触觉24/40%墨渍、暴击 60ms/震7/触觉30/60%墨渍、击杀 75ms/震9/[25,25,45]触觉+playSlay闷响+必出墨渍；重击受身腾空（altitudeZ+14/vz≥140，Boss免疫）；剑仙受创震屏+顿帧；击杀伤害数字「斩落」金色 1.55x；音频新增 playSlay/playCharCast(评级升调)/playCharFail
+- BattleView：字诀开关+集字缓冲+停笔判定管线+castCharAbility 威力透传（五技能全接 powerMult：斩伤/盾厚/弹幕伤/墨荷半径与灼伤/大招伤害，墨荷新增 dmgPerSec 字段）；executeGesture 抽取共用；已收笔画墨稿预览（青晕+墨芯）；集字状态/判定结果浮签；顶栏字诀按钮；指南/教学/底栏文案更新
+- 验证：tsc 零错误；vite build 1.9s 成功；vite 守护进程重启（pkill+start_vite_daemon.py，直连与网关Host模拟均 200）；agent-browser 冒烟：写字「山」→神品评级→竹影墨盾触发（截图铁证）、三段连击、祝福三选一、败北结算、再试一局、390x844 窄屏，控制台零错误
+
+Stage Summary:
+- 新文件：src/utils/charRecognizer.ts / src/utils/weaponSystem.ts / scripts/test_char_recognizer.ts（可复跑的识别器标定工具）
+- 修改：BattleView.tsx（+约250行）/ canvasRenderer.ts / audio.ts / types/game.ts（InkSplat+dmgPerSec）
+- 交付截图：verify5_menu/battle_init/charmode_on/char_shan（山·神品·竹影墨盾）/attack/kill2/melee/sword_close/mobile + zoom_melee（墨渍贴花特写）/zoom_sword（矢量剑特写）
+- 架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js

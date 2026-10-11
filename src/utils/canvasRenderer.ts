@@ -9,8 +9,10 @@ import {
   SealStamp,
   InkDragon,
   InkTreasure,
+  InkSplat,
 } from '../types/game';
 import { UNIT_CONFIGS } from '../data/gameData';
+import { drawVectorWeapon, getWeaponReach } from './weaponSystem';
 import {
   StickPose,
   makeDefaultPose,
@@ -125,7 +127,8 @@ export class CanvasRenderer {
     shakeY: number = 0,
     inkDragons: InkDragon[] = [],
     treasures: InkTreasure[] = [],
-    inkSlowProgress: number = 0
+    inkSlowProgress: number = 0,
+    inkSplats: InkSplat[] = []
   ) {
     const ctx = this.ctx;
 
@@ -149,6 +152,9 @@ export class CanvasRenderer {
 
     // 2. 2.5D Perspective Ground Plane (Courtyard / Riverbank flagstones)
     this.drawPerspectiveGround(cameraX, worldWidth, laneMinY, laneMaxY, level, gameTime);
+
+    // 2.5 地面墨渍贴花（击杀/重击飞溅的水墨痕迹，画在单位层之下）
+    this.drawInkSplats(inkSplats, cameraX);
 
     // 3. Ground Lotus Traps / Runes
     lotusTraps.forEach((trap) => {
@@ -1026,6 +1032,51 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
+  /** 地面墨渍贴花（seed 决定瓣形，life 驱动淡出；透视压扁贴地） */
+  private drawInkSplats(splats: InkSplat[], cameraX: number) {
+    if (splats.length === 0) return;
+    const ctx = this.ctx;
+    for (const s of splats) {
+      const screenX = s.x - cameraX;
+      if (screenX < -90 || screenX > this.width + 90) continue;
+      const ageK = Math.max(0, s.life / s.maxLife);
+      const alpha = 0.4 * Math.min(1, ageK * 1.7); // 前段饱和、尾段淡去
+      ctx.save();
+      ctx.translate(screenX, s.y);
+      ctx.scale(1, 0.36);
+      ctx.fillStyle = `rgba(9, 9, 11, ${alpha})`;
+      // 主墨团（多瓣不规则形，seed 确定性抖动）
+      ctx.beginPath();
+      const lobes = 7;
+      for (let i = 0; i <= lobes; i++) {
+        const li = i % lobes;
+        const ang = s.seed + li * ((Math.PI * 2) / lobes);
+        const rr = s.r * (0.6 + 0.4 * Math.abs(Math.sin(s.seed * 3.7 + li * 2.3)));
+        const px = Math.cos(ang) * rr;
+        const py = Math.sin(ang) * rr * 0.85;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      // 卫星飞溅墨点
+      for (let i = 0; i < 4; i++) {
+        const ang = s.seed * 1.7 + i * 1.9;
+        const dist = s.r * (1.18 + 0.55 * Math.abs(Math.sin(s.seed + i * 4.1)));
+        ctx.beginPath();
+        ctx.arc(
+          Math.cos(ang) * dist,
+          Math.sin(ang) * dist * 0.72,
+          s.r * 0.09 + 0.8,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
   /** 冲刺 / 重击残影（姿势快照幽灵剪影） */
   private drawAfterimages(cameraX: number, laneMinY: number, laneMaxY: number) {
     if (this.afterimages.length === 0) return;
@@ -1042,6 +1093,7 @@ export class CanvasRenderer {
       ctx.lineWidth = 4;
       ctx.lineCap = 'round';
       const p = g.pose;
+      const ghostReach = getWeaponReach('QINGSHUANG_JIAN');
       // 腿（简化折线）
       ctx.beginPath();
       ctx.moveTo(p.hipX, p.hipY);
@@ -1064,7 +1116,7 @@ export class CanvasRenderer {
       ctx.lineTo(ex, ey);
       ctx.lineTo(hx, hy);
       ctx.moveTo(hx, hy);
-      ctx.lineTo(hx + Math.cos(p.swordAngle) * 44, hy + Math.sin(p.swordAngle) * 44);
+      ctx.lineTo(hx + Math.cos(p.swordAngle) * ghostReach, hy + Math.sin(p.swordAngle) * ghostReach);
       ctx.stroke();
       // 头
       ctx.beginPath();
@@ -1210,15 +1262,16 @@ export class CanvasRenderer {
       this.prevTrailEmit = pose.trailEmit;
     }
 
-    // —— 剑刃世界坐标（轨迹 / 残影采样点） ——
+    // —— 剑刃世界坐标（轨迹 / 残影采样点；长度与矢量武器系统对齐） ——
+    const swordReach = getWeaponReach('QINGSHUANG_JIAN');
     const shLX = pose.hipX + Math.sin(pose.torsoLean) * 22;
     const shLY = pose.hipY - 22;
     const elbX = shLX + Math.sin(pose.frontArmA) * 14;
     const elbY = shLY + Math.cos(pose.frontArmA) * 14;
     const handLX = elbX + Math.sin(pose.frontArmA + pose.frontArmB) * 14;
     const handLY = elbY + Math.cos(pose.frontArmA + pose.frontArmB) * 14;
-    const tipLX = handLX + Math.cos(pose.swordAngle) * 46;
-    const tipLY = handLY + Math.sin(pose.swordAngle) * 46;
+    const tipLX = handLX + Math.cos(pose.swordAngle) * swordReach;
+    const tipLY = handLY + Math.sin(pose.swordAngle) * swordReach;
     const handWX = hero.x + handLX * facing * scale;
     const handWY = heroY + handLY * scale;
     const tipWX = hero.x + tipLX * facing * scale;
@@ -1408,7 +1461,7 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
-  /** 墨锋剑（辉光强度 0-1 驱动剑锋光晕） */
+  /** 墨锋剑：矢量武器系统渲染（SVG Path2D 剑形，辉光 0-1 驱动剑锋光晕） */
   private drawBrushSword(
     ctx: CanvasRenderingContext2D,
     handX: number,
@@ -1419,42 +1472,7 @@ export class CanvasRenderer {
     ctx.save();
     ctx.translate(handX, handY);
     ctx.rotate(angle);
-
-    // 剑柄 & 玉格
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(-5, -2, 8, 4);
-    ctx.fillStyle = '#06b6d4';
-    ctx.beginPath();
-    ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 光辉剑刃
-    const bladeGrad = ctx.createLinearGradient(0, 0, 46, 0);
-    bladeGrad.addColorStop(0, '#f8fafc');
-    bladeGrad.addColorStop(0.7, '#38bdf8');
-    bladeGrad.addColorStop(1, '#0284c7');
-
-    ctx.fillStyle = bladeGrad;
-    ctx.beginPath();
-    ctx.moveTo(0, -2);
-    ctx.lineTo(36, -1.6);
-    ctx.lineTo(46, 0);
-    ctx.lineTo(36, 1.6);
-    ctx.lineTo(0, 2);
-    ctx.closePath();
-    ctx.fill();
-
-    // 剑锋辉光
-    if (glow > 0.18) {
-      ctx.shadowColor = '#38bdf8';
-      ctx.shadowBlur = 6 + glow * 16;
-      ctx.fillStyle = `rgba(125, 211, 252, ${0.25 + glow * 0.5})`;
-      ctx.beginPath();
-      ctx.arc(46, 0, 2.5 + glow * 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
+    drawVectorWeapon(ctx, 'QINGSHUANG_JIAN', glow);
     ctx.restore();
   }
 
@@ -1997,6 +2015,19 @@ export class CanvasRenderer {
       }
     }
 
+    // 受击白闪（命中前几帧加性提亮，强化打击反馈）
+    const flashK = unit.flinchTimer > 0.1 ? Math.min(1, (unit.flinchTimer - 0.1) / 0.2) : 0;
+    if (flashK > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = flashK * 0.38;
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath();
+      ctx.ellipse(0, -20, 13, 25, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     ctx.restore();
 
     // Overhead HP Bar（Boss 抬高避让冠饰）
@@ -2389,7 +2420,7 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
-  // Draw Floating Damage Numbers
+  // Draw Floating Damage Numbers（出生弹跳：前 0.1s 由 1.55x 回落，pop-in overshoot）
   private drawDamageNumber(d: DamageNumber, cameraX: number) {
     const screenX = d.x - cameraX;
     if (screenX < -50 || screenX > this.width + 50) return;
@@ -2397,8 +2428,10 @@ export class CanvasRenderer {
     const ctx = this.ctx;
     ctx.save();
     ctx.globalAlpha = Math.max(0, d.alpha);
+    const age = 0.75 - d.life;
+    const pop = age < 0.1 ? 1 + 0.55 * (1 - age / 0.1) : 1;
     ctx.fillStyle = d.color;
-    ctx.font = `bold ${Math.round(14 * d.scale)}px "Plus Jakarta Sans", sans-serif`;
+    ctx.font = `bold ${Math.round(14 * d.scale * pop)}px "Plus Jakarta Sans", sans-serif`;
     ctx.textAlign = 'center';
     ctx.fillText(d.text, screenX, d.y);
     ctx.restore();

@@ -18,6 +18,7 @@ import {
   BlessingMults,
   InkDragon,
   InkTreasure,
+  InkSplat,
 } from '../types/game';
 import {
   UNIT_CONFIGS,
@@ -28,6 +29,12 @@ import {
 import { CanvasRenderer } from '../utils/canvasRenderer';
 import { sound } from '../utils/audio';
 import { GestureRecognizer, GestureResult } from '../utils/gestureRecognizer';
+import {
+  recognizeChar,
+  CHAR_MAX_STROKES,
+  CharStrokePoint,
+  CharMatchResult,
+} from '../utils/charRecognizer';
 import { Joystick } from './Joystick';
 import { FloatingJoystick } from './FloatingJoystick';
 import { PauseOverlay } from './PauseOverlay';
@@ -59,7 +66,31 @@ import {
   X,
   Hand,
   Gem,
+  Type,
 } from 'lucide-react';
+
+/** 字诀模式：已收笔画的墨稿预览（青晕 + 墨芯双描，停笔判定前可见所书之字） */
+const drawCharStrokesPreview = (
+  ctx: CanvasRenderingContext2D,
+  strokes: CharStrokePoint[][]
+) => {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const s of strokes) {
+    if (s.length < 2) continue;
+    ctx.beginPath();
+    ctx.moveTo(s[0].x, s[0].y);
+    for (let i = 1; i < s.length; i++) ctx.lineTo(s[i].x, s[i].y);
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.28)';
+    ctx.lineWidth = 13;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(9, 9, 11, 0.85)';
+    ctx.lineWidth = 6.5;
+    ctx.stroke();
+  }
+  ctx.restore();
+};
 
 interface BattleViewProps {
   level: LevelConfig;
@@ -240,6 +271,17 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
   // Recent Recognized Calligraphy Gesture Badge (e.g. 「横 · 断水东流」)
   const [gestureBadge, setGestureBadge] = useState<{ text: string; sub: string } | null>(null);
+
+  // ===== 字诀模式（汉字识别手势）：逐笔集字，停笔自动判定，朱印评级定威力 =====
+  const charModeRef = useRef(false);
+  const [charMode, setCharMode] = useState(false);
+  const charStrokesRef = useRef<CharStrokePoint[][]>([]);
+  const charCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [charStrokeCount, setCharStrokeCount] = useState(0);
+  const [charHint, setCharHint] = useState<{ text: string; sub: string } | null>(null);
+
+  // ===== 地面墨渍贴花（击杀/重击飞溅痕迹） =====
+  const inkSplatsRef = useRef<InkSplat[]>([]);
 
   // 2.5D Arena Geometry
   const WORLD_WIDTH = 2600;
@@ -432,6 +474,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
         triggerSkillInkLotus();
       } else if (code === 'r' || code === 'i') {
         triggerSkillUltimate();
+      } else if (code === 'c') {
+        toggleCharMode();
       } else if (code === '1') {
         setArmyCommand('DEFEND');
       } else if (code === '2') {
@@ -607,6 +651,102 @@ export const BattleView: React.FC<BattleViewProps> = ({
     triggerHaptic(40);
   };
 
+  // 地面墨渍：击杀/重击飞溅留痕（上限 26 张，超出移除最旧）
+  const spawnInkSplat = (x: number, y: number, r: number) => {
+    const splats = inkSplatsRef.current;
+    splats.push({
+      id: `splat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      x,
+      y,
+      r,
+      seed: Math.random() * Math.PI * 2,
+      life: 5,
+      maxLife: 5,
+    });
+    if (splats.length > 26) splats.splice(0, splats.length - 26);
+  };
+
+  // ===== 字诀助手：模式切换 / 收笔判定 / 技能投射 =====
+  const toggleCharMode = useCallback(() => {
+    charModeRef.current = !charModeRef.current;
+    setCharMode(charModeRef.current);
+    charStrokesRef.current = [];
+    setCharStrokeCount(0);
+    if (charCommitTimerRef.current) {
+      clearTimeout(charCommitTimerRef.current);
+      charCommitTimerRef.current = null;
+    }
+    setCharHint({
+      text: charModeRef.current ? '字诀 · 开' : '字诀 · 合',
+      sub: charModeRef.current ? '以指书字：之 山 火 水 王' : '回归挥毫手势',
+    });
+    safeTimeout(() => setCharHint(null), 1700);
+    sound.playPluck(charModeRef.current ? 783.99 : 523.25, 0.5);
+  }, [safeTimeout]);
+
+  // 字诀收笔判定：停笔 550ms 自动识别（集满笔画数则立即判定）
+  const commitCharStrokes = () => {
+    if (charCommitTimerRef.current) {
+      clearTimeout(charCommitTimerRef.current);
+      charCommitTimerRef.current = null;
+    }
+    const strokes = charStrokesRef.current;
+    charStrokesRef.current = [];
+    setCharStrokeCount(0);
+
+    if (heroRef.current.state === 'DEAD') return;
+    const match = recognizeChar({ strokes });
+    if (!match) {
+      sound.playCharFail();
+      setCharHint({ text: '墨渍', sub: '未成字 · 试试「之 山 火 水 王」' });
+      safeTimeout(() => setCharHint((prev) => (prev?.text === '墨渍' ? null : prev)), 1500);
+      return;
+    }
+
+    sound.playCharCast(match.grade);
+    triggerHaptic(match.grade === 'SHEN' ? [20, 30, 20] : 20);
+    triggerSealStamp(heroRef.current.x, heroRef.current.y - 72, match.char);
+    setCharHint({
+      text: `「${match.char}」`,
+      sub: `${match.gradeText} · ${match.name}（${match.poetic}）`,
+    });
+    safeTimeout(
+      () => setCharHint((prev) => (prev?.text === `「${match.char}」` ? null : prev)),
+      2400
+    );
+    castCharAbility(match);
+  };
+
+  const scheduleCharCommit = () => {
+    if (charCommitTimerRef.current) clearTimeout(charCommitTimerRef.current);
+    charCommitTimerRef.current = safeTimeout(() => {
+      charCommitTimerRef.current = null;
+      commitCharStrokes();
+    }, 550);
+  };
+
+  const castCharAbility = (match: CharMatchResult) => {
+    const hero = heroRef.current;
+    if (hero.state === 'DEAD') return;
+    switch (match.ability) {
+      case 'dash_slash':
+        triggerSkillDashSlash(undefined, match.powerMult);
+        break;
+      case 'bamboo_shield':
+        triggerSkillBambooShield(match.powerMult);
+        break;
+      case 'starlight_barrage':
+        triggerSkillStarlightBarrage(match.powerMult);
+        break;
+      case 'lotus_trap':
+        triggerSkillInkLotus(hero.x + hero.facing * 40, hero.y, match.powerMult);
+        break;
+      case 'ultimate_landscape':
+        triggerSkillUltimate(match.powerMult);
+        break;
+    }
+  };
+
   // Add Hit to Calligraphy Combo Counter
   const registerHit = (isCritical = false) => {
     const prev = comboRef.current;
@@ -690,13 +830,6 @@ export const BattleView: React.FC<BattleViewProps> = ({
   ) => {
     sound.playInkHit(isCritical || dmg > 80, isCritical);
 
-    if (isCritical || dmg > 80) {
-      triggerShake(6, 0.22);
-      triggerHitStop(0.05);
-    } else {
-      triggerShake(2.5, 0.12);
-    }
-
     if (target === 'HERO') {
       const hero = heroRef.current;
       if (hero.isInvulnerable || hero.state === 'DEAD') return;
@@ -714,6 +847,11 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
       hero.hp = Math.max(0, hero.hp - finalDmg);
       hero.flinchTimer = 0.2;
+
+      // 剑仙受创反馈：震屏 + 短顿帧 + 触觉
+      triggerShake(4, 0.18);
+      triggerHitStop(0.035);
+      triggerHaptic(18);
 
       // 墨滞时刻：首次跌破三成气血，天地凝墨缓技喘息（每场一次）
       if (
@@ -754,6 +892,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       if (isGameOverRef.current) return;
       playerBaseHpRef.current = Math.max(0, playerBaseHpRef.current - dmg);
       setPlayerBaseHp(playerBaseHpRef.current);
+      triggerShake(3.5, 0.2);
       damageNumbersRef.current.push({
         id: `dmg_${Math.random()}`,
         x: 100,
@@ -786,6 +925,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       if (levelRef.current.endless || isGameOverRef.current) return;
       enemyBaseHpRef.current = Math.max(0, enemyBaseHpRef.current - dmg);
       setEnemyBaseHp(enemyBaseHpRef.current);
+      triggerShake(3, 0.16);
       damageNumbersRef.current.push({
         id: `dmg_${Math.random()}`,
         x: WORLD_WIDTH - 100,
@@ -817,8 +957,38 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     const unit = target;
     unit.hp -= dmg;
-    unit.flinchTimer = 0.2;
+    const killShot = unit.hp <= 0 && unit.isEnemy;
+    const heavyHit = isCritical || dmg > 80 || killShot;
+    unit.flinchTimer = heavyHit ? 0.32 : 0.2;
     registerHit(isCritical);
+
+    // ===== 打击感分级：轻击/重击/暴击/击杀 → 顿帧·震屏·触觉逐级加码 =====
+    if (killShot) {
+      triggerHitStop(0.075);
+      triggerShake(9, 0.3);
+      triggerHaptic([25, 25, 45]);
+      sound.playSlay();
+      spawnInkSplat(unit.x, unit.y, 22 + Math.random() * 10);
+    } else if (isCritical) {
+      triggerHitStop(0.06);
+      triggerShake(7, 0.24);
+      triggerHaptic(30);
+      if (Math.random() < 0.6) spawnInkSplat(unit.x, unit.y, 12 + Math.random() * 6);
+    } else if (dmg > 80) {
+      triggerHitStop(0.05);
+      triggerShake(6, 0.2);
+      triggerHaptic(24);
+      if (Math.random() < 0.4) spawnInkSplat(unit.x, unit.y, 10 + Math.random() * 6);
+    } else {
+      triggerHitStop(0.028);
+      triggerShake(2.5, 0.12);
+    }
+
+    // 重击受身腾空：受击者被击得离地弹起（Boss 沉稳不可挑空）
+    if (heavyHit && !unit.isBoss) {
+      unit.altitudeZ += 14;
+      unit.vz = Math.max(unit.vz, 140);
+    }
 
     if (isCritical) {
       triggerSealStamp(unit.x, unit.y - 45, '斩');
@@ -828,27 +998,38 @@ export const BattleView: React.FC<BattleViewProps> = ({
       id: `dmg_${Math.random()}`,
       x: unit.x,
       y: unit.y - unit.altitudeZ - 55,
-      text: isCritical ? `暴击 -${Math.round(dmg)}` : `-${Math.round(dmg)}`,
-      color: unit.isEnemy ? (isCritical ? '#facc15' : '#ffffff') : '#ef4444',
+      text: killShot
+        ? `斩落 -${Math.round(dmg)}`
+        : isCritical
+          ? `暴击 -${Math.round(dmg)}`
+          : `-${Math.round(dmg)}`,
+      color: unit.isEnemy
+        ? killShot
+          ? '#fbbf24'
+          : isCritical
+            ? '#facc15'
+            : '#ffffff'
+        : '#ef4444',
       alpha: 1,
-      scale: isCritical ? 1.4 : 1.0,
+      scale: killShot ? 1.55 : isCritical ? 1.4 : 1.0,
       life: 0.75,
     });
 
-    for (let i = 0; i < (isCritical ? 8 : 4); i++) {
+    const burst = killShot ? 14 : heavyHit ? 8 : 4;
+    for (let i = 0; i < burst; i++) {
       particlesRef.current.push({
         id: `p_${Math.random()}`,
         x: unit.x,
         y: unit.y,
         altitudeZ: unit.altitudeZ + 25,
-        vx: (Math.random() - 0.5) * 160,
-        vy: (Math.random() - 0.5) * 60,
-        vz: Math.random() * 90 + 40,
+        vx: (Math.random() - 0.5) * (killShot ? 240 : 160),
+        vy: (Math.random() - 0.5) * (killShot ? 90 : 60),
+        vz: Math.random() * (killShot ? 150 : 90) + 40,
         color: unit.isEnemy ? '#09090b' : '#38bdf8',
-        size: Math.random() * 3.5 + 2,
+        size: Math.random() * (killShot ? 4.5 : 3.5) + 2,
         alpha: 1,
-        life: 0.6,
-        maxLife: 0.6,
+        life: killShot ? 0.75 : 0.6,
+        maxLife: killShot ? 0.75 : 0.6,
         type: 'INK',
       });
     }
@@ -1025,8 +1206,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     sound.playPluck(659.25, 0.4);
   };
 
-  // Skill 1: Dash Slash (Q or Horizontal Swipe 「横」)
-  const triggerSkillDashSlash = (forceDirection?: 'LEFT' | 'RIGHT') => {
+  // Skill 1: Dash Slash (Q or Horizontal Swipe 「横」 or 字诀「之」)；powerMult 由字诀评级驱动
+  const triggerSkillDashSlash = (forceDirection?: 'LEFT' | 'RIGHT', powerMult: number = 1) => {
     const hero = heroRef.current;
     if (hero.state === 'DEAD' || skillCdsRef.current.dash_slash > 0 || isPausedRef.current) return;
 
@@ -1054,7 +1235,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     unitsRef.current.forEach((u) => {
       if (u.isEnemy && u.hp > 0 && u.x >= minX && u.x <= maxX && Math.abs(u.y - hero.y) <= 50) {
-        applyDamage(u, hero.attack * 2.8, true, hero.x, hero.y);
+        applyDamage(u, hero.attack * 2.8 * powerMult, true, hero.x, hero.y);
       }
     });
 
@@ -1070,8 +1251,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }, 350);
   };
 
-  // Skill 2: Bamboo Shield (W / L or Circle Gesture 「圆」)
-  const triggerSkillBambooShield = () => {
+  // Skill 2: Bamboo Shield (W / L or Circle Gesture 「圆」 or 字诀「山」)
+  const triggerSkillBambooShield = (powerMult: number = 1) => {
     const hero = heroRef.current;
     if (hero.state === 'DEAD' || skillCdsRef.current.bamboo_shield > 0 || isPausedRef.current) return;
 
@@ -1079,8 +1260,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     triggerSealStamp(hero.x, hero.y - 40, '阵');
     hero.state = 'SKILL_SHIELD';
     hero.stateTime = 0;
-    // 风雅领域共鸣增幅：护盾厚度随共鸣等级提升
-    hero.shieldHp = Math.round(280 * resonanceMult);
+    // 风雅领域共鸣增幅：护盾厚度随共鸣等级提升；字诀评级再乘威力
+    hero.shieldHp = Math.round(280 * resonanceMult * powerMult);
     hero.shieldTimer = 7.0;
 
     applySkillCd('bamboo_shield', 8.0);
@@ -1102,8 +1283,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     });
   };
 
-  // Skill 3: Starlight Barrage (E / U or Zigzag Gesture 「折」)
-  const triggerSkillStarlightBarrage = () => {
+  // Skill 3: Starlight Barrage (E / U or Zigzag Gesture 「折」 or 字诀「火」)
+  const triggerSkillStarlightBarrage = (powerMult: number = 1) => {
     const hero = heroRef.current;
     if (hero.state === 'DEAD' || skillCdsRef.current.starlight_barrage > 0 || isPausedRef.current) return;
 
@@ -1128,7 +1309,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           vx: Math.cos(spreadAngle) * speed * heroRef.current.facing,
           vy: Math.sin(spreadAngle) * (speed * 0.2),
           vz: 0,
-          damage: hero.attack * 0.95,
+          damage: hero.attack * 0.95 * powerMult,
           isEnemy: false,
           type: 'QUILL',
           pierce: true,
@@ -1139,8 +1320,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
   };
 
-  // Skill 4: Ink Lotus Trap (T)
-  const triggerSkillInkLotus = (customX?: number, customY?: number) => {
+  // Skill 4: Ink Lotus Trap (T or 字诀「水」)；评级放大半径与灼伤
+  const triggerSkillInkLotus = (customX?: number, customY?: number, powerMult: number = 1) => {
     const hero = heroRef.current;
     if (hero.state === 'DEAD' || skillCdsRef.current.lotus_trap > 0 || isPausedRef.current) return;
 
@@ -1155,16 +1336,17 @@ export const BattleView: React.FC<BattleViewProps> = ({
       id: `lotus_${Date.now()}`,
       x: spawnX,
       y: spawnY,
-      radius: 80,
+      radius: Math.round(80 * Math.sqrt(powerMult)),
       isEnemy: false,
       duration: 12.0,
       maxDuration: 12.0,
       isBloomed: false,
+      dmgPerSec: 15 * powerMult,
     });
   };
 
-  // Ultimate Skill: River Immortal (R / Space)
-  const triggerSkillUltimate = () => {
+  // Ultimate Skill: River Immortal (R / Space or 字诀「王」)
+  const triggerSkillUltimate = (powerMult: number = 1) => {
     const hero = heroRef.current;
     if (
       hero.state === 'DEAD' ||
@@ -1189,12 +1371,12 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     unitsRef.current.forEach((u) => {
       if (u.isEnemy && u.hp > 0) {
-        applyDamage(u, hero.attack * 4.8, true, hero.x, hero.y);
+        applyDamage(u, hero.attack * 4.8 * powerMult, true, hero.x, hero.y);
         u.x += 50;
       }
     });
 
-    applyDamage('ENEMY_BASE', hero.attack * 3.5);
+    applyDamage('ENEMY_BASE', hero.attack * 3.5 * powerMult);
 
     unitsRef.current.forEach((u) => {
       if (!u.isEnemy) {
@@ -1264,6 +1446,12 @@ export const BattleView: React.FC<BattleViewProps> = ({
       return;
     }
 
+    // 字诀模式：新笔入字时取消待判定的收笔计时
+    if (charModeRef.current && charCommitTimerRef.current) {
+      clearTimeout(charCommitTimerRef.current);
+      charCommitTimerRef.current = null;
+    }
+
     gestureRecognizer.current.startStroke(clientX, clientY);
   };
 
@@ -1306,29 +1494,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
-    // 浮动摇杆释放：归零输入并隐藏
-    const joy = floatJoyRef.current;
-    if (joy.active && e.pointerId === joy.pointerId) {
-      const cleared = {
-        active: false,
-        pointerId: -1,
-        baseX: 0,
-        baseY: 0,
-        knobX: 0,
-        knobY: 0,
-      };
-      floatJoyRef.current = cleared;
-      setFloatJoy(cleared);
-      joystickVector.current = { x: 0, y: 0 };
-      return;
-    }
-
-    const gesture = gestureRecognizer.current.endStroke();
-    if (!gesture) return;
-    // 识别成功触觉反馈（轻震）
-    if (gesture.type !== 'DRAG') triggerHaptic(12);
-
+  /** 经典手势 → 技能执行（挥毫模式与字诀模式的快速滑笔共用） */
+  const executeGesture = (gesture: GestureResult) => {
     const worldStartX = gesture.startX + cameraX.current;
     const worldEndX = gesture.endX + cameraX.current;
     const worldY = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, gesture.endY));
@@ -1417,6 +1584,50 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }, 1800);
   };
 
+  const handlePointerUp = (e: React.PointerEvent) => {
+    // 浮动摇杆释放：归零输入并隐藏
+    const joy = floatJoyRef.current;
+    if (joy.active && e.pointerId === joy.pointerId) {
+      const cleared = {
+        active: false,
+        pointerId: -1,
+        baseX: 0,
+        baseY: 0,
+        knobX: 0,
+        knobY: 0,
+      };
+      floatJoyRef.current = cleared;
+      setFloatJoy(cleared);
+      joystickVector.current = { x: 0, y: 0 };
+      return;
+    }
+
+    // 字诀模式：先截取轨迹点再走集字管线；不触发经典手势（避免写字被误判为滑动）
+    if (charModeRef.current) {
+      const strokePts = gestureRecognizer.current
+        .getPoints()
+        .map((p) => ({ x: p.x, y: p.y }));
+      const gesture = gestureRecognizer.current.endStroke();
+      if (strokePts.length >= 2 && gesture) {
+        charStrokesRef.current.push(strokePts);
+        setCharStrokeCount(charStrokesRef.current.length);
+        if (charStrokesRef.current.length >= CHAR_MAX_STROKES) {
+          commitCharStrokes();
+        } else {
+          scheduleCharCommit();
+        }
+      }
+      return;
+    }
+
+    const gesture = gestureRecognizer.current.endStroke();
+    if (!gesture) return;
+    // 识别成功触觉反馈（轻震）
+    if (gesture.type !== 'DRAG') triggerHaptic(12);
+
+    executeGesture(gesture);
+  };
+
   // Main 60FPS Game Loop（依赖清空：内部全部读 ref，不再因状态变化销毁重建）
   // updateSimulation 通过 ref 晚绑定（定义于本 effect 之后）
   const updateSimulationRef = useRef<(dt: number) => void>(() => {});
@@ -1477,13 +1688,18 @@ export const BattleView: React.FC<BattleViewProps> = ({
           screenShakeRef.current.y,
           inkDragonsRef.current,
           treasuresRef.current,
-          inkSlowTimerRef.current > 0 ? inkSlowTimerRef.current / INK_SLOW_DURATION : 0
+          inkSlowTimerRef.current > 0 ? inkSlowTimerRef.current / INK_SLOW_DURATION : 0,
+          inkSplatsRef.current
         );
 
         // Render Real-time Calligraphy Brush Trail on screen
         const ctx = canvasRef.current.getContext('2d');
         if (ctx) {
           gestureRecognizer.current.drawBrushTrail(ctx);
+          // 字诀模式：已收笔画的墨稿预览（停笔判定前可见所书之字）
+          if (charModeRef.current && charStrokesRef.current.length > 0) {
+            drawCharStrokesPreview(ctx, charStrokesRef.current);
+          }
         }
       }
 
@@ -1794,7 +2010,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
         const d = Math.hypot(u.x - trap.x, u.y - trap.y);
         if (d <= trap.radius) {
           if (u.isEnemy) {
-            u.hp -= 15 * dt;
+            u.hp -= (trap.dmgPerSec ?? 15) * dt;
           } else {
             if (!trap.isBloomed) {
               trap.isBloomed = true;
@@ -1937,6 +2153,13 @@ export const BattleView: React.FC<BattleViewProps> = ({
       if (dragon.life <= 0) {
         inkDragonsRef.current.splice(i, 1);
       }
+    }
+
+    // 地面墨渍贴花衰减
+    for (let i = inkSplatsRef.current.length - 1; i >= 0; i--) {
+      const sp = inkSplatsRef.current[i];
+      sp.life -= dt;
+      if (sp.life <= 0) inkSplatsRef.current.splice(i, 1);
     }
 
     // Update Units
@@ -2369,6 +2592,20 @@ export const BattleView: React.FC<BattleViewProps> = ({
             </button>
           </div>
 
+          {/* 字诀模式：汉字识别手势（逐笔书写，停笔判定） */}
+          <button
+            onClick={toggleCharMode}
+            className={`flex items-center gap-1 px-2.5 py-1.5 text-[11px] rounded-lg border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+              charMode
+                ? 'bg-amber-800/90 text-amber-100 border-amber-400/80 font-bold shadow-[0_0_10px_rgba(245,158,11,0.45)]'
+                : 'bg-stone-900 text-stone-300 border-stone-800 hover:text-stone-100'
+            }`}
+            title="字诀模式：逐笔书写汉字施法（之=断水斩 山=墨盾 火=笔阵 水=墨荷 王=大招）· 快捷键 C"
+          >
+            <Type className="w-3.5 h-3.5 text-amber-400" />
+            <span>字诀</span>
+          </button>
+
           <button
             onClick={() => setShowGestureGuide((prev) => !prev)}
             className="p-1.5 text-stone-400 hover:text-stone-100 bg-stone-900 border border-stone-800 rounded-lg transition-colors cursor-pointer"
@@ -2472,6 +2709,25 @@ export const BattleView: React.FC<BattleViewProps> = ({
         </div>
       )}
 
+      {/* 字诀：集字状态 / 判定结果（位于手势徽章下方） */}
+      {charHint && (
+        <div className="absolute top-56 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-fade-in">
+          <div className="px-5 py-2 bg-stone-950/90 border border-amber-500/70 rounded-2xl backdrop-blur-md shadow-2xl flex items-center gap-2">
+            <span className="text-lg font-bold font-serif text-amber-300">{charHint.text}</span>
+            <span className="text-xs font-serif text-stone-200">{charHint.sub}</span>
+          </div>
+        </div>
+      )}
+      {charMode && !charHint && (
+        <div className="absolute top-56 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+          <div className="px-4 py-1.5 bg-stone-950/85 border border-amber-600/50 rounded-xl backdrop-blur-md">
+            <span className="text-xs font-serif text-amber-200 tracking-wider">
+              ✍ 字诀集字 · 已书 {charStrokeCount} 笔（停笔即判定 · 之/山/火/水/王）
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Gesture Quick Guide Overlay Modal */}
       {showGestureGuide && (
         <div className="absolute top-16 right-4 md:right-6 z-40 max-w-xs p-4 bg-stone-900/95 border border-stone-700 rounded-2xl shadow-2xl backdrop-blur-md text-xs text-stone-300 space-y-2 animate-fade-in font-sans max-h-[75vh] overflow-y-auto">
@@ -2494,6 +2750,14 @@ export const BattleView: React.FC<BattleViewProps> = ({
           <p><strong className="text-cyan-300">「提」划（向上）：</strong>轻功腾跃跳起</p>
           <p><strong className="text-cyan-300">「画圆」⭕：</strong>释放【竹影墨盾 / 墨荷灵阵】</p>
           <p><strong className="text-cyan-300">「折」划（Z型）：</strong>万毫齐发【星河笔阵】</p>
+          <div className="pt-1.5 border-t border-stone-800">
+            <p className="text-[11px] font-bold text-amber-300">
+              【字诀 · 以指书字】点「字诀」开启（快捷键 C），逐笔写整个字，停笔自动判定：
+            </p>
+            <p className="text-amber-200">「之」→ 断水斩 ·「山」→ 竹影墨盾 ·「火」→ 星河笔阵</p>
+            <p className="text-amber-200">「水」→ 墨荷灵阵 ·「王」→ 临江仙（需绝意满）</p>
+            <p className="text-[10px] text-stone-400">字写得越正评级越高：神品 ×1.35 · 妙品 ×1.15 · 能品 ×1.0</p>
+          </div>
           <div className="pt-1 border-t border-stone-800 text-[10px] text-stone-400 space-y-1">
             <p>* 电脑端键盘（WASD/J/Q/W/E/R/Space）全程原生支持！</p>
             <p className="text-amber-300/80">
@@ -2697,7 +2961,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
           {controlMode === 'GESTURE' ? (
             <div className="text-[11px] font-serif text-stone-400 bg-stone-950/70 border border-stone-800 px-3 py-1 rounded-lg">
-              ✨ 挥毫手势模式：点击点地漫步 · 横划破水 · 竖划震天 · 画圆起盾
+              ✨ 挥毫手势：点地漫步 · 横划破水 · 画圆起盾 · 点「字诀」可写字施法（C）
             </div>
           ) : controlMode === 'DUAL' ? (
             <div className="text-[11px] font-serif text-emerald-300/90 bg-stone-950/70 border border-emerald-800/50 px-3 py-1 rounded-lg">
@@ -2738,14 +3002,14 @@ export const BattleView: React.FC<BattleViewProps> = ({
                 <span className="text-[9px] font-serif">断水</span>
               </button>
               <button
-                onClick={triggerSkillBambooShield}
+                onClick={() => triggerSkillBambooShield()}
                 className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-emerald-200 active:scale-95"
               >
                 <Shield className="w-4 h-4 text-emerald-400 mb-0.5" />
                 <span className="text-[9px] font-serif">竹影</span>
               </button>
               <button
-                onClick={triggerSkillStarlightBarrage}
+                onClick={() => triggerSkillStarlightBarrage()}
                 className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-amber-200 active:scale-95"
               >
                 <Sparkles className="w-4 h-4 text-amber-400 mb-0.5" />
@@ -2763,7 +3027,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
           {/* Luminous Ultimate Seal Button: River Immortal (临江仙) */}
           <button
-            onClick={triggerSkillUltimate}
+            onClick={() => triggerSkillUltimate()}
             disabled={heroEnergy < 100 || skillCds.ultimate_landscape > 0}
             className={`relative flex flex-col items-center justify-center w-16 h-16 rounded-2xl border-2 shadow-2xl transition-all cursor-pointer ${
               heroEnergy >= 100 && skillCds.ultimate_landscape === 0
@@ -2819,7 +3083,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
               </li>
             </ol>
             <p className="mt-2 pt-2 border-t rule-ink text-[10px] text-ink-light">
-              提示：ESC / P 可随时暂停 · 连墨45召墨龙 · 集齐文房四宝获「文光焕彩」· 残血自动触发墨滞时刻
+              提示：ESC / P 暂停 · 「字诀」逐笔写汉字施法（之山火水王）· 连墨45召墨龙 · 集齐文房四宝获「文光焕彩」
             </p>
           </div>
         </div>

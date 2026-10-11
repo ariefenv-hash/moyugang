@@ -1,0 +1,670 @@
+     1→  2181→      }
+     2→  2182→    }
+     3→  2183→
+     4→  2184→    // Update Seals
+     5→  2185→    for (let i = sealStampsRef.current.length - 1; i >= 0; i--) {
+     6→  2186→      const stamp = sealStampsRef.current[i];
+     7→  2187→      stamp.life -= dt;
+     8→  2188→      stamp.alpha = stamp.life / stamp.maxLife;
+     9→  2189→      if (stamp.life <= 0) {
+    10→  2190→        sealStampsRef.current.splice(i, 1);
+    11→  2191→      }
+    12→  2192→    }
+    13→  2193→
+    14→  2194→    // Update Particles
+    15→  2195→    for (let i = particlesRef.current.length - 1; i >= 0; i--) {
+    16→  2196→      const p = particlesRef.current[i];
+    17→  2197→      p.x += p.vx * dt;
+    18→  2198→      p.y += p.vy * dt;
+    19→  2199→      if (p.altitudeZ !== undefined) {
+    20→  2200→        p.altitudeZ += (p.vz || 0) * dt;
+    21→  2201→      }
+    22→  2202→      p.life -= dt;
+    23→  2203→      p.alpha = p.life / p.maxLife;
+    24→  2204→      if (p.vRot) p.rotation = (p.rotation || 0) + p.vRot * dt;
+    25→  2205→
+    26→  2206→      if (p.life <= 0) {
+    27→  2207→        particlesRef.current.splice(i, 1);
+    28→  2208→      }
+    29→  2209→    }
+    30→  2210→
+    31→  2211→    // Update Damage Numbers
+    32→  2212→    for (let i = damageNumbersRef.current.length - 1; i >= 0; i--) {
+    33→  2213→      const d = damageNumbersRef.current[i];
+    34→  2214→      d.y -= 26 * dt;
+    35→  2215→      d.life -= dt;
+    36→  2216→      d.alpha = Math.max(0, d.life / 0.75);
+    37→  2217→      if (d.life <= 0) {
+    38→  2218→        damageNumbersRef.current.splice(i, 1);
+    39→  2219→      }
+    40→  2220→    }
+    41→  2221→
+    42→  2222→    armyCountRef.current = units.filter((u) => !u.isEnemy).length;
+    43→  2223→  };
+    44→  2224→
+    45→  2225→  // 将 updateSimulation 晚绑定到游戏循环（避免循环 effect 依赖函数引用）
+    46→  2226→  updateSimulationRef.current = updateSimulation;
+    47→  2227→
+    48→  2228→  // ===== HUD 节流同步：每 130ms 批量把 ref 真相同步到 React state（替代每帧 setState） =====
+    49→  2229→  useEffect(() => {
+    50→  2230→    const hudTimer = setInterval(() => {
+    51→  2231→      setInk(inkRef.current);
+    52→  2232→      setHeroHp(heroRef.current.hp);
+    53→  2233→      setHeroEnergy(heroEnergyRef.current);
+    54→  2234→      setSkillCds({ ...skillCdsRef.current });
+    55→  2235→      setCombo({ ...comboRef.current });
+    56→  2236→      setArmyCount(armyCountRef.current);
+    57→  2237→      setPlayerBaseHp(playerBaseHpRef.current);
+    58→  2238→      setEnemyBaseHp(enemyBaseHpRef.current);
+    59→  2239→      setEndlessWave(endlessWaveRef.current);
+    60→  2240→      setInkSlowLeft(inkSlowTimerRef.current > 0 ? inkSlowTimerRef.current : 0);
+    61→  2241→    }, 130);
+    62→  2242→    return () => clearInterval(hudTimer);
+    63→  2243→  }, []);
+    64→  2244→
+    65→  2245→  const toggleSound = () => {
+    66→  2246→    const muted = sound.toggleMute();
+    67→  2247→    setIsMuted(muted);
+    68→  2248→  };
+    69→  2249→
+    70→  2250→  return (
+    71→  2251→    <div className="relative w-full h-screen bg-stone-950 select-none overflow-hidden font-sans">
+    72→  2252→      {/* Top Bar Header */}
+    73→  2253→      <header className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between gap-4 px-4 md:px-6 py-2.5 bg-stone-950/85 backdrop-blur-md border-b border-stone-800">
+    74→  2254→        <div className="flex items-center gap-3">
+    75→  2255→          <button
+    76→  2256→            onClick={onExit}
+    77→  2257→            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-stone-300 hover:text-white bg-stone-900 border border-stone-800 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+    78→  2258→          >
+    79→  2259→            <ChevronLeft className="w-3.5 h-3.5" />
+    80→  2260→            <span className="hidden sm:inline">退出</span>
+    81→  2261→          </button>
+    82→  2262→          <span className="text-sm md:text-base font-bold tracking-wide text-stone-100 font-serif whitespace-nowrap shrink-0">
+    83→  2263→            {level.endless && (
+    84→  2264→              <span className="inline-flex items-center gap-1 mr-2 px-2 py-0.5 align-middle rounded-md bg-purple-950/80 border border-purple-700/60 text-[10px] font-bold text-purple-200">
+    85→  2265→                <InfinityIcon className="w-3 h-3" />
+    86→  2266→                第 {endlessWave} 波
+    87→  2267→              </span>
+    88→  2268→            )}
+    89→  2269→            {level.chapter} · {level.title}
+    90→  2270→          </span>
+    91→  2271→        </div>
+    92→  2272→
+    93→  2273→        {/* Army Commands Toolbar */}
+    94→  2274→        <div className="flex items-center gap-1.5 p-1 bg-stone-900/90 border border-stone-800 rounded-lg overflow-x-auto max-w-sm md:max-w-none">
+    95→  2275→          <button
+    96→  2276→            onClick={() => setArmyCommand('DEFEND')}
+    97→  2277→            className={`px-2 md:px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1 ${
+    98→  2278→              armyCommand === 'DEFEND'
+    99→  2279→                ? 'bg-amber-700 text-amber-50 shadow-sm'
+   100→  2280→                : 'text-stone-400 hover:text-stone-200'
+   101→  2281→            }`}
+   102→  2282→          >
+   103→  2283→            <Shield className="w-3.5 h-3.5" />
+   104→  2284→            <span className="hidden sm:inline">坚守</span>墨阁
+   105→  2285→          </button>
+   106→  2286→          <button
+   107→  2287→            onClick={() => setArmyCommand('HOLD')}
+   108→  2288→            className={`px-2 md:px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1 ${
+   109→  2289→              armyCommand === 'HOLD'
+   110→  2290→                ? 'bg-stone-700 text-stone-50 shadow-sm'
+   111→  2291→                : 'text-stone-400 hover:text-stone-200'
+   112→  2292→            }`}
+   113→  2293→          >
+   114→  2294→            <Flag className="w-3.5 h-3.5" />
+   115→  2295→            <span className="hidden sm:inline">就地</span>御敌
+   116→  2296→          </button>
+   117→  2297→          <button
+   118→  2298→            onClick={() => setArmyCommand('FOLLOW_HERO')}
+   119→  2299→            className={`px-2 md:px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1 ${
+   120→  2300→              armyCommand === 'FOLLOW_HERO'
+   121→  2301→                ? 'bg-cyan-700 text-cyan-50 shadow-sm'
+   122→  2302→                : 'text-stone-400 hover:text-stone-200'
+   123→  2303→            }`}
+   124→  2304→          >
+   125→  2305→            <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+   126→  2306→            随君冲锋
+   127→  2307→          </button>
+   128→  2308→          <button
+   129→  2309→            onClick={() => setArmyCommand('ATTACK')}
+   130→  2310→            className={`px-2 md:px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1 ${
+   131→  2311→              armyCommand === 'ATTACK'
+   132→  2312→                ? 'bg-rose-800 text-rose-50 shadow-sm'
+   133→  2313→                : 'text-stone-400 hover:text-stone-200'
+   134→  2314→            }`}
+   135→  2315→          >
+   136→  2316→            <Sword className="w-3.5 h-3.5" />
+   137→  2317→            全军破阵
+   138→  2318→          </button>
+   139→  2319→        </div>
+   140→  2320→
+   141→  2321→        {/* Resources, Input Mode Switcher & Sound Action */}
+   142→  2322→        <div className="flex items-center gap-2 md:gap-3 shrink-0">
+   143→  2323→          {/* 暂停按钮 */}
+   144→  2324→          <button
+   145→  2325→            onClick={togglePause}
+   146→  2326→            className="p-2 text-stone-300 hover:text-white bg-stone-900 border border-stone-800 rounded-lg transition-colors cursor-pointer"
+   147→  2327→            title="暂停 (ESC / P)"
+   148→  2328→          >
+   149→  2329→            <Pause className="w-4 h-4" />
+   150→  2330→          </button>
+   151→  2331→
+   152→  2332→          {/* Mode Switcher: 挥毫手势 / 双区操控 / 经典按键 */}
+   153→  2333→          <div className="flex items-center bg-stone-900 border border-stone-800 rounded-lg p-0.5">
+   154→  2334→            <button
+   155→  2335→              onClick={() => setControlMode('GESTURE')}
+   156→  2336→              className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md transition-colors cursor-pointer ${
+   157→  2337→                controlMode === 'GESTURE'
+   158→  2338→                  ? 'bg-cyan-900/80 text-cyan-200 font-bold'
+   159→  2339→                  : 'text-stone-400 hover:text-stone-200'
+   160→  2340→              }`}
+   161→  2341→              title="全屏挥毫手势：以笔驭剑（桌面鼠标友好）"
+   162→  2342→            >
+   163→  2343→              <PenTool className="w-3 h-3 text-cyan-400" />
+   164→  2344→              <span>挥毫</span>
+   165→  2345→            </button>
+   166→  2346→            <button
+   167→  2347→              onClick={() => setControlMode('DUAL')}
+   168→  2348→              className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md transition-colors cursor-pointer ${
+   169→  2349→                controlMode === 'DUAL'
+   170→  2350→                  ? 'bg-emerald-900/80 text-emerald-200 font-bold'
+   171→  2351→                  : 'text-stone-400 hover:text-stone-200'
+   172→  2352→              }`}
+   173→  2353→              title="双区操控：左手浮动摇杆移动 + 右手手势/技能（触屏推荐）"
+   174→  2354→            >
+   175→  2355→              <Hand className="w-3 h-3 text-emerald-400" />
+   176→  2356→              <span>双区</span>
+   177→  2357→            </button>
+   178→  2358→            <button
+   179→  2359→              onClick={() => setControlMode('CLASSIC')}
+   180→  2360→              className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md transition-colors cursor-pointer ${
+   181→  2361→                controlMode === 'CLASSIC'
+   182→  2362→                  ? 'bg-stone-800 text-stone-100 font-bold'
+   183→  2363→                  : 'text-stone-400 hover:text-stone-200'
+   184→  2364→              }`}
+   185→  2365→              title="传统虚拟摇杆+按键模式"
+   186→  2366→            >
+   187→  2367→              <Gamepad2 className="w-3 h-3 text-amber-400" />
+   188→  2368→              <span>经典</span>
+   189→  2369→            </button>
+   190→  2370→          </div>
+   191→  2371→
+   192→  2372→          <button
+   193→  2373→            onClick={() => setShowGestureGuide((prev) => !prev)}
+   194→  2374→            className="p-1.5 text-stone-400 hover:text-stone-100 bg-stone-900 border border-stone-800 rounded-lg transition-colors cursor-pointer"
+   195→  2375→            title="手势指南"
+   196→  2376→          >
+   197→  2377→            <HelpCircle className="w-3.5 h-3.5 text-cyan-300" />
+   198→  2378→          </button>
+   199→  2379→
+   200→  2380→          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 border border-stone-800 rounded-lg">
+   201→  2381→            <span className="text-[11px] text-stone-400">墨韵</span>
+   202→  2382→            <span className="text-xs md:text-sm font-bold text-cyan-400 font-mono tabular-nums">
+   203→  2383→              {Math.floor(ink)}
+   204→  2384→            </span>
+   205→  2385→          </div>
+   206→  2386→
+   207→  2387→          <button
+   208→  2388→            onClick={toggleSound}
+   209→  2389→            className="p-1.5 text-stone-400 hover:text-stone-100 bg-stone-900 border border-stone-800 rounded-lg transition-colors cursor-pointer"
+   210→  2390→          >
+   211→  2391→            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+   212→  2392→          </button>
+   213→  2393→        </div>
+   214→  2394→      </header>
+   215→  2395→
+   216→  2396→      {/* Full-Screen Unified Calligraphy Gesture Canvas */}
+   217→  2397→      <canvas
+   218→  2398→        ref={canvasRef}
+   219→  2399→        onPointerDown={handlePointerDown}
+   220→  2400→        onPointerMove={handlePointerMove}
+   221→  2401→        onPointerUp={handlePointerUp}
+   222→  2402→        onPointerCancel={handlePointerUp}
+   223→  2403→        className="w-full h-full block touch-none cursor-crosshair"
+   224→  2404→      />
+   225→  2405→
+   226→  2406→      {/* 浮动摇杆（双区模式：触点处浮现，松手即隐） */}
+   227→  2407→      {controlMode === 'DUAL' && floatJoy.active && (
+   228→  2408→        <FloatingJoystick
+   229→  2409→          baseX={floatJoy.baseX}
+   230→  2410→          baseY={floatJoy.baseY}
+   231→  2411→          knobX={floatJoy.knobX}
+   232→  2412→          knobY={floatJoy.knobY}
+   233→  2413→          size={FLOAT_JOY_RADIUS * 2}
+   234→  2414→        />
+   235→  2415→      )}
+   236→  2416→
+   237→  2417→      {/* 文房四宝收集进度 + 已获墨灵祝福 */}
+   238→  2418→      <div className="absolute left-4 md:left-6 top-28 z-30 pointer-events-none flex flex-col gap-1.5">
+   239→  2419→        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-stone-950/80 border border-amber-800/50 rounded-xl backdrop-blur-sm shadow-xl">
+   240→  2420→          <Gem className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+   241→  2421→          {TREASURE_KINDS.map((k) => (
+   242→  2422→            <span
+   243→  2423→              key={k}
+   244→  2424→              className={`w-6 h-6 flex items-center justify-center rounded-md text-xs font-serif font-bold border transition-all ${
+   245→  2425→                treasureCollected[k]
+   246→  2426→                  ? 'bg-amber-400/90 border-amber-300 text-stone-950 shadow-[0_0_8px_rgba(250,204,21,0.7)] scale-110'
+   247→  2427→                  : 'bg-stone-900 border-stone-700 text-stone-600'
+   248→  2428→              }`}
+   249→  2429→            >
+   250→  2430→              {TREASURE_CHAR[k]}
+   251→  2431→            </span>
+   252→  2432→          ))}
+   253→  2433→        </div>
+   254→  2434→        {Object.keys(ownedBlessings).length > 0 && (
+   255→  2435→          <div className="flex flex-wrap items-center gap-1 max-w-[230px]">
+   256→  2436→            {BLESSINGS.filter((b) => ownedBlessings[b.id]).map((b) => (
+   257→  2437→              <span
+   258→  2438→                key={b.id}
+   259→  2439→                className="px-1.5 py-0.5 text-[10px] font-serif rounded-md bg-emerald-950/80 border border-emerald-700/50 text-emerald-200 backdrop-blur-sm"
+   260→  2440→              >
+   261→  2441→                {b.name} ×{ownedBlessings[b.id]}
+   262→  2442→              </span>
+   263→  2443→            ))}
+   264→  2444→          </div>
+   265→  2445→        )}
+   266→  2446→      </div>
+   267→  2447→
+   268→  2448→      {/* 墨滞时刻倒计时指示 */}
+   269→  2449→      {inkSlowLeft > 0 && (
+   270→  2450→        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-fade-in">
+   271→  2451→          <div className="px-4 py-1.5 bg-purple-950/85 border border-purple-500/60 rounded-xl backdrop-blur-md shadow-2xl text-center">
+   272→  2452→            <p className="text-xs font-serif font-bold text-purple-200 tracking-widest">
+   273→  2453→              墨滞时刻 · 天地凝墨
+   274→  2454→            </p>
+   275→  2455→            <div className="mt-1 w-32 h-1 bg-stone-800 rounded-full overflow-hidden">
+   276→  2456→              <div
+   277→  2457→                className="h-full bg-purple-400 transition-all duration-100"
+   278→  2458→                style={{ width: `${Math.max(0, (inkSlowLeft / INK_SLOW_DURATION) * 100)}%` }}
+   279→  2459→              />
+   280→  2460→            </div>
+   281→  2461→          </div>
+   282→  2462→        </div>
+   283→  2463→      )}
+   284→  2464→
+   285→  2465→      {/* Floating Gesture Recognition Badge */}
+   286→  2466→      {gestureBadge && (
+   287→  2467→        <div className="absolute top-44 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-bounce">
+   288→  2468→          <div className="px-5 py-2 bg-stone-950/90 border border-cyan-500/70 rounded-2xl backdrop-blur-md shadow-2xl flex items-center gap-2">
+   289→  2469→            <span className="text-lg font-bold font-serif text-cyan-300">{gestureBadge.text}</span>
+   290→  2470→            <span className="text-xs font-serif text-stone-200">{gestureBadge.sub}</span>
+   291→  2471→          </div>
+   292→  2472→        </div>
+   293→  2473→      )}
+   294→  2474→
+   295→  2475→      {/* Gesture Quick Guide Overlay Modal */}
+   296→  2476→      {showGestureGuide && (
+   297→  2477→        <div className="absolute top-16 right-4 md:right-6 z-40 max-w-xs p-4 bg-stone-900/95 border border-stone-700 rounded-2xl shadow-2xl backdrop-blur-md text-xs text-stone-300 space-y-2 animate-fade-in font-sans max-h-[75vh] overflow-y-auto">
+   298→  2478→          <div className="flex items-center justify-between font-serif font-bold text-amber-200 border-b border-stone-800 pb-1.5">
+   299→  2479→            <span>操控心诀 · 三式任选</span>
+   300→  2480→            <button
+   301→  2481→              onClick={() => setShowGestureGuide(false)}
+   302→  2482→              className="text-stone-400 hover:text-white"
+   303→  2483→            >
+   304→  2484→              ✕
+   305→  2485→            </button>
+   306→  2486→          </div>
+   307→  2487→          <p className="text-[11px] font-bold text-emerald-300">
+   308→  2488→            【双区操控 · 触屏推荐】左半屏任意处按住浮现摇杆移动；右半屏点按/手势施法；右下技能按钮随时可点，双手齐用！
+   309→  2489→          </p>
+   310→  2490→          <p><strong className="text-cyan-300">轻点地面：</strong>剑仙踏墨巡行至该位置</p>
+   311→  2491→          <p><strong className="text-cyan-300">轻点敌军：</strong>施展落墨三式剑招</p>
+   312→  2492→          <p><strong className="text-cyan-300">「横」划：</strong>化身墨影疾驰【断水斩】</p>
+   313→  2493→          <p><strong className="text-cyan-300">「竖」划：</strong>凌空暴扣【笔落惊风俯冲斩】</p>
+   314→  2494→          <p><strong className="text-cyan-300">「提」划（向上）：</strong>轻功腾跃跳起</p>
+   315→  2495→          <p><strong className="text-cyan-300">「画圆」⭕：</strong>释放【竹影墨盾 / 墨荷灵阵】</p>
+   316→  2496→          <p><strong className="text-cyan-300">「折」划（Z型）：</strong>万毫齐发【星河笔阵】</p>
+   317→  2497→          <div className="pt-1 border-t border-stone-800 text-[10px] text-stone-400 space-y-1">
+   318→  2498→            <p>* 电脑端键盘（WASD/J/Q/W/E/R/Space）全程原生支持！</p>
+   319→  2499→            <p className="text-amber-300/80">
+   320→  2500→              ★ 连墨 45 触发「墨龙卷」· 集齐文房四宝触发「文光焕彩」· 残血自动入「墨滞时刻」
+   321→  2501→            </p>
+   322→  2502→          </div>
+   323→  2503→        </div>
+   324→  2504→      )}
+   325→  2505→
+   326→  2506→      {/* Active Calligraphy Combo Rating HUD */}
+   327→  2507→      {combo.count >= 3 && (
+   328→  2508→        <div className="absolute top-14 right-6 z-30 pointer-events-none flex flex-col items-end animate-fade-in">
+   329→  2509→          <div className="flex items-center gap-2 px-3 py-1 bg-stone-950/80 border border-amber-600/60 rounded-xl backdrop-blur-sm shadow-xl">
+   330→  2510→            <Flame className="w-4 h-4 text-amber-400 animate-pulse" />
+   331→  2511→            <span className="text-sm font-bold font-mono text-amber-300">
+   332→  2512→              {combo.count} 连墨
+   333→  2513→            </span>
+   334→  2514→            <span className="text-xs font-serif font-bold text-amber-100">
+   335→  2515→              【{combo.ratingText}】
+   336→  2516→            </span>
+   337→  2517→          </div>
+   338→  2518→          <div className="w-24 h-1 bg-stone-800 rounded-full mt-1 overflow-hidden">
+   339→  2519→            <div
+   340→  2520→              className="h-full bg-amber-400 transition-all duration-75"
+   341→  2521→              style={{ width: `${(combo.timer / combo.maxTimer) * 100}%` }}
+   342→  2522→            />
+   343→  2523→          </div>
+   344→  2524→        </div>
+   345→  2525→      )}
+   346→  2526→
+   347→  2527→      {/* Dynamic Weather Event Indicator */}
+   348→  2528→      {activeWeather && (
+   349→  2529→        <div className="absolute top-14 left-6 z-30 pointer-events-none flex items-center gap-2 px-3 py-1.5 bg-stone-950/80 border border-cyan-800/60 rounded-xl backdrop-blur-sm shadow-xl">
+   350→  2530→          {activeWeather.type === 'INK_RAIN' && <CloudRain className="w-4 h-4 text-cyan-400" />}
+   351→  2531→          {activeWeather.type === 'POETIC_BREEZE' && <Wind className="w-4 h-4 text-emerald-400" />}
+   352→  2532→          {activeWeather.type === 'LUNAR_GLOW' && <Moon className="w-4 h-4 text-amber-300" />}
+   353→  2533→          <div>
+   354→  2534→            <p className="text-xs font-serif font-bold text-stone-100">
+   355→  2535→              异象 · {activeWeather.name}
+   356→  2536→            </p>
+   357→  2537→            <p className="text-[10px] text-stone-400 font-serif">
+   358→  2538→              {activeWeather.description} ({Math.ceil(activeWeather.timeRemaining)}s)
+   359→  2539→            </p>
+   360→  2540→          </div>
+   361→  2541→        </div>
+   362→  2542→      )}
+   363→  2543→
+   364→  2544→      {/* Poetic Verse Announcement Banner */}
+   365→  2545→      {stageBanner && (
+   366→  2546→        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 pointer-events-none text-center animate-fade-in max-w-sm md:max-w-md w-full px-4">
+   367→  2547→          <div className="px-6 py-3.5 bg-stone-950/90 border border-stone-800 rounded-2xl backdrop-blur-md shadow-2xl">
+   368→  2548→            <p className="text-base md:text-lg font-serif font-semibold tracking-widest text-amber-100">
+   369→  2549→              {stageBanner}
+   370→  2550→            </p>
+   371→  2551→            <p className="mt-1 text-[11px] text-stone-400 font-serif tracking-wider">
+   372→  2552→              {level.poeticAuthor}
+   373→  2553→            </p>
+   374→  2554→          </div>
+   375→  2555→        </div>
+   376→  2556→      )}
+   377→  2557→
+   378→  2558→      {/* Boss Announcement Banner */}
+   379→  2559→      {bossAnnounced && level.boss && (
+   380→  2560→        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 pointer-events-none text-center">
+   381→  2561→          <div className="px-6 py-2.5 bg-rose-950/90 border border-rose-800 rounded-xl backdrop-blur-md shadow-2xl">
+   382→  2562→            <p className="text-xs text-rose-300 font-mono tracking-widest">警告 · 敌阵宿敌降临</p>
+   383→  2563→            <p className="text-base md:text-lg font-serif font-bold text-rose-100 tracking-wider">
+   384→  2564→              {level.boss.name} · {level.boss.title}
+   385→  2565→            </p>
+   386→  2566→          </div>
+   387→  2567→        </div>
+   388→  2568→      )}
+   389→  2569→
+   390→  2570→      {/* Hero Reviving Overlay */}
+   391→  2571→      {heroReviving && (
+   392→  2572→        <div className="absolute top-36 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+   393→  2573→          <div className="px-5 py-2 bg-stone-900/90 border border-rose-900/50 rounded-xl backdrop-blur-sm text-center">
+   394→  2574→            <p className="text-xs text-rose-400 font-medium">剑仙重伤调息中</p>
+   395→  2575→            <p className="text-sm font-bold text-stone-100 font-mono tabular-nums">
+   396→  2576→              {heroReviveTimer} 秒后墨阁重塑真身
+   397→  2577→            </p>
+   398→  2578→          </div>
+   399→  2579→        </div>
+   400→  2580→      )}
+   401→  2581→
+   402→  2582→      {/* Compact Troop Recruitment Dock (Always Accessible on Top or Bottom) */}
+   403→  2583→      <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 p-1.5 bg-stone-950/80 backdrop-blur-md border border-stone-800 rounded-xl shadow-2xl">
+   404→  2584→        <button
+   405→  2585→          onClick={() => recruitUnit('SCRIBE')}
+   406→  2586→          disabled={ink < UNIT_CONFIGS.SCRIBE.cost || armyCount >= maxArmy}
+   407→  2587→          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border transition-all ${
+   408→  2588→            ink >= UNIT_CONFIGS.SCRIBE.cost && armyCount < maxArmy
+   409→  2589→              ? 'bg-stone-900 hover:bg-stone-800 border-stone-700 text-stone-200 cursor-pointer active:scale-95'
+   410→  2590→              : 'bg-stone-900/40 border-stone-800/40 text-stone-600 cursor-not-allowed'
+   411→  2591→          }`}
+   412→  2592→          title="采墨侍 (50 墨)"
+   413→  2593→        >
+   414→  2594→          <Feather className="w-3.5 h-3.5 text-cyan-400" />
+   415→  2595→          <span className="text-[11px] font-serif">采墨</span>
+   416→  2596→          <span className="text-[10px] text-cyan-300 font-mono">50</span>
+   417→  2597→        </button>
+   418→  2598→
+   419→  2599→        <button
+   420→  2600→          onClick={() => recruitUnit('SWORD')}
+   421→  2601→          disabled={ink < UNIT_CONFIGS.SWORD.cost || armyCount >= maxArmy}
+   422→  2602→          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border transition-all ${
+   423→  2603→            ink >= UNIT_CONFIGS.SWORD.cost && armyCount < maxArmy
+   424→  2604→              ? 'bg-stone-900 hover:bg-stone-800 border-stone-700 text-stone-200 cursor-pointer active:scale-95'
+   425→  2605→              : 'bg-stone-900/40 border-stone-800/40 text-stone-600 cursor-not-allowed'
+   426→  2606→          }`}
+   427→  2607→          title="折柳剑客 (100 墨)"
+   428→  2608→        >
+   429→  2609→          <Sword className="w-3.5 h-3.5 text-emerald-400" />
+   430→  2610→          <span className="text-[11px] font-serif">折柳</span>
+   431→  2611→          <span className="text-[10px] text-cyan-300 font-mono">100</span>
+   432→  2612→        </button>
+   433→  2613→
+   434→  2614→        {level.id >= 2 && (
+   435→  2615→          <button
+   436→  2616→            onClick={() => recruitUnit('ARCHER')}
+   437→  2617→            disabled={ink < UNIT_CONFIGS.ARCHER.cost || armyCount >= maxArmy}
+   438→  2618→            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border transition-all ${
+   439→  2619→              ink >= UNIT_CONFIGS.ARCHER.cost && armyCount < maxArmy
+   440→  2620→                ? 'bg-stone-900 hover:bg-stone-800 border-stone-700 text-stone-200 cursor-pointer active:scale-95'
+   441→  2621→                : 'bg-stone-900/40 border-stone-800/40 text-stone-600 cursor-not-allowed'
+   442→  2622→            }`}
+   443→  2623→            title="抚竹射手 (180 墨)"
+   444→  2624→          >
+   445→  2625→            <Crosshair className="w-3.5 h-3.5 text-lime-400" />
+   446→  2626→            <span className="text-[11px] font-serif">抚竹</span>
+   447→  2627→            <span className="text-[10px] text-cyan-300 font-mono">180</span>
+   448→  2628→          </button>
+   449→  2629→        )}
+   450→  2630→
+   451→  2631→        {level.id >= 3 && (
+   452→  2632→          <button
+   453→  2633→            onClick={() => recruitUnit('GUARDIAN')}
+   454→  2634→            disabled={ink < UNIT_CONFIGS.GUARDIAN.cost || armyCount >= maxArmy}
+   455→  2635→            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border transition-all ${
+   456→  2636→              ink >= UNIT_CONFIGS.GUARDIAN.cost && armyCount < maxArmy
+   457→  2637→                ? 'bg-stone-900 hover:bg-stone-800 border-stone-700 text-stone-200 cursor-pointer active:scale-95'
+   458→  2638→                : 'bg-stone-900/40 border-stone-800/40 text-stone-600 cursor-not-allowed'
+   459→  2639→            }`}
+   460→  2640→            title="墨岩卫 (280 墨)"
+   461→  2641→          >
+   462→  2642→            <Shield className="w-3.5 h-3.5 text-amber-400" />
+   463→  2643→            <span className="text-[11px] font-serif">墨岩</span>
+   464→  2644→            <span className="text-[10px] text-cyan-300 font-mono">280</span>
+   465→  2645→          </button>
+   466→  2646→        )}
+   467→  2647→
+   468→  2648→        {level.id >= 4 && (
+   469→  2649→          <button
+   470→  2650→            onClick={() => recruitUnit('HARPIST')}
+   471→  2651→            disabled={ink < UNIT_CONFIGS.HARPIST.cost || armyCount >= maxArmy}
+   472→  2652→            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border transition-all ${
+   473→  2653→              ink >= UNIT_CONFIGS.HARPIST.cost && armyCount < maxArmy
+   474→  2654→                ? 'bg-stone-900 hover:bg-stone-800 border-stone-700 text-stone-200 cursor-pointer active:scale-95'
+   475→  2655→                : 'bg-stone-900/40 border-stone-800/40 text-stone-600 cursor-not-allowed'
+   476→  2656→            }`}
+   477→  2657→            title="鸣筝琴师 (380 墨)"
+   478→  2658→          >
+   479→  2659→            <Music className="w-3.5 h-3.5 text-purple-400" />
+   480→  2660→            <span className="text-[11px] font-serif">鸣筝</span>
+   481→  2661→            <span className="text-[10px] text-cyan-300 font-mono">380</span>
+   482→  2662→          </button>
+   483→  2663→        )}
+   484→  2664→      </div>
+   485→  2665→
+   486→  2666→      {/* Floating Bottom HUD: Hero Health & Luminous Ultimate Seal */}
+   487→  2667→      <div className="absolute bottom-4 left-6 right-6 z-20 flex items-end justify-between pointer-events-none pb-[env(safe-area-inset-bottom)]">
+   488→  2668→        {/* Left: Hero Stats & Gesture Mode prompt */}
+   489→  2669→        <div className="flex flex-col items-start gap-1.5 pointer-events-auto">
+   490→  2670→          <div className="flex items-center gap-3 px-3.5 py-2 bg-stone-950/85 backdrop-blur-md border border-stone-800 rounded-xl shadow-xl">
+   491→  2671→            <div className="flex items-center gap-1.5">
+   492→  2672→              <span className="text-[11px] font-serif text-stone-300">云砚气血</span>
+   493→  2673→              <div className="w-24 md:w-32 h-2.5 bg-stone-800 rounded-full overflow-hidden">
+   494→  2674→                <div
+   495→  2675→                  className="h-full bg-emerald-500 transition-all duration-150"
+   496→  2676→                  style={{ width: `${Math.max(0, Math.min(100, (heroHp / heroMaxHp) * 100))}%` }}
+   497→  2677→                />
+   498→  2678→              </div>
+   499→  2679→              <span className="text-[10px] font-mono text-stone-400 tabular-nums">
+   500→  2680→                {Math.ceil(heroHp)}/{heroMaxHp}
+   501→  2681→              </span>
+   502→  2682→            </div>
+   503→  2683→
+   504→  2684→            <div className="flex items-center gap-1.5">
+   505→  2685→              <span className="text-[11px] font-serif text-amber-200">绝意</span>
+   506→  2686→              <div className="w-18 md:w-26 h-2.5 bg-stone-800 rounded-full overflow-hidden">
+   507→  2687→                <div
+   508→  2688→                  className="h-full bg-amber-400 transition-all duration-150"
+   509→  2689→                  style={{ width: `${Math.max(0, Math.min(100, (heroEnergy / 100) * 100))}%` }}
+   510→  2690→                />
+   511→  2691→              </div>
+   512→  2692→              <span className="text-[10px] font-mono text-amber-300 tabular-nums">
+   513→  2693→                {Math.floor(heroEnergy)}/100
+   514→  2694→              </span>
+   515→  2695→            </div>
+   516→  2696→          </div>
+   517→  2697→
+   518→  2698→          {controlMode === 'GESTURE' ? (
+   519→  2699→            <div className="text-[11px] font-serif text-stone-400 bg-stone-950/70 border border-stone-800 px-3 py-1 rounded-lg">
+   520→  2700→              ✨ 挥毫手势模式：点击点地漫步 · 横划破水 · 竖划震天 · 画圆起盾
+   521→  2701→            </div>
+   522→  2702→          ) : controlMode === 'DUAL' ? (
+   523→  2703→            <div className="text-[11px] font-serif text-emerald-300/90 bg-stone-950/70 border border-emerald-800/50 px-3 py-1 rounded-lg">
+   524→  2704→              🖐 双区操控：左半屏按住浮现摇杆移动 · 右半屏点按/手势施法 · 技能常驻右下
+   525→  2705→            </div>
+   526→  2706→          ) : (
+   527→  2707→            /* Classic Joystick on Bottom Left when in Classic Mode */
+   528→  2708→            <div className="mt-2">
+   529→  2709→              <Joystick
+   530→  2710→                size={110}
+   531→  2711→                onMove={(dx, dy) => {
+   532→  2712→                  joystickVector.current = { x: dx, y: dy };
+   533→  2713→                }}
+   534→  2714→                onEnd={() => {
+   535→  2715→                  joystickVector.current = { x: 0, y: 0 };
+   536→  2716→                }}
+   537→  2717→              />
+   538→  2718→            </div>
+   539→  2719→          )}
+   540→  2720→        </div>
+   541→  2721→
+   542→  2722→        {/* Right: Ultimate Seal & Action Cluster (双区/经典模式都显示实体技能键，挥毫模式仅保留绝技印) */}
+   543→  2723→        <div className="pointer-events-auto flex items-center gap-2">
+   544→  2724→          {controlMode !== 'GESTURE' && (
+   545→  2725→            <div className="flex items-center gap-1.5 p-2 bg-stone-950/90 backdrop-blur-md border border-stone-800 rounded-2xl shadow-2xl">
+   546→  2726→              <button
+   547→  2727→                onClick={triggerHeroJump}
+   548→  2728→                className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-stone-200 active:scale-95"
+   549→  2729→              >
+   550→  2730→                <ArrowUp className="w-4 h-4 text-cyan-300 mb-0.5" />
+   551→  2731→                <span className="text-[9px] font-serif">腾跃</span>
+   552→  2732→              </button>
+   553→  2733→              <button
+   554→  2734→                onClick={() => triggerSkillDashSlash()}
+   555→  2735→                className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-cyan-200 active:scale-95"
+   556→  2736→              >
+   557→  2737→                <Zap className="w-4 h-4 text-cyan-400 mb-0.5" />
+   558→  2738→                <span className="text-[9px] font-serif">断水</span>
+   559→  2739→              </button>
+   560→  2740→              <button
+   561→  2741→                onClick={triggerSkillBambooShield}
+   562→  2742→                className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-emerald-200 active:scale-95"
+   563→  2743→              >
+   564→  2744→                <Shield className="w-4 h-4 text-emerald-400 mb-0.5" />
+   565→  2745→                <span className="text-[9px] font-serif">竹影</span>
+   566→  2746→              </button>
+   567→  2747→              <button
+   568→  2748→                onClick={triggerSkillStarlightBarrage}
+   569→  2749→                className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-amber-200 active:scale-95"
+   570→  2750→              >
+   571→  2751→                <Sparkles className="w-4 h-4 text-amber-400 mb-0.5" />
+   572→  2752→                <span className="text-[9px] font-serif">笔阵</span>
+   573→  2753→              </button>
+   574→  2754→              <button
+   575→  2755→                onClick={() => triggerHeroAttack()}
+   576→  2756→                className="w-13 h-13 flex flex-col items-center justify-center bg-stone-800 border-2 border-stone-600 rounded-2xl text-white active:scale-95 cursor-pointer"
+   577→  2757→              >
+   578→  2758→                <Sword className="w-5 h-5 text-stone-100 mb-0.5" />
+   579→  2759→                <span className="text-[10px] font-serif font-bold">落墨</span>
+   580→  2760→              </button>
+   581→  2761→            </div>
+   582→  2762→          )}
+   583→  2763→
+   584→  2764→          {/* Luminous Ultimate Seal Button: River Immortal (临江仙) */}
+   585→  2765→          <button
+   586→  2766→            onClick={triggerSkillUltimate}
+   587→  2767→            disabled={heroEnergy < 100 || skillCds.ultimate_landscape > 0}
+   588→  2768→            className={`relative flex flex-col items-center justify-center w-16 h-16 rounded-2xl border-2 shadow-2xl transition-all cursor-pointer ${
+   589→  2769→              heroEnergy >= 100 && skillCds.ultimate_landscape === 0
+   590→  2770→                ? 'bg-gradient-to-br from-amber-600 via-rose-700 to-amber-700 border-amber-300 text-white animate-pulse active:scale-95 shadow-[0_0_20px_rgba(245,158,11,0.6)]'
+   591→  2771→                : 'bg-stone-900/80 border-stone-800 text-stone-600 cursor-not-allowed'
+   592→  2772→            }`}
+   593→  2773→            title="【绝技】临江仙·水墨山河 (R): 全屏墨爆+全军狂暴！"
+   594→  2774→          >
+   595→  2775→            <Scroll className="w-6 h-6 text-amber-200 mb-0.5" />
+   596→  2776→            <span className="text-[10px] font-serif font-black tracking-wider">临江仙</span>
+   597→  2777→            {skillCds.ultimate_landscape > 0 && (
+   598→  2778→              <div className="absolute inset-0 bg-stone-950/80 rounded-2xl flex items-center justify-center text-xs font-mono font-bold text-amber-400">
+   599→  2779→                {skillCds.ultimate_landscape.toFixed(0)}
+   600→  2780→              </div>
+   601→  2781→            )}
+   602→  2782→          </button>
+   603→  2783→        </div>
+   604→  2784→      </div>
+   605→  2785→
+   606→  2786→      {/* ===== 首战教学引导（仅第一折且未完成时展示） ===== */}
+   607→  2787→      {showTutorial && (
+   608→  2788→        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-sm w-[calc(100%-2rem)] animate-fade-in">
+   609→  2789→          <div className="relative p-4 scroll-mount-thin text-ink">
+   610→  2790→            <div className="flex items-center justify-between mb-2">
+   611→  2791→              <span className="text-sm font-serif font-bold text-ink-strong flex items-center gap-1.5">
+   612→  2792→                <PenTool className="w-4 h-4 text-cinnabar" />
+   613→  2793→                初入战场 · 三步上手法
+   614→  2794→              </span>
+   615→  2795→              <button
+   616→  2796→                onClick={() => {
+   617→  2797→                  setShowTutorial(false);
+   618→  2798→                  onTutorialDone();
+   619→  2799→                }}
+   620→  2800→                className="p-1 text-ink-light hover:text-ink-strong cursor-pointer"
+   621→  2801→              >
+   622→  2802→                <X className="w-4 h-4" />
+   623→  2803→              </button>
+   624→  2804→            </div>
+   625→  2805→            <ol className="text-xs text-ink-mid font-serif space-y-1.5 list-decimal list-inside leading-relaxed">
+   626→  2806→              <li>
+   627→  2807→                <strong className="text-daiqing">招募采墨侍</strong>
+   628→  2808→                （顶栏「采墨 50」）→ 他们会自动汲取墨韵运回墨阁
+   629→  2809→              </li>
+   630→  2810→              <li>
+   631→  2811→                <strong className="text-shilv">触屏推荐双区模式</strong>
+   632→  2812→                ：左半屏按住浮现摇杆移动，右手点敌攻击或划手势施法；电脑端 WASD + J 攻击
+   633→  2813→              </li>
+   634→  2814→              <li>
+   635→  2815→                <strong className="text-cinnabar">横划屏幕</strong>
+   636→  2816→                施放断水斩，
+   637→  2817→                <strong className="text-cinnabar">画圆</strong>
+   638→  2818→                起竹影盾，攒满绝意释放「临江仙」大招！
+   639→  2819→              </li>
+   640→  2820→            </ol>
+   641→  2821→            <p className="mt-2 pt-2 border-t rule-ink text-[10px] text-ink-light">
+   642→  2822→              提示：ESC / P 可随时暂停 · 连墨45召墨龙 · 集齐文房四宝获「文光焕彩」· 残血自动触发墨滞时刻
+   643→  2823→            </p>
+   644→  2824→          </div>
+   645→  2825→        </div>
+   646→  2826→      )}
+   647→  2827→
+   648→  2828→      {/* ===== 墨灵祝福三选一（战场凝滞中抉择） ===== */}
+   649→  2829→      {blessingOffer && (
+   650→  2830→        <BlessingModal
+   651→  2831→          offerings={blessingOffer}
+   652→  2832→          ownedCounts={ownedBlessings}
+   653→  2833→          onPick={handlePickBlessing}
+   654→  2834→        />
+   655→  2835→      )}
+   656→  2836→
+   657→  2837→      {/* ===== 暂停遮罩 ===== */}
+   658→  2838→      {paused && (
+   659→  2839→        <PauseOverlay
+   660→  2840→          isMuted={isMuted}
+   661→  2841→          onToggleMute={toggleSound}
+   662→  2842→          onResume={togglePause}
+   663→  2843→          onRestart={onRestart}
+   664→  2844→          onExit={onExit}
+   665→  2845→        />
+   666→  2846→      )}
+   667→  2847→    </div>
+   668→  2848→  );
+   669→  2849→};
+   670→  2850→
