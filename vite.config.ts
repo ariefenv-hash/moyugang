@@ -3,12 +3,59 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {defineConfig} from 'vite';
+import {VitePWA} from 'vite-plugin-pwa';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      // PWA：可安装 + 离线可玩（precache 全部构建产物；架构仍为 Vite，未迁移 Next.js）
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+        manifest: {
+          id: '/',
+          name: '墨韵战纪：风雅篇',
+          short_name: '墨韵战纪',
+          description:
+            '文艺优雅的水墨火柴人战争策略游戏。操控风雅剑仙，施展落墨剑气、星河笔阵与山河绝技，以字诀为印、以笔锋为兵，征战五大诗意关卡，更有无尽试炼等你坚守。',
+          lang: 'zh-CN',
+          dir: 'ltr',
+          start_url: '/',
+          scope: '/',
+          display: 'standalone',
+          orientation: 'any',
+          background_color: '#1f2629',
+          theme_color: '#1f2629',
+          categories: ['games', 'entertainment'],
+          icons: [
+            {src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml'},
+            {src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png'},
+            {src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png'},
+            {
+              src: '/icons/maskable-512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+          ],
+        },
+        workbox: {
+          // 字体/图片/音频全在本地构建产物内，全量预缓存即完全离线可玩
+          globPatterns: ['**/*.{js,css,html,svg,png,jpg,woff2}'],
+          navigateFallback: '/index.html',
+          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+          cleanupOutdatedCaches: true,
+        },
+        // dev server 也注入 manifest 与 SW，便于预览链路直接体验安装
+        devOptions: {
+          enabled: true,
+        },
+      }),
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

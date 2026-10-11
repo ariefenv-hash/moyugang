@@ -176,3 +176,24 @@ Stage Summary:
 - 修改：BattleView.tsx（+约250行）/ canvasRenderer.ts / audio.ts / types/game.ts（InkSplat+dmgPerSec）
 - 交付截图：verify5_menu/battle_init/charmode_on/char_shan（山·神品·竹影墨盾）/attack/kill2/melee/sword_close/mobile + zoom_melee（墨渍贴花特写）/zoom_sword（矢量剑特写）
 - 架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js
+
+---
+Task ID: 9
+Agent: 主 agent (Super Z)
+Task: 添加 PWA 支持（可安装 + 离线可玩），保持 Vite 架构未迁移 Next.js
+
+Work Log:
+- 定位现状：项目无 public/ 目录、无 favicon、无任何 PWA 配置；theme-color #1f2629（暗墨）
+- 图标套件「墨韵朱印」：scripts/gen_pwa_icons.py 用 fontTools 把霞鹜文楷 Medium 的「墨」字转成纯 SVG path（零字体运行时依赖）+ cairosvg 栅格化；设计 = 暗墨径向底 + 朱砂白文印（微旋 -3°+内框细线）+ 淡纸色圆相 + 墨点飞溅；修复字基线 Y 轴符号反推 bug 后视觉自检通过
+- 产物：public/favicon.svg / icons/icon-{192,512}.png / icons/maskable-512.png（印面缩至 272px 进安全区）/ apple-touch-icon.png(180)
+- bun add -d vite-plugin-pwa@2.0.0（peerDeps 明确支持 vite ^8.0.0）
+- vite.config.ts：VitePWA registerType autoUpdate + manifest（id/start_url=/、standalone、orientation any、zh-CN、categories games）+ workbox（globPatterns js/css/html/svg/png/jpg/woff2、navigateFallback /index.html、precache 上限 8MB、cleanupOutdatedCaches）+ devOptions.enabled（dev 也注入 manifest/SW）
+- main.tsx 接 registerSW({immediate:true})；新建 src/vite-env.d.ts（vite/client + vite-plugin-pwa/client 双引用）
+- index.html 补 favicon(svg+png 双链) / apple-touch-icon / mobile-web-app-capable / apple-mobile-web-app-*（黑半透状态栏 + 应用名「墨韵战纪」）
+- 验证：pkill + start_vite_daemon.py 重启后 curl 全 200（manifest.webmanifest=application/manifest+json、dev-SW=/dev-sw.js 200 text/javascript、四枚图标、index.html 自动注入 <link rel=manifest>）；tsc --noEmit 零错误；vite build 2.2s 成功，PWA v2.0.0 generateSW 预缓存 272 项 12.5MB，dist 含 sw.js/workbox/manifest；网关 Host 模拟 200；scripts/pwa_smoke.py Playwright 冒烟 PASS（SW 注册+active+controller、manifest 200、控制台零错误）；截图 verify6_pwa_menu.png
+- 备注：dev 模式 SW 挂在 /dev-sw.js（/sw.js 仅生产构建存在）；预览网关域名若轮换，已安装的 PWA 绑定旧 origin 需重装，属平台特性
+
+Stage Summary:
+- 新文件：public/favicon.svg + public/icons/*.png×3 + public/apple-touch-icon.png + scripts/gen_pwa_icons.py + scripts/pwa_smoke.py + src/vite-env.d.ts
+- 修改：vite.config.ts / src/main.tsx / index.html；依赖 +vite-plugin-pwa@2.0.0
+- 游戏Now可安装到主屏幕（Android/iOS/桌面 Chrome）且断网可玩；架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js
