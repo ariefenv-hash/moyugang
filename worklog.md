@@ -399,3 +399,24 @@ Work Log:
 Stage Summary:
 - https://ariefenv-hash.github.io/moyugang/ 已更新为连招升级版（e5078bf）
 - 提醒用户立即撤销本轮临时 PAT
+
+---
+Task ID: 19
+Agent: 主 agent (Super Z)
+Task: 修复切关残留卡死 + 突刺卡滞两动作合体 + 上下分区操控 + 点击误移动排查 + 战况信息增强 + 推送上线
+
+Work Log:
+- 用户报三项：①进入下一关有机率残留旧场景致卡死 ②突刺后永久卡初次状态需竖划解卡，要求两动作合为一体不影响移动 ③希望上下分区（上画字/下行动+技能）并排查点击误移动 ④增强展示信息
+- 根因一（切关）：App.tsx <BattleView level={...}/> 无 key，切折时 mode 保持 BATTLE 组件仅 re-render 不 remount，全部 ref（hero/units/spawnedWaves/baseHp/cds/blessings）残留旧关且初始化 effect([]) 不重跑 → 修复：battleSession 会话序号每次 handleStartBattle 自增作 key，forceVictory 实测两次连续切关战场全新（时间归零/基地满血/角色回出生点/敌军未生成）
+- 根因二（突刺）：SKILL_DASH 被 2443 行移动锁（state!=='SKILL_DASH'）与 2467 行恢复条件（!startsWith('SKILL_')）双重排除永不收势，唯一解卡路径为竖划跳跃落地强制 IDLE（与玩家描述完全吻合）→ 修复：SKILL_DASH 0.35s 自动收势回 IDLE + 移动分支不再排除（有输入立即 WALK 接管），其余 SKILL_ 姿势 0.6s 自动收势
+- 分区操控：上 56% 书符区（起笔 strokeZoneRef='CAST'：TAP 空点不移动仅首次提示「书符 · 画字施法」，慢拖不牵引角色，横竖圆折/点敌出剑照常）+ 下方行止区（TAP 移形/DRAG 引路/点敌出剑）；分区指示线淡青渐变+双角标签，字诀模式（全屏皆纸）自动隐去；executeGesture 对非 DRAG 手势先清 heroTargetMove，杜绝出招后角色续走向旧落点；点击误移动确认存在于 TAP 空地（1901 行），分区后上区不再误触
+- 信息增强：顶栏战况行（波次进度/场上敌情/用时/墨阁%·敌营%，基地血量首次数值化）；墨盾厚度+文思连段实时 chip（底部左列）；断水/竹影/笔阵冷却秒数遮罩+disabled；操控心诀/首战教学/底部提示文案全面同步分区玩法
+- dev 钩子扩展（仅 DEV）：heroState/heroTarget/strokeZone/forceVictory/battleState
+- 测试：verify_zone_fix.py 新增 22 项全 PASS（S 切关×2/D 突刺×3/Z 分区×9/H 信息×4/0 异常）；生产冒烟 verify_prod_smoke_v12.py 5/5（preview 需 --base=/moyugang/ 对齐 PAGES_BASE 构建）；回归：手势 22/22（M1 采样点适配至行止区 82%）·剧情 39/39 ·连招 21/21（M1 偶发为战局随机性，复跑全绿）；tsc 零错误；build 成功
+- 推送：PAT 验证（ariefenv-hash push=true）→ 远端 920a917 为本地祖先常规快进 920a917..f5dafb0 → Actions run 38124829038 completed success → 线上 bundle index-BFIcmfpg.js 含 书符/行止/敌营/文思/墨盾/分区说明 全部运行时标记（forceVictory 生产被正确剪除）
+
+Stage Summary:
+- 修改：App.tsx（battleSession key）/ BattleView.tsx（状态机收势+分区+HUD+钩子，+269 行）/ verify_gesture_smooth.py（M1 适配）
+- 新增：scripts/verify_zone_fix.py（22 项）/ scripts/verify_prod_smoke_v12.py（生产冒烟）
+- 线上：https://ariefenv-hash.github.io/moyugang/ 已更新（f5dafb0）
+- 提醒用户立即撤销本轮临时 PAT
