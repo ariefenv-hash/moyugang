@@ -6,3 +6,14 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# sandbox / tooling artifacts（平台沙箱产物，不入库）
+skills/
+download/
+upload/
+tool-results/
+dev-dist/
+agent-ctx/
+*.marker
+.clawhub/
+.push-tmp/
