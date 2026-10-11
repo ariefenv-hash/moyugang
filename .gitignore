@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# build artifacts
+dist/
+dev-dist/
+build/
+coverage/
+
+# env & local config
+.env
+.env.*
+!.env.example
+
+# editor / OS
+.DS_Store
+*.log
+
+# sandbox / tooling artifacts
+download/
+upload/
+tool-results/
+skills/
+agent-ctx/
+*.marker
+worklog.md
