@@ -117,6 +117,14 @@ export const BattleView: React.FC<BattleViewProps> = ({
   // Sound Mute State
   const [isMuted, setIsMuted] = useState(sound.getMuted());
 
+  // 行云性能模式：30fps 节流 + 减特效（弱机/省电），持久化 + 低帧自动建议
+  const [qualityLow, setQualityLowState] = useState<boolean>(() => {
+    try { return localStorage.getItem('ink_steel_quality') === 'low'; } catch { return false; }
+  });
+  const qualityLowRef = useRef(qualityLow);
+  const [showPerfTip, setShowPerfTip] = useState(false);
+  const perfTipShownRef = useRef(false);
+
   // 操控：全平台统一「挥毫手势」（点地漫步 / 点敌出剑 / 横竖提折画圆施法 / 字诀书字），
   // 虚拟摇杆已随三模式机制移除；桌面端 WASD + J/Q/W/E/R 键盘全程原生支持
   const [showGestureGuide, setShowGestureGuide] = useState(false);
@@ -563,6 +571,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       viewHRef.current,
       Math.min(2, Math.max(1, window.devicePixelRatio || 1))
     );
+    rendererRef.current.setQualityLow(qualityLowRef.current);
 
     // Initial units
     spawnUnit('SCRIBE', false, 140, LANE_MIN_Y.current + 30);
@@ -577,6 +586,18 @@ export const BattleView: React.FC<BattleViewProps> = ({
       timeoutsRef.current.clear();
       sound.stopBGM();
     };
+  }, []);
+
+  // 行云模式切换（同步渲染器 + 持久化）
+  const toggleQuality = useCallback(() => {
+    setQualityLowState((prev) => {
+      const next = !prev;
+      qualityLowRef.current = next;
+      try { localStorage.setItem('ink_steel_quality', next ? 'low' : 'high'); } catch {}
+      rendererRef.current?.setQualityLow(next);
+      if (next) { setShowPerfTip(false); perfTipShownRef.current = true; }
+      return next;
+    });
   }, []);
 
   // Helper to spawn unit with 2.5D lane depth
@@ -1804,12 +1825,49 @@ export const BattleView: React.FC<BattleViewProps> = ({
   // updateSimulation 通过 ref 晚绑定（定义于本 effect 之后）
   const updateSimulationRef = useRef<(dt: number) => void>(() => {});
   const lastSizeCheckRef = useRef(0);
+  // 行云模式：帧累积器（30fps 节流）与帧率巡检（滚动均值）
+  const frameAccRef = useRef(0);
+  const fpsAccumRef = useRef(0);
+  const fpsFramesRef = useRef(0);
+  const fpsLowStreakRef = useRef(0);
   useEffect(() => {
     let animId: number;
 
     const gameLoop = (timestamp: number) => {
-      const dt = Math.min(0.1, (timestamp - lastTimeRef.current) / 1000);
+      let dt = Math.min(0.1, (timestamp - lastTimeRef.current) / 1000);
       lastTimeRef.current = timestamp;
+
+      // 帧率巡检：滚动均值，持续低帧且未开行云 → 建议开启（每场至多一次）
+      fpsAccumRef.current += dt;
+      fpsFramesRef.current += 1;
+      if (fpsAccumRef.current >= 2) {
+        const avgFps = fpsFramesRef.current / fpsAccumRef.current;
+        fpsAccumRef.current = 0;
+        fpsFramesRef.current = 0;
+        if (!qualityLowRef.current && !perfTipShownRef.current && gameTimeRef.current > 6) {
+          if (avgFps < 42) {
+            fpsLowStreakRef.current += 1;
+            if (fpsLowStreakRef.current >= 3) {
+              perfTipShownRef.current = true;
+              setShowPerfTip(true);
+              safeTimeout(() => setShowPerfTip(false), 12000);
+            }
+          } else {
+            fpsLowStreakRef.current = 0;
+          }
+        }
+      }
+
+      // 行云模式 30fps 节流：不足 1/30s 的帧整体跳过（模拟+渲染同省）
+      if (qualityLowRef.current) {
+        frameAccRef.current += dt;
+        if (frameAccRef.current < 1 / 30) {
+          animId = requestAnimationFrame(gameLoop);
+          return;
+        }
+        dt = Math.min(0.1, frameAccRef.current);
+        frameAccRef.current = 0;
+      }
 
       // 画布自愈：元素/位图/dpr 任一脱耦立即重同步（地址栏伸缩・旋转・分屏・缩放全兼容），250ms 节流防强制回流
       {
@@ -2620,6 +2678,12 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
     }
 
+    // 行云模式粒子预算：低载设备限制同屏粒子存量（裁最老）
+    const maxParticles = qualityLowRef.current ? 130 : 420;
+    if (particlesRef.current.length > maxParticles) {
+      particlesRef.current.splice(0, particlesRef.current.length - maxParticles);
+    }
+
     // Update Damage Numbers
     for (let i = damageNumbersRef.current.length - 1; i >= 0; i--) {
       const d = damageNumbersRef.current[i];
@@ -2665,7 +2729,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
       style={{ height: '100dvh' }}
     >
       {/* Top Bar Header */}
-      <header className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between gap-4 px-4 md:px-6 py-2.5 bg-stone-950/85 backdrop-blur-md border-b border-stone-800">
+      <header
+        className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between gap-4 px-4 md:px-6 py-2.5 bg-stone-950/85 backdrop-blur-md border-b border-stone-800"
+        style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}
+      >
         <div className="flex items-center gap-3">
           <button
             onClick={onExit}
@@ -2773,6 +2840,17 @@ export const BattleView: React.FC<BattleViewProps> = ({
             </span>
           </div>
 
+          <button
+            onClick={toggleQuality}
+            title="行云模式：30帧 + 减特效（弱机省电利器）"
+            className={`p-1.5 border rounded-lg transition-colors cursor-pointer ${
+              qualityLow
+                ? 'text-emerald-300 bg-emerald-950/60 border-emerald-700/60 shadow-[0_0_10px_rgba(52,211,153,0.35)]'
+                : 'text-stone-400 hover:text-stone-100 bg-stone-900 border-stone-800'
+            }`}
+          >
+            <Wind className="w-4 h-4" />
+          </button>
           <button
             onClick={toggleSound}
             className="p-1.5 text-stone-400 hover:text-stone-100 bg-stone-900 border border-stone-800 rounded-lg transition-colors cursor-pointer"
@@ -3092,6 +3170,16 @@ export const BattleView: React.FC<BattleViewProps> = ({
           </button>
         )}
       </div>
+
+      {/* 行云模式低帧建议浮签（帧率巡检自动触发，每场至多一次） */}
+      {showPerfTip && !qualityLow && (
+        <div className="absolute bottom-36 left-4 md:left-6 z-40 pointer-events-auto flex items-center gap-2 px-3 py-2 bg-stone-950/90 border border-emerald-800/60 rounded-xl backdrop-blur-md shadow-2xl animate-fade-in max-w-[92%]">
+          <Wind className="w-4 h-4 text-emerald-300 shrink-0" />
+          <span className="text-[11px] font-serif text-stone-200">检测到画面吃紧，建议开启行云模式（30帧 · 减特效）</span>
+          <button onClick={toggleQuality} className="px-2 py-0.5 text-[11px] font-bold font-serif bg-emerald-700 text-emerald-50 rounded-md hover:bg-emerald-600 transition-colors cursor-pointer shrink-0">开启</button>
+          <button onClick={() => setShowPerfTip(false)} className="px-1.5 py-0.5 text-[11px] text-stone-400 hover:text-stone-200 transition-colors cursor-pointer shrink-0">忽略</button>
+        </div>
+      )}
 
       {/* Floating Bottom HUD: Hero Health & Luminous Ultimate Seal */}
       <div className="absolute bottom-4 left-6 right-6 z-20 flex items-end justify-between pointer-events-none pb-[env(safe-area-inset-bottom)]">

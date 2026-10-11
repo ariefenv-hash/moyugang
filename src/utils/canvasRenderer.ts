@@ -36,6 +36,8 @@ export class CanvasRenderer {
   /** 设备像素比：高分屏逻辑坐标 → 物理像素映射，画面更清晰 */
   private dpr: number = 1;
   private bgImage: HTMLImageElement | null = null;
+  /** 行云性能模式：低载设备开启后跳过剑气轨迹/残影采样，渲染负载大减 */
+  private qualityLow: boolean = false;
 
   /* ===== 程序化动作引擎内部状态（v3） ===== */
   private frameDt: number = 1 / 60;
@@ -95,6 +97,11 @@ export class CanvasRenderer {
     this.width = width;
     this.height = height;
     if (dpr && dpr > 0) this.dpr = dpr;
+  }
+
+  /** 行云模式开关（由 BattleView 顶栏切换并持久化） */
+  public setQualityLow(v: boolean) {
+    this.qualityLow = v;
   }
 
   // 2.5D Coordinate to Screen position with perspective
@@ -1291,13 +1298,13 @@ export class CanvasRenderer {
     const tipWX = hero.x + tipLX * facing * scale;
     const tipWY = heroY + tipLY * scale;
 
-    // —— 剑气轨迹采样 ——
-    if (dt > 0 && pose.trailEmit > 0.08) {
+    // —— 剑气轨迹采样（行云模式跳过） ——
+    if (dt > 0 && !this.qualityLow && pose.trailEmit > 0.08) {
       this.swordTrail.push({ x: handWX, y: handWY, tx: tipWX, ty: tipWY, life: 0.2 });
     }
 
-    // —— 残影采样（重击挥砍 / 冲刺瞬移路径补插） ——
-    if (dt > 0 && (pose.trailEmit > 0.55 || hero.state === 'SKILL_DASH')) {
+    // —— 残影采样（重击挥砍 / 冲刺瞬移路径补插；行云模式跳过） ——
+    if (dt > 0 && !this.qualityLow && (pose.trailEmit > 0.55 || hero.state === 'SKILL_DASH')) {
       this.afterimageTimer -= dt;
       if (this.afterimageTimer <= 0) {
         this.afterimageTimer = 0.048;
