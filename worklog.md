@@ -343,3 +343,24 @@ Stage Summary:
 - https://ariefenv-hash.github.io/moyugang/ 已更新为第二章版（0c0834e，含 c050b87 半屏修复 + c39cd81 行云模式 + 324a6f3 第二章全五折 + 十章架构）
 - 仓库历史由 squash 单提交换为完整本地历史（72 文件）
 - 提醒用户立即撤销本轮临时 PAT
+
+---
+Task ID: 17
+Agent: 主 agent (Super Z)
+Task: 手势体验全面强化（用户反馈"手势体验仍不顺畅"）+ 无头浏览器全量实测
+
+Work Log:
+- 摩擦点诊断 6 处：字诀书写带跑角色（最高）/无指针捕获/无多指隔离/pointercancel 误发/三笔字干等 550ms/容差偏紧+徽章残留
+- BattleView 指针管线：activePointerIdRef 多指守卫 + setPointerCapture（滑出画布不断笔）+ handlePointerCancel 弃笔 + onContextMenu 拦截；字诀模式豁免笔尖牵引；<6px 误触不成笔并恢复待判定
+- charRecognizer：新增 peekCharMatch（无惩罚原始距离+主模板笔数）+ CHAR_EARLY_COMMIT_SCORE=0.045（标定：规整≤0.033 vs 缺整笔≥0.05，缺右竖山=0.0517 边界实测后由 0.062 收紧）——收笔即判 10-20ms，变体快写与缺笔不抢发，550ms 停笔判定兜底
+- gestureRecognizer：cancelStroke()；收笔余墨 240ms 渐隐（余墨期跳过随机墨点）；TAP 600ms；快扫轴比 1.22；画圆闭合比 0.33（高个 Z 不再被抢判为圆）
+- 根治手势徽章永不清散（「行」「周」文案≠手势名）：flashGestureBadge 自增序号清除，全场景统一
+- 墨渍驳回附「近『X』形」引导（raw≤0.16）；字诀浮签/操控心诀文案同步更新
+- dev 测试钩子 __inkGestureDebug（仅 DEV 构建生产零开销）：heroPos/isCharMode/原生捕获层指针轨迹环
+- 测试：识别器单测 41 项全 PASS（早判 11 项：规整早发/缺笔不抢/变体不抢/乱画不抢）；新 verify_gesture_smooth.py 22 项全 PASS（拖动引路/横竖提圆折/斜扫1.29/长按450ms/山之早判 10-21ms/书写站定 drift=7px/CDP 双指守卫/touchCancel 弃笔续写/指针捕获越 HUD/右键拦截/移动端触写山 11ms）；verify_weapon_chars VERIFY PASS；verify_story_ch2 39/39；tsc 零错误；vite build 成功
+- 测试基建教训：AFK 败北会卸载战场致后续用例打空 → ensure_alive 检测结算面板自动重开；window 捕获层读 defaultPrevented 需延迟读取
+
+Stage Summary:
+- 修改：BattleView.tsx / charRecognizer.ts / gestureRecognizer.ts / test_char_recognizer.ts；新增 verify_gesture_smooth.py
+- 提交 a1f1085（本地 main，领先远端 2 个提交，推送需新 PAT）
+- 待办：推送 GitHub 需用户提供新令牌（推送后 Actions 自动部署 Pages）
