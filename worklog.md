@@ -237,3 +237,24 @@ Stage Summary:
 - https://github.com/ariefenv-hash/moyugang 已含完整游戏源码（main @ 2b5f323）
 - Release v1.0.0 附源码压缩包：moyugang-v1.0.0-source.zip
 - 提醒用户立即撤销临时 PAT
+
+---
+Task ID: 12
+Agent: 主 agent (Super Z)
+Task: 武器系统拓展 + 技能体系全面升级 + 手势识别/操控舒适度升级 + GitHub Pages 部署（保持 Vite 架构未迁移 Next.js）
+
+Work Log:
+- weaponSystem.ts：WeaponId 扩为双武器；新增 QINGLUO_SAN 青罗伞矢量定义（黛青渐变伞面+三重波浪裙边+七骨辐条+弯钩柄+朱穗+青碧辉光 glowColor）；模块级活动武器状态 setActiveWeapon/getActiveWeaponId；WEAPON_LIST 图鉴元数据
+- canvasRenderer.ts：三处硬编码 QINGSHUANG_JIAN 改读活动武器（剑气轨迹/残影 reach 对齐）；drawProjectile 新增 INK_BLADE 墨浪分支（青碧弧潮+浪尖飞沫，友军/敌军双色）
+- charRecognizer.ts：新增「川」三江引「心」墨心归元模板；CharTemplateDef.alt 连笔变体机制（之一笔快写/山两笔快写）；MIN_STROKE_PX 8→6（心字短点成笔）；标定收紧 FAIL_SCORE 0.085→0.078 + 差1笔惩罚 1.18→1.28（修复螺旋乱画因山连笔变体被误识的回归）；川模板首笔加强左掠撇弧度（修复三直竖被点云误判为山）
+- BattleView.tsx：武器切换（V 键/按钮/localStorage 偏好 + 移速调整）；伞招式差异化（三式「旋伞回雪」108px 周身击退、断水斩→翻雨旋浪带±70、伞盾×1.3、轻击×0.95）；triggerSkillRiverWaves（三道墨浪 stagger+水花粒子）、triggerSkillHeartHeal（群疗+金绿文光）；退笔/重写函数与浮签按钮；七字速查表全文案同步
+- 修复三处交互缺陷：①字诀开关提示的无条件清空计时器会误杀快速书写后的识别结果（改条件式清空）②手势徽章清除条件比对「横」vs「横」永不相等导致不消散 ③首战教学卡未设 pointer-events-none 拦截下半屏书写/拖动的 pointerup
+- 验证：识别器测试 26 项全 PASS（七字规整/潦草/连笔/交叉误识/六种乱画拒绝）；tsc 零错误；vite build 成功；PAGES_BASE=/moyugang/ 构建产物路径校验（index/sw navigateFallback/manifest 全部 /moyugang/ 前缀，precache 相对路径天然适配）；守护进程重启；scripts/verify_weapon_chars.py Playwright 全绿（武器切换徽章/「山」神品竹影墨盾/「川」神品三江引/退笔重写/切回/零控制台错误）+ 截图 verify8_*.png；诊断期间产出 scripts/diag*.py 探针工具链（未入仓）
+- 部署：vite.config.ts PAGES_BASE 参数化（base/manifest id/start_url/scope/icons/navigateFallback）；.github/workflows/deploy-pages.yml（bun 构建 + actions/deploy-pages）；干净树单提交 639abbb（59 files）force-with-lease 推送；API 启用 Pages(build_type=workflow)；Actions 3 轮询 completed success
+- 线上验证：https://ariefenv-hash.github.io/moyugang/ 200（标题/manifest/sw.js 全 200）；Release v1.1.0 附 moyugang-v1.1.0-source.zip
+
+Stage Summary:
+- 新文件：.github/workflows/deploy-pages.yml / scripts/verify_weapon_chars.py / README.md
+- 修改：weaponSystem / canvasRenderer / charRecognizer / BattleView / LoreModal / gameData / vite.config
+- 线上：GitHub Pages 正式运行（main 推送自动部署）；架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js
+- 提醒用户撤销临时 PAT（本轮再次使用后）
