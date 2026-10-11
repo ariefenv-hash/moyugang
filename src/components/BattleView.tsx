@@ -2786,10 +2786,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
       {/* ===== 首战教学引导（仅第一折且未完成时展示） ===== */}
       {showTutorial && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-sm w-[calc(100%-2rem)] animate-fade-in">
-          <div className="p-4 bg-stone-900/95 border border-amber-800/50 rounded-2xl shadow-2xl backdrop-blur-md">
+          <div className="relative p-4 scroll-mount-thin text-ink">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-serif font-bold text-amber-200 flex items-center gap-1.5">
-                <PenTool className="w-4 h-4 text-amber-400" />
+              <span className="text-sm font-serif font-bold text-ink-strong flex items-center gap-1.5">
+                <PenTool className="w-4 h-4 text-cinnabar" />
                 初入战场 · 三步上手法
               </span>
               <button
@@ -2797,28 +2797,28 @@ export const BattleView: React.FC<BattleViewProps> = ({
                   setShowTutorial(false);
                   onTutorialDone();
                 }}
-                className="p-1 text-stone-400 hover:text-white cursor-pointer"
+                className="p-1 text-ink-light hover:text-ink-strong cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <ol className="text-xs text-stone-300 font-serif space-y-1.5 list-decimal list-inside leading-relaxed">
+            <ol className="text-xs text-ink-mid font-serif space-y-1.5 list-decimal list-inside leading-relaxed">
               <li>
-                <strong className="text-cyan-300">招募采墨侍</strong>
+                <strong className="text-daiqing">招募采墨侍</strong>
                 （顶栏「采墨 50」）→ 他们会自动汲取墨韵运回墨阁
               </li>
               <li>
-                <strong className="text-emerald-300">触屏推荐双区模式</strong>
+                <strong className="text-shilv">触屏推荐双区模式</strong>
                 ：左半屏按住浮现摇杆移动，右手点敌攻击或划手势施法；电脑端 WASD + J 攻击
               </li>
               <li>
-                <strong className="text-amber-300">横划屏幕</strong>
+                <strong className="text-cinnabar">横划屏幕</strong>
                 施放断水斩，
-                <strong className="text-amber-300">画圆</strong>
+                <strong className="text-cinnabar">画圆</strong>
                 起竹影盾，攒满绝意释放「临江仙」大招！
               </li>
             </ol>
-            <p className="mt-2 pt-2 border-t border-stone-800 text-[10px] text-stone-500">
+            <p className="mt-2 pt-2 border-t rule-ink text-[10px] text-ink-light">
               提示：ESC / P 可随时暂停 · 连墨45召墨龙 · 集齐文房四宝获「文光焕彩」· 残血自动触发墨滞时刻
             </p>
           </div>

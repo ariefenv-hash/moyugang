@@ -228,61 +228,62 @@ export default function App() {
   const endlessUnlocked = progress.completedLevels.includes(5);
 
   return (
-    <div className="w-full h-full min-h-screen bg-stone-950 text-stone-100 font-sans selection:bg-amber-600 selection:text-white">
+    <div className="w-full h-full min-h-screen bg-ink-strong text-paper font-sans selection:bg-cinnabar selection:text-paper-soft">
       {/* View Router */}
       {mode === 'MENU' && (
-        <div className="relative min-h-screen flex flex-col justify-between overflow-hidden">
-          {/* Background Scenic Landscape Layer */}
-          <div className="absolute inset-0 pointer-events-none opacity-40">
+        <div className="relative min-h-screen flex flex-col justify-between overflow-hidden paper-grain text-ink">
+          {/* 远山淡墨：纸面顶部若隐若现 */}
+          <div className="absolute inset-x-0 top-0 h-64 md:h-80 pointer-events-none overflow-hidden">
             <img
               src={bgInkMountains}
               alt="Ink mountains"
               referrerPolicy="no-referrer"
-              className="w-full h-full object-cover object-center contrast-125"
+              className="w-full h-full object-cover object-top opacity-18 grayscale contrast-125 mix-blend-multiply"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/70 to-stone-950/40" />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-paper/35 to-paper" />
           </div>
 
-          {/* Top Bar Contract */}
-          <header className="relative z-10 flex items-center justify-between gap-8 px-8 py-5 border-b border-stone-800/80 bg-stone-950/40 backdrop-blur-sm">
+          {/* 天杆：题签横档 */}
+          <header className="relative z-10 flex items-center justify-between gap-8 px-8 py-4 border-b rule-ink-strong">
             <div className="flex items-center gap-3">
-              <span className="text-xl font-bold font-serif tracking-widest text-stone-100">
+              <span className="seal w-8 h-8 flex items-center justify-center text-base font-bold shrink-0" aria-hidden="true">墨</span>
+              <span className="text-xl font-bold font-serif tracking-widest text-ink-strong">
                 墨韵战纪 · 风雅篇
               </span>
             </div>
 
-            <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-stone-400">
+            <nav className="hidden md:flex items-center gap-6 text-sm text-ink-mid">
               <button
                 onClick={() => setMode('LEVEL_SELECT')}
-                className="hover:text-stone-100 transition-colors whitespace-nowrap cursor-pointer"
+                className="hover:text-ink-strong border-b border-transparent hover:border-cinnabar/70 pb-0.5 transition-colors whitespace-nowrap cursor-pointer"
               >
                 选折启程
               </button>
               <button
                 onClick={() => setMode('UPGRADES')}
-                className="hover:text-stone-100 transition-colors whitespace-nowrap cursor-pointer"
+                className="hover:text-ink-strong border-b border-transparent hover:border-cinnabar/70 pb-0.5 transition-colors whitespace-nowrap cursor-pointer"
               >
                 赋诗研习
               </button>
               <button
                 onClick={() => setShowLore(true)}
-                className="hover:text-stone-100 transition-colors whitespace-nowrap cursor-pointer"
+                className="hover:text-ink-strong border-b border-transparent hover:border-cinnabar/70 pb-0.5 transition-colors whitespace-nowrap cursor-pointer"
               >
                 兵法心诀
               </button>
             </nav>
 
             <div className="flex items-center gap-3 shrink-0">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-stone-900/80 border border-stone-800 rounded-lg">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-xs text-stone-400">灵玉</span>
-                <span className="text-sm font-bold text-amber-300 font-mono tabular-nums">
+              <div className="flex items-center gap-2 px-3 py-1.5 panel-paper-deep">
+                <Sparkles className="w-3.5 h-3.5 text-tenghuang" />
+                <span className="text-xs text-ink-mid">灵玉</span>
+                <span className="text-sm font-bold text-ink-strong font-mono tabular-nums">
                   {progress.jadeSparks}
                 </span>
               </div>
               <button
                 onClick={toggleSound}
-                className="p-2 text-stone-400 hover:text-stone-100 bg-stone-900 border border-stone-800 rounded-lg transition-colors cursor-pointer"
+                className="btn-ink-quiet p-2"
                 title="音频开关"
               >
                 {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -298,12 +299,13 @@ export default function App() {
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className="flex items-center gap-2 text-xs text-amber-300/80 tracking-widest font-serif"
+                className="flex items-center gap-2.5 text-xs text-ink-mid tracking-widest font-serif"
               >
+                <span className="inline-block w-6 h-px bg-cinnabar/70" aria-hidden="true" />
                 <span>水墨风雅</span>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" className="text-cinnabar/60">·</span>
                 <span>独创剑仙主角</span>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" className="text-cinnabar/60">·</span>
                 <span>火柴人战争新篇</span>
               </motion.div>
 
@@ -311,18 +313,18 @@ export default function App() {
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.55, delay: 0.08 }}
-                className="text-4xl md:text-5xl font-serif font-black tracking-widest text-stone-100 leading-tight"
+                className="text-4xl md:text-5xl font-serif font-black tracking-widest text-ink-strong leading-tight"
               >
                 一砚清霜写江山
                 <br />
-                <span className="text-amber-200">剑破千峰墨染云</span>
+                <span className="text-cinnabar">剑破千峰墨染云</span>
               </motion.h1>
 
               <motion.p
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.55, delay: 0.16 }}
-                className="text-sm text-stone-400 font-serif leading-relaxed"
+                className="text-sm text-ink-mid font-serif leading-loose max-w-md"
               >
                 告别单调纯旁观的阵线对撞！亲临前线操控「云砚剑仙」，手握落墨三式与绝技「水墨山河」，统领采墨侍、折柳剑客、抚竹射手与墨岩卫，征战五大诗意关卡。更有墨灵祝福三选一、文房四宝收集、墨龙卷与墨滞时刻等奇遇机制，通关后更可入无尽长夜，迎战无穷墨潮！
               </motion.p>
@@ -336,23 +338,23 @@ export default function App() {
               >
                 <button
                   onClick={() => setMode('LEVEL_SELECT')}
-                  className="py-3.5 px-7 bg-amber-200 hover:bg-amber-100 text-stone-950 font-serif font-bold text-sm rounded-xl flex items-center gap-2.5 shadow-2xl transition-all cursor-pointer active:scale-95"
+                  className="btn-seal py-3 px-7 font-serif font-bold text-sm tracking-widest flex items-center gap-2.5 cursor-pointer"
                 >
-                  <Play className="w-4 h-4 fill-stone-950" />
+                  <Play className="w-4 h-4 fill-current" />
                   启卷入战
                 </button>
 
                 <button
                   onClick={() => setMode('UPGRADES')}
-                  className="py-3.5 px-6 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 font-serif text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer"
+                  className="btn-ink py-3 px-6 font-serif text-sm tracking-widest flex items-center gap-2 cursor-pointer"
                 >
-                  <BookOpen className="w-4 h-4 text-amber-400" />
+                  <BookOpen className="w-4 h-4 text-daiqing" />
                   翰墨赋诗阁
                 </button>
 
                 <button
                   onClick={() => setShowLore(true)}
-                  className="py-3.5 px-5 bg-stone-900/60 hover:bg-stone-800 border border-stone-800 text-stone-400 hover:text-stone-200 font-serif text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer"
+                  className="btn-ink-quiet py-3 px-4 font-serif text-sm tracking-widest flex items-center gap-2 cursor-pointer"
                 >
                   <Scroll className="w-4 h-4" />
                   兵法心诀
@@ -364,59 +366,69 @@ export default function App() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.32 }}
-                className="pt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-stone-400 font-mono"
+                className="pt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-ink-light font-serif"
               >
-                <span>当前进度: 第 {progress.unlockedLevel}/5 折</span>
-                <span aria-hidden="true">·</span>
-                <span>已通关: {progress.completedLevels.length} 关</span>
+                <span>当前进度: 第 <span className="font-mono text-ink-mid">{progress.unlockedLevel}</span>/5 折</span>
+                <span aria-hidden="true" className="text-cinnabar/50">·</span>
+                <span>已通关: <span className="font-mono text-ink-mid">{progress.completedLevels.length}</span> 关</span>
                 {progress.endlessBest > 0 && (
                   <>
-                    <span aria-hidden="true">·</span>
-                    <span className="text-purple-300">无尽最佳: {progress.endlessBest} 波</span>
+                    <span aria-hidden="true" className="text-cinnabar/50">·</span>
+                    <span className="text-daiqing">无尽最佳: <span className="font-mono">{progress.endlessBest}</span> 波</span>
                   </>
                 )}
               </motion.div>
             </div>
 
-            {/* Right Column: Hero Art Showcase Frame */}
+            {/* Right Column: 装裱立轴式英雄画框 */}
             <motion.div
               initial={{ opacity: 0, scale: 0.94 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, delay: 0.15 }}
-              className="relative w-72 h-72 md:w-88 md:h-88 shrink-0 rounded-3xl overflow-hidden border border-stone-800 shadow-2xl bg-stone-900/80"
+              className="relative shrink-0 scroll-mount-thin p-3 md:p-4"
             >
-              <img
-                src={bgHeroAvatar}
-                alt="云砚·青莲剑仙"
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover object-center contrast-110"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-transparent to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4 text-center">
-                <span className="text-sm font-serif font-bold text-stone-100 tracking-wider">
-                  阵心主角 · 云砚剑笔仙
-                </span>
-                <p className="text-[11px] text-cyan-300 font-serif mt-0.5">
-                  身随剑动 · 墨意通灵 · 随君冲锋
-                </p>
+              <div className="flex gap-3">
+                <div className="relative w-64 h-72 md:w-72 md:h-80 overflow-hidden">
+                  <img
+                    src={bgHeroAvatar}
+                    alt="云砚·青莲剑仙"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover object-center contrast-110"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-ink-strong/85 via-transparent to-transparent" />
+                  <div className="absolute bottom-3 inset-x-3 text-center">
+                    <span className="text-sm font-serif font-bold text-paper tracking-wider">
+                      阵心主角 · 云砚剑笔仙
+                    </span>
+                    <p className="text-[11px] text-paper-dim font-serif mt-0.5">
+                      身随剑动 · 墨意通灵 · 随君冲锋
+                    </p>
+                  </div>
+                </div>
+                {/* 竖排题跋签条 */}
+                <div className="hidden sm:flex w-9 py-4 items-start justify-center panel-paper-deep border-rule-ink">
+                  <span className="verse-v text-[13px] font-serif text-ink-mid">
+                    十步杀一人 千里不留行
+                  </span>
+                </div>
               </div>
             </motion.div>
           </main>
 
-          {/* Footer */}
-          <footer className="relative z-10 flex flex-wrap items-center justify-between gap-2 px-8 py-4 border-t border-stone-900/80 bg-stone-950/80 text-xs text-stone-500">
-            <span>《风雅集·翰墨千秋》 第一大章全五折已备</span>
+          {/* 地杆：卷尾 */}
+          <footer className="relative z-10 flex flex-wrap items-center justify-between gap-2 px-8 py-4 border-t rule-ink text-xs text-ink-light">
+            <span className="font-serif tracking-wider">《风雅集·翰墨千秋》 第一大章全五折已备</span>
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setShowAchievements(true)}
-                className="text-stone-500 hover:text-amber-300 transition-colors flex items-center gap-1 cursor-pointer"
+                className="text-ink-mid hover:text-cinnabar transition-colors flex items-center gap-1.5 cursor-pointer"
               >
-                <Award className="w-3 h-3" />
+                <Award className="w-3.5 h-3.5" />
                 文心宝箓（{progress.achievements.length}/{ACHIEVEMENTS.length}）
               </button>
               <button
                 onClick={handleResetProgress}
-                className="text-stone-600 hover:text-stone-400 transition-colors flex items-center gap-1 cursor-pointer"
+                className="text-ink-light hover:text-ink-mid transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <RotateCcw className="w-3 h-3" />
                 重置感悟进度

@@ -91,3 +91,24 @@ Stage Summary:
 - 新增技能：skills/taste-literati-brush、skills/game-world-design、skills/anthropic-frontend-design
 - 应用规划：①文人笔墨×官方前端设计=UI 视觉身份升级（装裱卷轴布局/墨色五阶/留白/题跋）②game-world-design=情节延伸前置产出 GAME_DESIGN 设计合同
 - 架构未动，纯技能库扩充
+
+---
+Task ID: 6
+Agent: main (Super Z)
+Task: 纸墨主题 UI 全面升级（霞鹜文楷接入 + 文人画设计系统），保持 Vite 架构未迁移 Next.js
+
+Work Log:
+- 确认沙箱字库已含霞鹜文楷（Regular/Medium/Light/Mono 六枚 TTF），无需安装
+- scripts/subset_wenkai.py：扫描 src 全部字符 + 安全冗余集（1951 字），pyftsubset 子集化 Regular/Medium → woff2 各约 810KB（原 25MB/枚），输出至 src/assets/fonts/
+- src/index.css 全面重写：@font-face ×2、@theme 令牌（宣纸四阶/墨色四阶/朱砂/黛青/矿物辅色）、组件类（paper-grain 纸纹、scroll-mount 装裱立轴、seal 印章、btn-seal/btn-ink/btn-night 印式按钮、rule-zhusi 朱丝栏、verse-v 竖排题跋、panel-paper/panel-night）、印章盖章动画
+- index.html：移除 Google Fonts 外链、预加载两枚 woff2、theme-color 换 silk-deep
+- 页面重塑：App 主菜单（宣纸卷面+远山淡墨+「墨」印+竖排题跋签条+装裱画框）、ChapterSelect（经折装册页+朱丝左界引文+首领战钤印+无尽夜色折页）、PavilionUpgrades（朱丝栏双线+简牍纸条+印式按钮）、VictoryDefeatModal（立轴捷报「捷/思」印+题跋）、PauseOverlay（「歇」印立轴）、AchievementsModal（文心印谱：印成者朱未悟者白）、BlessingModal（夜幕三灵符：凡墨/珍黛青/绝朱砂）、LoreModal（装裱卷宗）、BattleView 教学卡（纸上便签）
+- 战场 HUD 保持夜色（纸夜二元设计）；设计决策记录：冷调绢白避开 AI 模板暖奶油底、朱砂仅点睛不铺开
+- 修复：390px 头部灵玉芯片裁切（px/gap 响应式 + truncate）、无尽卡奖励行折行（whitespace-nowrap）
+- 验证：tsc --noEmit 零错误；vite build 成功（字体正确 hash 打包）；agent-browser 冒烟（菜单/选折/墨阁/战斗+教学卡/ESC 暂停/印谱/心诀/390x844 窄屏）控制台零错误
+- 截图 10 张：verify4_menu/select/upgrades/battle/pause/achv/lore/mobile_menu/mobile_select/mobile_select2
+
+Stage Summary:
+- 交付：/home/z/my-project/download/ink_and_steel_v4.zip（39 文件含 v4_README）
+- 新增 src/assets/fonts/*.woff2 ×2 与 scripts/subset_wenkai.py
+- 离线可玩（无 Google Fonts 依赖）；架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js
