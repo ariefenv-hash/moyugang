@@ -221,7 +221,12 @@ export interface LevelConfig {
     | 'MIST'
     | 'AUTUMN'
     | 'STORM'
-    | 'VOID';
+    | 'VOID'
+    | 'LOTUS'
+    | 'GOOSE'
+    | 'CHRYS'
+    | 'GLOOM'
+    | 'STRING';
   initialInk: number;
   enemySpawns: {
     time: number;

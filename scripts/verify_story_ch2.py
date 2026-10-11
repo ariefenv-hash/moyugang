@@ -100,11 +100,17 @@ async def main():
             ok(f'A6 第二章折卡「{t}」', t in body)
         ok('A6b 新玩家第二章锁定', '尚未感悟' in body)
 
-        # A7 未启之卷（第三章）预告
+        # A7 未启之卷预告（第三章已启 → 现未启之卷为第四章边塞引；漱玉词应展示五折已启内容）
         await page.get_by_role('button', name='漱玉词').first.click()
         await page.wait_for_timeout(700)
         body = await page.evaluate("() => document.body.innerText")
-        ok('A7 未启之卷预告（断弦夫人/敬请期待）', ('断弦' in body and '敬请期待' in body))
+        ok('A7a 漱玉词已启（五折折卡可见）', ('溪亭暮弦' in body and '绝响广陵' in body))
+        await page.get_by_role('button', name='边塞引').first.click()
+        await page.wait_for_timeout(700)
+        body = await page.evaluate("() => document.body.innerText")
+        ok('A7b 未启之卷预告（边塞引/敬请期待）', ('孤城万仞' in body and '敬请期待' in body))
+        await page.get_by_role('button', name='风雅集').first.click()
+        await page.wait_for_timeout(400)
         await page.screenshot(path=f'{OUT}/verify10_upcoming.png')
 
         # A8 第一章战斗：卷首语 + 诗签

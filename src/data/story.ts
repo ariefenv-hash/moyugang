@@ -32,7 +32,7 @@ export const MAIN_STORY_OUTLINE: StoryOutlineEntry[] = [
     anthology: '漱玉词',
     name: '断弦遗音',
     teaser: '断弦夫人以音律蚀文，广陵散遗谱成决胜之钥。',
-    status: 'UPCOMING',
+    status: 'RELEASED',
   },
   {
     id: 4,
@@ -388,6 +388,160 @@ const CH2_LEVELS: LevelConfig[] = [
 ];
 
 /* ============================================================
+   第三大章 《漱玉词·断弦遗音》
+   文枢殿后北天断弦之音南侵：前朝教坊第一琴师「断弦夫人」
+   以焦尾古琴奏「无声之曲」，音律蚀文。云砚集《广陵散》遗谱，
+   以嵇康绝响对奏破之。（词境取意漱玉词五篇）
+   ============================================================ */
+
+const CH3_LEVELS: LevelConfig[] = [
+  {
+    id: 11,
+    chapter: '漱玉词·第一折',
+    title: '溪亭暮弦',
+    subtitle: '藕花深处，弦音初试',
+    poeticVerse: '常记溪亭日暮，沉醉不知归路。惊起一滩鸥鹭，弦动满滩词句。',
+    poeticAuthor: '—— 如梦令·溪亭引',
+    description: '断弦音波掠过溪亭，藕花深处的词句纷纷落水成墨。鸥鹭惊起，衔着遗谱残页没入暮色——守住溪亭墨阁，为云砚夺得第一页遗谱！',
+    storyIntro: '溪亭日暮，藕花深处本该沉醉不知归路。可如今弦音过处，词句落水成墨，鸥鹭惊飞衔谱——断弦夫人的琴音，第一次掠过江南。',
+    ambientType: 'LOTUS',
+    playerBaseHp: 3600,
+    enemyBaseHp: 4800,
+    initialInk: 460,
+    rewardJade: 560,
+    enemyWaveInterval: 15,
+    baselineWaves: ['SWORD', 'ARCHER'],
+    enemySpawns: [
+      { time: 8, unitType: 'SWORD', count: 3 },
+      { time: 26, unitType: 'ARCHER', count: 2 },
+      { time: 48, unitType: 'SWORD', count: 3 },
+      { time: 70, unitType: 'GUARDIAN', count: 2 },
+      { time: 94, unitType: 'ARCHER', count: 3 },
+      { time: 118, unitType: 'SWORD', count: 4 },
+    ],
+  },
+  {
+    id: 12,
+    chapter: '漱玉词·第二折',
+    title: '雁字西楼',
+    subtitle: '锦书谁寄，月满西楼',
+    poeticVerse: '云中谁寄锦书来？雁字回时，月满西楼。',
+    poeticAuthor: '—— 一剪梅·西楼引',
+    description: '雁阵衔着天下锦书南渡，断弦夫人的哑弦歌伎立于云中，弦起之处书信尽成白纸。守住西楼渡口，护送雁阵归还每一封锦书！',
+    storyIntro: '红藕香残，玉簟秋凉。雁字回时的月夜，锦书在弦音里一页页褪成白纸——西楼渡口，是文魂南渡的最后航路。',
+    ambientType: 'GOOSE',
+    playerBaseHp: 3800,
+    enemyBaseHp: 5200,
+    initialInk: 480,
+    rewardJade: 620,
+    enemyWaveInterval: 15,
+    baselineWaves: ['ARCHER', 'GUARDIAN', 'HARPIST'],
+    enemySpawns: [
+      { time: 6, unitType: 'ARCHER', count: 3 },
+      { time: 24, unitType: 'GUARDIAN', count: 2 },
+      { time: 46, unitType: 'HARPIST', count: 2 },
+      { time: 68, unitType: 'SWORD', count: 4 },
+      { time: 92, unitType: 'GUARDIAN', count: 3 },
+      { time: 116, unitType: 'HARPIST', count: 3 },
+    ],
+  },
+  {
+    id: 13,
+    chapter: '漱玉词·第三折',
+    title: '黄花瘦影',
+    subtitle: '帘卷西风，琴魅守谱',
+    poeticVerse: '莫道不销魂，帘卷西风，人比黄花瘦。',
+    poeticAuthor: '—— 醉花阴·东篱引',
+    description: '焦尾古琴自焚那夜，琴魂不散，化作琴魅「断章」镇守东篱菊圃。它以焚音蚀字，所过之处菊瓣皆成灰墨。击败琴魅，夺回遗谱第三节！',
+    storyIntro: '东篱把酒黄昏后，有暗香盈袖。可菊圃深处立着一具焚琴的残骸——琴魅「断章」以断弦为爪，以焚音为语，守着遗谱第三节。',
+    ambientType: 'CHRYS',
+    playerBaseHp: 4000,
+    enemyBaseHp: 5600,
+    initialInk: 500,
+    rewardJade: 680,
+    enemyWaveInterval: 15,
+    baselineWaves: ['SWORD', 'ARCHER', 'GUARDIAN'],
+    boss: {
+      name: '焦尾琴魅·断章',
+      title: '洗墨麾下琴魂',
+      hp: 4600,
+      attack: 105,
+      speed: 150,
+    },
+    bossUnit: 'HARPIST',
+    bossTime: 35,
+    enemySpawns: [
+      { time: 6, unitType: 'SWORD', count: 3 },
+      { time: 24, unitType: 'ARCHER', count: 3 },
+      { time: 44, unitType: 'GUARDIAN', count: 2 },
+      { time: 66, unitType: 'HARPIST', count: 2 },
+      { time: 88, unitType: 'SWORD', count: 4 },
+      { time: 112, unitType: 'GUARDIAN', count: 3 },
+    ],
+  },
+  {
+    id: 14,
+    chapter: '漱玉词·第四折',
+    title: '声声慢雨',
+    subtitle: '梧桐细雨，守谱达旦',
+    poeticVerse: '梧桐更兼细雨，到黄昏、点点滴滴。这次第，怎一个愁字了得！',
+    poeticAuthor: '—— 声声慢·守夜引',
+    description: '遗谱第四节沉在梧桐苑的雨水里，字迹随雨点滴落。断弦夫人的墨聋力士冒雨强攻——守至天明，一字一画皆是文魂！',
+    storyIntro: '寻寻觅觅，冷冷清清，凄凄惨惨戚戚。梧桐细雨点点滴滴，打在残谱上，也打在每一个文人的心上——天明之前，墨阁不可失。',
+    ambientType: 'GLOOM',
+    playerBaseHp: 4200,
+    enemyBaseHp: 6000,
+    initialInk: 520,
+    rewardJade: 740,
+    enemyWaveInterval: 16,
+    baselineWaves: ['ARCHER', 'GUARDIAN', 'HARPIST'],
+    enemySpawns: [
+      { time: 8, unitType: 'GUARDIAN', count: 2 },
+      { time: 28, unitType: 'HARPIST', count: 2 },
+      { time: 50, unitType: 'SWORD', count: 4 },
+      { time: 74, unitType: 'GUARDIAN', count: 3 },
+      { time: 98, unitType: 'ARCHER', count: 4 },
+      { time: 122, unitType: 'HARPIST', count: 3 },
+    ],
+  },
+  {
+    id: 15,
+    chapter: '漱玉词·第五折',
+    title: '绝响广陵',
+    subtitle: '无声之曲，有生之音',
+    poeticVerse: '广陵散于今绝矣，然文心不死，弦歌不辍。',
+    poeticAuthor: '—— 广陵散·终章引',
+    description: '断弦夫人立于琴台之上，欲奏「无声之曲」令天下文字俱寂。七页遗谱齐聚，以嵇康绝响对奏——剑锋作弦，文心为谱，破她琴中万千文魂！',
+    storyIntro: '琴台高筑，万籁俱寂。断弦夫人十指抚弦，第一枚音起，天地间的字迹便开始褪色——以剑为弦，以文心为谱，与她对奏这最后一曲！',
+    ambientType: 'STRING',
+    playerBaseHp: 4600,
+    enemyBaseHp: 6600,
+    initialInk: 560,
+    rewardJade: 900,
+    enemyWaveInterval: 17,
+    baselineWaves: ['SWORD', 'GUARDIAN', 'HARPIST'],
+    boss: {
+      name: '断弦夫人·绝响',
+      title: '无声之曲抚琴人',
+      hp: 5400,
+      attack: 120,
+      speed: 155,
+    },
+    bossUnit: 'HARPIST',
+    bossTime: 25,
+    enemySpawns: [
+      { time: 5, unitType: 'GUARDIAN', count: 2 },
+      { time: 24, unitType: 'ARCHER', count: 3 },
+      { time: 46, unitType: 'HARPIST', count: 2 },
+      { time: 70, unitType: 'SWORD', count: 5 },
+      { time: 96, unitType: 'GUARDIAN', count: 3 },
+      { time: 122, unitType: 'HARPIST', count: 3 },
+      { time: 148, unitType: 'SWORD', count: 4 },
+    ],
+  },
+];
+
+/* ============================================================
    大章元数据全集（章前引子 / 卷首诗 / 通关尾声）
    ============================================================ */
 
@@ -421,12 +575,12 @@ export const STORY_CHAPTERS: StoryChapterMeta[] = [
     key: 'shuyu',
     anthology: '漱玉词',
     name: '断弦遗音',
-    verse: '弦断有谁听，墨枯词未成。',
-    verseAuthor: '—— 漱玉词·预告',
-    intro: '',
-    epilogue: '',
-    status: 'UPCOMING',
-    teaser: MAIN_STORY_OUTLINE[2].teaser,
+    verse: '寻寻觅觅字成灰，冷冷清清弦断时。莫道文心随墨逝，广陵绝响有归期。',
+    verseAuthor: '—— 漱玉词·卷首',
+    intro: '文枢殿尘埃落定不过旬月，北天断弦之音夜夜可闻。江南旧亭之上，一位抱焦尾古琴的白衣夫人踏水而来——她名唤断弦，曾是前朝教坊第一琴师。玄墨军团破城那夜，她以此琴弹退千军，弦断七根，琴身俱焚，唯余焦尾。蚀文君许她重续断弦，代价是以「无声之曲」洗尽天下有声之文。断弦夫人一曲《广陵散》残章，字随风散——文人墨客的字迹成了哑墨，戏台上的曲谱成了白纸。唯有集齐《广陵散》遗谱七页，以嵇康刑前之绝响对奏，方能破她琴中囚禁的万千文魂。云砚循琴音南下，于漱玉词境再启战端。',
+    epilogue: '「无声之曲」终于断了最后一个音。断弦夫人散去的刹那，万千文魂自琴身飞出，如萤火归林，字字归位。她最后望了一眼那张焦尾古琴：「原来琴弦断了，曲未必要绝——嵇康先生，惭愧。」广陵散遗谱七页合一，化作一道青光没入云砚剑鞘。北天之上，褪色的潮水正在退去；可文脉尽头，隐约有铁蹄踏碑之声——边关的残碑，正在等待持笔之人。',
+    status: 'RELEASED',
+    levels: CH3_LEVELS,
   },
   {
     id: 4,
@@ -518,7 +672,7 @@ export const STORY_CHAPTERS: StoryChapterMeta[] = [
    工具函数（UI 与解锁链使用）
    ============================================================ */
 
-/** 所有已启章节的平铺关卡（含第一大章与第二大章） */
+/** 所有已启章节的平铺关卡（含第一、二、三大章） */
 export const RELEASED_LEVELS: LevelConfig[] = STORY_CHAPTERS.flatMap(
   (c) => c.levels ?? []
 );

@@ -420,3 +420,24 @@ Stage Summary:
 - 新增：scripts/verify_zone_fix.py（22 项）/ scripts/verify_prod_smoke_v12.py（生产冒烟）
 - 线上：https://ariefenv-hash.github.io/moyugang/ 已更新（f5dafb0）
 - 提醒用户立即撤销本轮临时 PAT
+
+---
+Task ID: 20
+Agent: 主 agent (Super Z)
+Task: 第三大章《漱玉词·断弦遗音》全五折实装 + 全面特效增强 + 无头实测 + 推送上线
+
+Work Log:
+- 第三章剧情（id 11-15，词境取意漱玉词五篇）：溪亭暮弦(如梦令·LOTUS)→雁字西楼(一剪梅·GOOSE)→黄花瘦影(醉花阴·CHRYS·中Boss焦尾琴魅·断章)→声声慢雨(声声慢·GLOOM)→绝响广陵(终Boss断弦夫人·绝响·STRING)；剧情线=断弦夫人以「无声之曲」音律蚀文→集《广陵散》遗谱七页→嵇康绝响对奏破之；难度曲线 3600/4800→4600/6600；章前引子/通关尾声/卷首诗全撰写，尾声埋线第四章边塞「铁蹄踏碑」
+- 数据驱动接入：story.ts 追加 CH3_LEVELS + 章元数据(RELEASED) + 总纲状态翻转；MAX_STORY_LEVEL_ID 10→15，解锁链/章签导航/引子弹窗/存档全自动适配；新增成就 琴魅断章(13)/漱玉绝响(15) + App 判定接入
+- 修复隐性 bug：handleVictory 用过期 progress 快照算成就，首次通关终折章成就漏发 → 本地合并 mergedProgress 后再判定（verify F3 专测通过）
+- 五个新氛围类型（types + canvasRenderer 三段式：天空渐变/天体/天气层/地面）：LOTUS 暮色玫金+半沉落日+萤火/藕花瓣/鸥鹭掠影；GOOSE 蓝紫月夜+满月+人字雁阵+红藕残瓣；CHRYS 琥珀黄昏+西风疾线+菊瓣打旋；GLOOM 凄冷青灰+点点滴滴缓雨+梧桐落叶；STRING 寒墨琴台+蚀缺细月+天际五根振动琴弦(两根断裂弦尾下垂)+墨色音符+地面音纹涟漪；全部纯 gameTime 函数（暂停凝滞）、行云模式裁剪
+- 特效增强七件套：①修复 drawParticle 四类型硬编码颜色忽略 p.color（PETAL/SNOW/BAMBOO/STAR）②新增 SLASH 剑气残痕（旋转长划）与 WATER_RIPPLE 涟纹环专属渲染③渲染器新增公共 addFxRing 接口④断水斩：起收双冲击环+沿途 10 枚剑气残痕+短震屏（青霜/翻雨旋异色）⑤竹影墨盾：环形竹节粒子螺旋上升+青碧护体环⑥星河笔阵：每波针出金芒枪口星火⑦临江仙：45→64 混合粒子+地面金环/天穹青环双重冲击波+随行墨龙卷；Boss 出场：震屏+16 枚玄墨迸发+暗红地面冲击环
+- DEV 钩子扩展（仅 DEV）：fxStats()（粒子/墨龙/Boss 在阵/狂暴）
+- 测试：新 scripts/verify_story_ch3.py 36/36 全 PASS（章签/默认落章/卷首诗/引子自动弹/五折卡/首领战×2/边塞引未启/卷首语/五氛围像素采样+两两互异/折三折五 Boss banner+在阵+出场粒子/三技能粒子迸发/终折尾声+漱玉绝响成就+无启下一章/移动端390px）；回归：手势 22/22·连招 21/21·分区 22/22·第二章 40/40（A7 断言更新为「漱玉词已启+边塞引未启」）·字诀 VERIFY PASS；tsc 零错误；PAGES_BASE=/moyugang/ 构建成功；生产冒烟 5/5（此前失败根因=本轮误以无 PAGES_BASE 构建，非代码问题）
+- 截图 9 张：verify_ch3_intro/select/lotus_battle/雁字西楼/黄花瘦影/声声慢雨/string_battle/boss15/boss13/victory/mobile
+
+Stage Summary:
+- 修改：story.ts(+170)/canvasRenderer.ts(+390)/BattleView.tsx/App.tsx/gameData.ts/types/game.ts/verify_story_ch2.py
+- 新增：scripts/verify_story_ch3.py（36 项）
+- 仓库新里程碑：主线十章已启其三（风雅集/山河谣/漱玉词）
+- 待办：推送 GitHub（PAT 验证后快进推送，Actions 自动部署 Pages）

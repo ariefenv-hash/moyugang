@@ -1553,6 +1553,32 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
     });
 
+    // 特效强化：剑气残痕沿途飞溅 + 起收双冲击环 + 短震屏（青霜剑/翻雨旋异色）
+    triggerShake(5, 0.22);
+    const fxColor = isUmbrella ? 'rgba(125, 211, 252, 0.9)' : 'rgba(165, 243, 252, 0.9)';
+    rendererRef.current?.addFxRing(startX, hero.y, fxColor, 8, 64, 0.32, 3, true);
+    rendererRef.current?.addFxRing(endX, hero.y, fxColor, 6, 46, 0.3, 2.4, true);
+    for (let i = 0; i < 10; i++) {
+      const tt = i / 9;
+      particlesRef.current.push({
+        id: `p_dash_${Date.now()}_${i}`,
+        x: startX + (endX - startX) * tt,
+        y: hero.y + (Math.random() - 0.5) * 30,
+        altitudeZ: 14 + Math.random() * 42,
+        vx: hero.facing * (60 + Math.random() * 90),
+        vy: (Math.random() - 0.5) * 70,
+        vz: 40 + Math.random() * 110,
+        color: i % 3 === 0 ? '#e0f2fe' : '#38bdf8',
+        size: Math.random() * 3.4 + 1.6,
+        alpha: 1,
+        life: 0.42,
+        maxLife: 0.42,
+        type: 'SLASH',
+        rotation: hero.facing === 1 ? -0.5 : Math.PI + 0.5,
+        vRot: hero.facing * 9,
+      });
+    }
+
     safeTimeout(() => {
       hero.isInvulnerable = false;
     }, 350);
@@ -1589,6 +1615,30 @@ export const BattleView: React.FC<BattleViewProps> = ({
         });
       }
     });
+
+    // 特效强化：竹影升腾（环形竹节粒子螺旋上升 + 青碧护体环）
+    rendererRef.current?.addFxRing(hero.x, hero.y, 'rgba(74, 222, 128, 0.85)', 14, 110, 0.4, 3.2, false);
+    triggerShake(3.5, 0.16);
+    for (let i = 0; i < 14; i++) {
+      const ang = (i / 14) * Math.PI * 2;
+      particlesRef.current.push({
+        id: `p_bshield_${Date.now()}_${i}`,
+        x: hero.x + Math.cos(ang) * 26,
+        y: hero.y + Math.sin(ang) * 12,
+        altitudeZ: 6 + Math.random() * 16,
+        vx: Math.cos(ang) * 46,
+        vy: Math.sin(ang) * 22,
+        vz: 110 + Math.random() * 90,
+        color: i % 2 === 0 ? '#4ade80' : '#22c55e',
+        size: Math.random() * 2.6 + 1.6,
+        alpha: 1,
+        life: 0.7,
+        maxLife: 0.7,
+        type: 'BAMBOO',
+        rotation: ang,
+        vRot: 2.2,
+      });
+    }
   };
 
   // Skill 3: Starlight Barrage (E / U or Zigzag Gesture 「折」 or 字诀「火」)
@@ -1628,6 +1678,24 @@ export const BattleView: React.FC<BattleViewProps> = ({
           duration: 0,
           maxDuration: 1.6,
         });
+        // 特效强化：针出金芒（枪口星火迸射）
+        for (let k = 0; k < 3; k++) {
+          particlesRef.current.push({
+            id: `p_barrage_${Date.now()}_${i}_${k}`,
+            x: heroRef.current.x + 24 * heroRef.current.facing,
+            y: heroRef.current.y + (Math.random() - 0.5) * 14,
+            altitudeZ: heroRef.current.altitudeZ + 22 + (Math.random() - 0.5) * 16,
+            vx: heroRef.current.facing * (140 + Math.random() * 120),
+            vy: (Math.random() - 0.5) * 60,
+            vz: 30 + Math.random() * 70,
+            color: k === 0 ? '#fde68a' : '#fbbf24',
+            size: Math.random() * 2.2 + 1.2,
+            alpha: 1,
+            life: 0.34,
+            maxLife: 0.34,
+            type: 'STAR',
+          });
+        }
       }, i * 35);
     }
   };
@@ -1713,23 +1781,38 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
     });
 
-    for (let i = 0; i < 45; i++) {
+    for (let i = 0; i < 64; i++) {
       particlesRef.current.push({
         id: `p_ult_${i}`,
-        x: hero.x + (Math.random() - 0.5) * 500,
-        y: hero.y + (Math.random() - 0.5) * 80,
-        altitudeZ: Math.random() * 150,
-        vx: (Math.random() - 0.5) * 220,
-        vy: (Math.random() - 0.5) * 80,
-        vz: Math.random() * 180,
-        color: i % 2 === 0 ? '#38bdf8' : '#facc15',
-        size: Math.random() * 5 + 3,
+        x: hero.x + (Math.random() - 0.5) * 560,
+        y: hero.y + (Math.random() - 0.5) * 90,
+        altitudeZ: Math.random() * 170,
+        vx: (Math.random() - 0.5) * 260,
+        vy: (Math.random() - 0.5) * 100,
+        vz: Math.random() * 220,
+        color: i % 3 === 0 ? '#e0f2fe' : i % 3 === 1 ? '#38bdf8' : '#facc15',
+        size: Math.random() * 5 + 2.4,
         alpha: 1,
-        life: 1.6,
-        maxLife: 1.6,
-        type: 'STAR',
+        life: 1.7,
+        maxLife: 1.7,
+        type: i % 4 === 0 ? 'SLASH' : 'STAR',
+        rotation: Math.random() * Math.PI,
+        vRot: (Math.random() - 0.5) * 14,
       });
     }
+
+    // 特效强化：山河图天地开阖（地面金环 + 天穹青环双重冲击波，随行墨龙卷）
+    rendererRef.current?.addFxRing(hero.x, hero.y, 'rgba(250, 204, 21, 0.9)', 24, 460, 0.55, 5, true);
+    rendererRef.current?.addFxRing(hero.x, hero.y - 40, 'rgba(56, 189, 248, 0.85)', 10, 320, 0.45, 3.4, false);
+    inkDragonsRef.current.push({
+      id: `dragon_ult_${Date.now()}`,
+      x: hero.x + hero.facing * 60,
+      y: hero.y,
+      vx: hero.facing * 520,
+      life: 2.4,
+      maxLife: 2.4,
+      hitIds: new Set(),
+    });
   };
 
   // Skill 6（字诀「川」）: 三江引·墨浪 — 三道墨浪沿三路横扫，穿行击退
@@ -2131,6 +2214,12 @@ export const BattleView: React.FC<BattleViewProps> = ({
       skillCds: { ...skillCdsRef.current },
     });
     // 连招体系观测：连墨段位/伤害倍率/衔招窗口/文思段数/最近敌军（无头实测用）
+    dbg.__inkGestureDebug.fxStats = () => ({
+      particles: particlesRef.current.length,
+      dragons: inkDragonsRef.current.length,
+      bossOnField: unitsRef.current.some((u) => u.isBoss && u.hp > 0),
+      bossEnraged: unitsRef.current.some((u) => u.isBoss && u.enraged),
+    });
     dbg.__inkGestureDebug.comboInfo = () => ({
       count: comboRef.current.count,
       tier: comboRef.current.tier,
@@ -2599,6 +2688,28 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
           sound.playUltimate();
           triggerSealStamp(WORLD_WIDTH - 200, (LANE_MIN_Y.current + LANE_MAX_Y.current) * 0.5, '尊');
+          // 特效强化：Boss 出场天地变色（震屏 + 玄墨迸发 + 暗红地面冲击环）
+          triggerShake(10, 0.55);
+          const bossSpawnX = WORLD_WIDTH - 200;
+          const bossSpawnY = (LANE_MIN_Y.current + LANE_MAX_Y.current) * 0.5;
+          rendererRef.current?.addFxRing(bossSpawnX, bossSpawnY, 'rgba(159, 18, 57, 0.9)', 12, 190, 0.5, 4, true);
+          for (let i = 0; i < 16; i++) {
+            particlesRef.current.push({
+              id: `p_bossin_${Date.now()}_${i}`,
+              x: bossSpawnX + (Math.random() - 0.5) * 70,
+              y: bossSpawnY + (Math.random() - 0.5) * 46,
+              altitudeZ: Math.random() * 90,
+              vx: (Math.random() - 0.5) * 180,
+              vy: (Math.random() - 0.5) * 90,
+              vz: 60 + Math.random() * 130,
+              color: i % 3 === 0 ? '#7f1d1d' : '#1c1917',
+              size: Math.random() * 4.5 + 2,
+              alpha: 1,
+              life: 0.9,
+              maxLife: 0.9,
+              type: 'SMOKE',
+            });
+          }
           spawnUnit(lv.bossUnit ?? (lv.id === 5 ? 'GUARDIAN' : 'SWORD'), true, WORLD_WIDTH - 200, undefined, true);
         }
       }

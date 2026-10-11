@@ -94,6 +94,8 @@ function checkAchievements(
     if (progress.completedLevels.includes(5)) add('chapter_clear');
     if (progress.completedLevels.includes(8)) add('chapter2_half');
     if (progress.completedLevels.includes(10)) add('chapter2_clear');
+    if (progress.completedLevels.includes(13)) add('chapter3_half');
+    if (progress.completedLevels.includes(15)) add('chapter3_clear');
     if (stats.baseHpPct >= 0.7) add('perfect_defense');
   }
   if (stats.maxCombo >= 20) add('combo_dragon');
@@ -150,18 +152,27 @@ export default function App() {
     const level = currentLevel;
     const isFirstClear = !progress.completedLevels.includes(level.id);
 
+    // 先本地合并出"本战之后"的进度快照：成就判定必须包含本折通关，
+    // 否则首次通关终折时章成就（漱玉绝响等）会因读到过期 state 而漏发
+    const nextUnlocked = Math.max(
+      progress.unlockedLevel,
+      Math.min(MAX_STORY_LEVEL_ID, level.id + 1)
+    );
+    const mergedProgress: PlayerProgress = {
+      ...progress,
+      completedLevels: Array.from(new Set([...progress.completedLevels, level.id])),
+      unlockedLevel: nextUnlocked,
+    };
+
     setProgress((prev) => {
       const completed = Array.from(new Set([...prev.completedLevels, level.id]));
       // 跨章解锁链：本折通关即解锁下一折（若已是已启章节末折，则解锁下一大章首折）
-      const nextUnlocked = Math.max(
-        prev.unlockedLevel,
-        Math.min(MAX_STORY_LEVEL_ID, level.id + 1)
-      );
+      const next = Math.max(prev.unlockedLevel, Math.min(MAX_STORY_LEVEL_ID, level.id + 1));
       const prevStars = prev.levelStars[level.id] || 0;
       return {
         ...prev,
         completedLevels: completed,
-        unlockedLevel: nextUnlocked,
+        unlockedLevel: next,
         jadeSparks: prev.jadeSparks + stats.jadeEarned,
         levelStars: {
           ...prev.levelStars,
@@ -172,7 +183,7 @@ export default function App() {
       };
     });
 
-    const newAchievements = checkAchievements(progress, stats, true, false);
+    const newAchievements = checkAchievements(mergedProgress, stats, true, false);
     if (newAchievements.length > 0) {
       const ids = newAchievements.map((a) => a.id);
       setProgress((prev) => ({

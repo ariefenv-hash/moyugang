@@ -104,6 +104,21 @@ export class CanvasRenderer {
     this.qualityLow = v;
   }
 
+  /** 公共特效环：技能/Boss 出场可从外部注入冲击环（flat=地面椭圆波） */
+  public addFxRing(
+    x: number,
+    y: number,
+    color: string,
+    r0: number,
+    r1: number,
+    life: number,
+    lw = 3,
+    flat = false
+  ) {
+    this.fxRings.push({ x, y, r0, r1, life, maxLife: life, color, lw, flat });
+    if (this.fxRings.length > 40) this.fxRings.splice(0, this.fxRings.length - 40);
+  }
+
   // 2.5D Coordinate to Screen position with perspective
   private getDepthScale(laneY: number, laneMin: number, laneMax: number): number {
     const t = Math.max(0, Math.min(1, (laneY - laneMin) / (laneMax - laneMin)));
@@ -536,6 +551,36 @@ export class CanvasRenderer {
       skyGrad.addColorStop(0.5, '#1d0f31');
       skyGrad.addColorStop(0.82, '#33163f');
       skyGrad.addColorStop(1, '#4a1e3f');
+    } else if (level.ambientType === 'LOTUS') {
+      // 溪亭暮弦：暮色玫金，藕花水气
+      skyGrad.addColorStop(0, '#1a1026');
+      skyGrad.addColorStop(0.45, '#4a2440');
+      skyGrad.addColorStop(0.75, '#8a4a52');
+      skyGrad.addColorStop(1, '#e8a06a');
+    } else if (level.ambientType === 'GOOSE') {
+      // 雁字西楼：月满西楼，蓝紫雁夜
+      skyGrad.addColorStop(0, '#070a16');
+      skyGrad.addColorStop(0.55, '#141c33');
+      skyGrad.addColorStop(0.85, '#33405e');
+      skyGrad.addColorStop(1, '#6b5a70');
+    } else if (level.ambientType === 'CHRYS') {
+      // 黄花瘦影：东篱黄昏，琥珀菊香
+      skyGrad.addColorStop(0, '#1d1208');
+      skyGrad.addColorStop(0.5, '#4a2c10');
+      skyGrad.addColorStop(0.8, '#8a5a20');
+      skyGrad.addColorStop(1, '#d8a850');
+    } else if (level.ambientType === 'GLOOM') {
+      // 声声慢雨：凄冷暮雨，梧桐青灰
+      skyGrad.addColorStop(0, '#0d1210');
+      skyGrad.addColorStop(0.55, '#1e2a26');
+      skyGrad.addColorStop(0.85, '#3a4a42');
+      skyGrad.addColorStop(1, '#5c6e62');
+    } else if (level.ambientType === 'STRING') {
+      // 绝响广陵：琴台寒墨，万籁俱寂
+      skyGrad.addColorStop(0, '#05070c');
+      skyGrad.addColorStop(0.5, '#101822');
+      skyGrad.addColorStop(0.8, '#1e2c38');
+      skyGrad.addColorStop(1, '#384a52');
     } else {
       skyGrad.addColorStop(0, '#120d1c');
       skyGrad.addColorStop(0.4, '#2e192f');
@@ -636,8 +681,103 @@ export class CanvasRenderer {
       ctx.beginPath();
       ctx.arc(celestialX, 100, 130, 0, Math.PI * 2);
       ctx.fill();
+    } else if (level.ambientType === 'LOTUS') {
+      // 溪亭日暮：半沉落日贴在地平线上，金红余晖漫染
+      const sunY = laneMinY - 26;
+      const sunGlow2 = ctx.createRadialGradient(celestialX, sunY, 12, celestialX, sunY, 120);
+      sunGlow2.addColorStop(0, 'rgba(255, 214, 150, 0.95)');
+      sunGlow2.addColorStop(0.3, 'rgba(250, 160, 100, 0.42)');
+      sunGlow2.addColorStop(1, 'rgba(220, 110, 80, 0)');
+      ctx.fillStyle = sunGlow2;
+      ctx.beginPath();
+      ctx.arc(celestialX, sunY, 120, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffd9a0';
+      ctx.beginPath();
+      ctx.arc(celestialX, sunY, 26, Math.PI, Math.PI * 2);
+      ctx.fill();
+    } else if (level.ambientType === 'GOOSE') {
+      // 雁字西楼：满月（与月夜共用月体，色调偏暖白）
+      const moonGlow = ctx.createRadialGradient(celestialX, 88, 10, celestialX, 88, 80);
+      moonGlow.addColorStop(0, 'rgba(255, 250, 235, 0.92)');
+      moonGlow.addColorStop(0.4, 'rgba(240, 225, 210, 0.38)');
+      moonGlow.addColorStop(1, 'rgba(220, 200, 190, 0)');
+      ctx.fillStyle = moonGlow;
+      ctx.beginPath();
+      ctx.arc(celestialX, 88, 80, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fdf8ec';
+      ctx.beginPath();
+      ctx.arc(celestialX, 88, 29, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (level.ambientType === 'STRING') {
+      // 绝响广陵：惨白细月悬于琴台之上
+      const moonGlow2 = ctx.createRadialGradient(celestialX, 78, 6, celestialX, 78, 60);
+      moonGlow2.addColorStop(0, 'rgba(225, 235, 240, 0.85)');
+      moonGlow2.addColorStop(0.4, 'rgba(180, 200, 215, 0.28)');
+      moonGlow2.addColorStop(1, 'rgba(140, 170, 190, 0)');
+      ctx.fillStyle = moonGlow2;
+      ctx.beginPath();
+      ctx.arc(celestialX, 78, 60, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#e5edf2';
+      ctx.beginPath();
+      ctx.arc(celestialX, 78, 18, 0, Math.PI * 2);
+      ctx.fill();
+      // 玄色蚀缺（无声之曲啃月）
+      ctx.fillStyle = '#0a0e14';
+      ctx.beginPath();
+      ctx.arc(celestialX + 9, 72, 15, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.restore();
+
+    // 绝响广陵：天际断弦（振动的琴弦横陈天际，纯 gameTime 函数，暂停自然凝滞）
+    if (level.ambientType === 'STRING') {
+      ctx.save();
+      for (let s = 0; s < 5; s++) {
+        const sy = laneMinY * (0.18 + s * 0.09);
+        const amp = 1.6 + (s % 3) * 1.1;
+        const broken = s === 2 || s === 4; // 两根断弦：中段留缺口，弦尾下垂
+        ctx.strokeStyle = `rgba(196, 212, 222, ${0.16 + s * 0.022})`;
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        const gapStart = broken ? this.width * 0.46 : -1;
+        const gapEnd = broken ? this.width * 0.54 : -1;
+        let drawing = true;
+        for (let x = 0; x <= this.width; x += 14) {
+          const inGap = x > gapStart && x < gapEnd;
+          const vy = sy + Math.sin(gameTime * (3.1 + s * 0.7) + x * 0.02 + s) * amp * (inGap ? 0 : 1);
+          if (inGap) {
+            if (drawing) {
+              ctx.stroke();
+              drawing = false;
+            }
+            continue;
+          }
+          if (!drawing) {
+            ctx.beginPath();
+            drawing = true;
+          }
+          if (x === 0) ctx.moveTo(x, vy);
+          else ctx.lineTo(x, vy);
+        }
+        if (drawing) ctx.stroke();
+        if (broken) {
+          // 断弦下垂的弦尾
+          ctx.strokeStyle = 'rgba(196, 212, 222, 0.24)';
+          ctx.beginPath();
+          ctx.moveTo(gapStart, sy);
+          ctx.quadraticCurveTo(gapStart - 10, sy + 26, gapStart - 4, sy + 52 + Math.sin(gameTime * 1.7) * 4);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(gapEnd, sy);
+          ctx.quadraticCurveTo(gapEnd + 10, sy + 22, gapEnd + 5, sy + 44 + Math.cos(gameTime * 1.4) * 4);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
 
     // Distant Ink Mountains
     this.drawDistantInkMountains(cameraX, laneMinY, 0.2, '#333b47', 0.35, 120);
@@ -790,6 +930,205 @@ export class CanvasRenderer {
         ctx.fill();
       }
       ctx.restore();
+    } else if (level.ambientType === 'LOTUS') {
+      // 溪亭暮弦：萤火明灭 + 藕花瓣飘落 + 鸥鹭掠影
+      ctx.save();
+      if (!this.qualityLow) {
+        for (let i = 0; i < 9; i++) {
+          const seed = i * 211.7;
+          const fx = ((seed * 31) % (W + 40)) - 20 + Math.sin(t * 0.9 + seed) * 34;
+          const fy = laneMinY - 40 - (seed % 90) - Math.sin(t * 0.55 + seed * 2) * 16;
+          const pulse = 0.3 + 0.42 * (0.5 + 0.5 * Math.sin(t * 2.3 + seed * 5));
+          ctx.fillStyle = `rgba(255, 236, 140, ${pulse})`;
+          ctx.beginPath();
+          ctx.arc(fx, fy, 1.8 + (seed % 3) * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      if (!this.qualityLow) {
+        const petalColors = ['#f2c4cd', '#e8a7b7', '#f7dde2'];
+        for (let i = 0; i < 10; i++) {
+          const seed = i * 157.3;
+          const px = ((seed * 47) % (W + 60)) - 30 + Math.sin(t * 0.7 + seed) * 30;
+          const py = ((seed * 89 + t * 55) % (H + 40)) - 20;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(Math.sin(t * 1.3 + seed) * 0.9 + seed);
+          ctx.globalAlpha = 0.6;
+          ctx.fillStyle = petalColors[i % 3];
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 5.5, 2.6, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      if (!this.qualityLow) {
+        ctx.strokeStyle = 'rgba(245, 240, 232, 0.42)';
+        ctx.lineWidth = 1.6;
+        for (let g = 0; g < 3; g++) {
+          const seed = g * 331.1;
+          const gx = ((t * (14 + g * 5) + seed * 97) % (W + 300)) - 150;
+          const gy = laneMinY * (0.2 + g * 0.09) + Math.sin(t * 0.8 + seed) * 6;
+          const flap = Math.sin(t * 6 + seed) * 3.2;
+          ctx.beginPath();
+          ctx.moveTo(gx - 8, gy - flap);
+          ctx.quadraticCurveTo(gx, gy + 2.5, gx + 8, gy - flap);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'GOOSE') {
+      // 雁字西楼：雁阵人字横空 + 红藕残瓣
+      if (!this.qualityLow) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(26, 28, 38, 0.62)';
+        ctx.lineWidth = 1.5;
+        const flockX = ((t * 11) % (W + 420)) - 210;
+        const flockY = laneMinY * 0.3;
+        for (let g = 0; g < 7; g++) {
+          const row = Math.ceil(g / 2);
+          const side = g % 2 === 0 ? 1 : -1;
+          const bx = flockX - row * 16;
+          const by = flockY + row * 13 * side + Math.sin(t * 1.2 + g) * 2;
+          const flap = Math.sin(t * 5 + g * 0.7) * 2.6;
+          ctx.beginPath();
+          ctx.moveTo(bx - 6, by - flap);
+          ctx.quadraticCurveTo(bx, by + 2, bx + 6, by - flap);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      if (!this.qualityLow) {
+        ctx.save();
+        const cols = ['#a34a52', '#8a3a44', '#c4707a'];
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 167.9;
+          const px = ((seed * 53) % (W + 60)) - 30 + Math.sin(t * 0.6 + seed) * 26;
+          const py = ((seed * 97 + t * 64) % (H + 40)) - 20;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(seed + Math.sin(t * 1.1 + seed) * 0.8);
+          ctx.globalAlpha = 0.55;
+          ctx.fillStyle = cols[i % 3];
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 4.6, 2.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.restore();
+      }
+    } else if (level.ambientType === 'CHRYS') {
+      // 黄花瘦影：西风疾线 + 菊瓣细长打旋
+      if (this.qualityLow) return;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(240, 224, 180, 0.16)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const seed = i * 251.3;
+        const wy = laneMinY * 0.3 + (seed % 700) * 0.7;
+        const wx = ((seed * 37 + t * 180) % (W + 200)) - 100;
+        ctx.moveTo(wx, wy);
+        ctx.lineTo(wx + 46 + (seed % 30), wy + 2);
+      }
+      ctx.stroke();
+      const cols = ['#e8b84a', '#d8a428', '#f0d070', '#c4922a'];
+      for (let i = 0; i < 14; i++) {
+        const seed = i * 143.7;
+        const px = ((seed * 41) % (W + 60)) - 30 + Math.sin(t * 1.1 + seed) * 52;
+        const py = ((seed * 89 + t * 95) % (H + 50)) - 25;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(t * 2.1 + seed);
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = cols[i % cols.length];
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 6.2, 1.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'GLOOM') {
+      // 声声慢雨：点点滴滴缓雨 + 梧桐落叶打旋
+      ctx.save();
+      if (!this.qualityLow) {
+        ctx.strokeStyle = 'rgba(190, 205, 198, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 34; i++) {
+          const seed = i * 113.7;
+          const rx = ((seed * 71 + t * 130) % (W + 40)) - 20;
+          const ry = ((seed * 59 + t * 300) % (H + 70)) - 35;
+          ctx.moveTo(rx, ry);
+          ctx.lineTo(rx - 1, ry + 9);
+        }
+        ctx.stroke();
+      }
+      if (!this.qualityLow) {
+        const cols = ['#3d4a34', '#4a5540', '#2e3a28'];
+        for (let i = 0; i < 9; i++) {
+          const seed = i * 191.3;
+          const lx = ((seed * 43) % (W + 60)) - 30 + Math.sin(t * 0.5 + seed) * 44;
+          const ly = ((seed * 83 + t * 70) % (H + 50)) - 25;
+          ctx.save();
+          ctx.translate(lx, ly);
+          ctx.rotate(Math.sin(t * 0.9 + seed) * 1.4 + seed);
+          ctx.globalAlpha = 0.6;
+          ctx.fillStyle = cols[i % 3];
+          ctx.beginPath();
+          ctx.moveTo(0, -7);
+          ctx.quadraticCurveTo(7, -2, 0, 7);
+          ctx.quadraticCurveTo(-7, -2, 0, -7);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'STRING') {
+      // 绝响广陵：墨色音符上浮 + 地面音纹涟漪
+      if (this.qualityLow) return;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(170, 195, 210, 0.14)';
+      ctx.lineWidth = 1.2;
+      for (let i = 0; i < 4; i++) {
+        const seed = i * 277.7;
+        const ph = (t * 0.35 + i * 0.27) % 1;
+        const cx = (seed * 67) % W;
+        const cy = H - 30 - (seed % 60);
+        const rr = 20 + ph * 130;
+        ctx.globalAlpha = (1 - ph) * 0.16;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rr, rr * 0.32, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = 'rgba(16, 22, 28, 0.78)';
+      ctx.strokeStyle = 'rgba(16, 22, 28, 0.78)';
+      for (let i = 0; i < 11; i++) {
+        const seed = i * 149.9;
+        const nx = ((seed * 37) % (W + 40)) - 20 + Math.sin(t * 0.6 + seed) * 22;
+        const ny = H - ((seed * 71 + t * 46) % (H * 0.8));
+        const s = 0.8 + (seed % 5) * 0.14;
+        ctx.save();
+        ctx.translate(nx, ny);
+        ctx.rotate(Math.sin(t * 0.8 + seed) * 0.25);
+        ctx.scale(s, s);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 3.4, 2.4, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(3, -0.8);
+        ctx.lineTo(3, -13);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(3, -13);
+        ctx.quadraticCurveTo(8.5, -10.5, 6, -5.5);
+        ctx.quadraticCurveTo(6.8, -9.5, 3, -10.5);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
     }
   }
 
@@ -834,6 +1173,31 @@ export class CanvasRenderer {
       groundGrad.addColorStop(0, '#241331');
       groundGrad.addColorStop(0.3, '#160b22');
       groundGrad.addColorStop(1, '#0a0512');
+    } else if (level.ambientType === 'LOTUS') {
+      // 溪亭暮岸：玫褐暮色湿地
+      groundGrad.addColorStop(0, '#4a3040');
+      groundGrad.addColorStop(0.3, '#2c1e2c');
+      groundGrad.addColorStop(1, '#140d16');
+    } else if (level.ambientType === 'GOOSE') {
+      // 西楼月渡：月照青蓝石阶
+      groundGrad.addColorStop(0, '#333a52');
+      groundGrad.addColorStop(0.3, '#20263a');
+      groundGrad.addColorStop(1, '#0c0f1a');
+    } else if (level.ambientType === 'CHRYS') {
+      // 东篱菊圃：琥珀暗金
+      groundGrad.addColorStop(0, '#4e381a');
+      groundGrad.addColorStop(0.3, '#30220f');
+      groundGrad.addColorStop(1, '#140d06');
+    } else if (level.ambientType === 'GLOOM') {
+      // 梧桐暮雨：湿冷青灰
+      groundGrad.addColorStop(0, '#333f38');
+      groundGrad.addColorStop(0.3, '#1f2823');
+      groundGrad.addColorStop(1, '#0b100d');
+    } else if (level.ambientType === 'STRING') {
+      // 琴台绝响：寒墨玄青
+      groundGrad.addColorStop(0, '#1c242e');
+      groundGrad.addColorStop(0.3, '#10161d');
+      groundGrad.addColorStop(1, '#06090d');
     } else {
       groundGrad.addColorStop(0, '#26262b');
       groundGrad.addColorStop(0.3, '#1c1c20');
@@ -2630,27 +2994,45 @@ export class CanvasRenderer {
     if (p.type === 'PETAL') {
       ctx.translate(screenX, screenY);
       ctx.rotate(p.rotation || 0);
-      ctx.fillStyle = '#f472b6';
+      ctx.fillStyle = p.color || '#f472b6';
       ctx.beginPath();
       ctx.ellipse(0, 0, p.size * 1.5, p.size * 0.8, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (p.type === 'SNOW') {
-      ctx.fillStyle = '#f8fafc';
+      ctx.fillStyle = p.color || '#f8fafc';
       ctx.beginPath();
       ctx.arc(screenX, screenY, p.size, 0, Math.PI * 2);
       ctx.fill();
     } else if (p.type === 'BAMBOO') {
       ctx.translate(screenX, screenY);
       ctx.rotate(p.rotation || 0);
-      ctx.fillStyle = '#4ade80';
+      ctx.fillStyle = p.color || '#4ade80';
       ctx.beginPath();
       ctx.ellipse(0, 0, p.size * 2, p.size * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (p.type === 'STAR') {
-      ctx.fillStyle = '#facc15';
+      ctx.fillStyle = p.color || '#facc15';
       ctx.beginPath();
       ctx.arc(screenX, screenY, p.size, 0, Math.PI * 2);
       ctx.fill();
+    } else if (p.type === 'SLASH') {
+      // 剑气残痕：旋转的墨色长划
+      ctx.translate(screenX, screenY);
+      ctx.rotate(p.rotation || 0);
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = Math.max(1, p.size * 0.9);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-p.size * 2.6, 0);
+      ctx.lineTo(p.size * 2.6, 0);
+      ctx.stroke();
+    } else if (p.type === 'WATER_RIPPLE') {
+      // 水波涟纹：空心扩散环
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, p.size * 1.7, 0, Math.PI * 2);
+      ctx.stroke();
     } else {
       ctx.fillStyle = p.color;
       ctx.beginPath();

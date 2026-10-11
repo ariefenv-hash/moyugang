@@ -95,6 +95,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'chapter_clear', name: '翰墨千秋', description: '通关第五折，完卷第一大章', icon: 'CROWN' },
   { id: 'chapter2_half', name: '雷峰塔倾', description: '通关第二大章第三折《雷峰夕照》，夺回诗魄', icon: 'FEATHER' },
   { id: 'chapter2_clear', name: '文枢归一', description: '完卷第二大章，蚀文君伏诛，文脉重光', icon: 'CROWN' },
+  { id: 'chapter3_half', name: '琴魅断章', description: '通关第三大章第三折《黄花瘦影》，夺回焦尾琴下的遗谱', icon: 'FEATHER' },
+  { id: 'chapter3_clear', name: '漱玉绝响', description: '完卷第三大章，断弦夫人归寂，广陵遗音重续', icon: 'CROWN' },
   { id: 'combo_dragon', name: '笔走龙蛇', description: '单场战斗连墨达到 20 连', icon: 'FLAME' },
   { id: 'combo_transcend', name: '翰墨通神', description: '单场战斗连墨达到 45 连', icon: 'STAR' },
   { id: 'slayer_40', name: '妙笔生花', description: '单场战斗击杀 40 名敌军', icon: 'SWORD' },
