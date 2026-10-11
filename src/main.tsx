@@ -6,10 +6,7 @@ import '@fontsource/ma-shan-zheng';
 import '@fontsource/zhi-mang-xing';
 import '@fontsource/liu-jian-mao-cao';
 import './index.css';
-// PWA：注册 Service Worker（autoUpdate 策略，新版本在下次访问时静默生效）
-import {registerSW} from 'virtual:pwa-register';
-
-registerSW({immediate: true});
+// PWA 注册由 <PwaUpdatePrompt/>（useRegisterSW）统一管理：自动巡检新版本 + 更新浮签
 
 createRoot(document.getElementById('root')!).render(
   <ErrorBoundary>

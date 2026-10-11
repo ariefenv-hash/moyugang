@@ -13,8 +13,9 @@ export default defineConfig(() => {
       react(),
       tailwindcss(),
       // PWA：可安装 + 离线可玩（precache 全部构建产物；架构仍为 Vite，未迁移 Next.js）
+      // prompt 策略：发现新版本弹出「墨韵阁 · 新笺已至」浮签，由玩家确认后再换新重启
       VitePWA({
-        registerType: 'autoUpdate',
+        registerType: 'prompt',
         includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
         manifest: {
           id: '/',

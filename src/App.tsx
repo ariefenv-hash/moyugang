@@ -8,6 +8,7 @@ import { PavilionUpgrades } from './components/PavilionUpgrades';
 import { VictoryDefeatModal } from './components/VictoryDefeatModal';
 import { LoreModal } from './components/LoreModal';
 import { AchievementsModal } from './components/AchievementsModal';
+import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
 import { sound } from './utils/audio';
 import bgInkMountains from './assets/images/bg_ink_mountains_1791652099827.jpg';
 import bgHeroAvatar from './assets/images/hero_poet_avatar_1791652089636.jpg';
@@ -229,6 +230,8 @@ export default function App() {
 
   return (
     <div className="w-full h-full min-h-screen bg-ink-strong text-paper font-sans selection:bg-cinnabar selection:text-paper-soft">
+      {/* PWA 版本巡检与更新浮签（全视图常驻） */}
+      <PwaUpdatePrompt />
       {/* View Router */}
       {mode === 'MENU' && (
         <div className="relative min-h-screen flex flex-col justify-between overflow-hidden paper-grain text-ink">

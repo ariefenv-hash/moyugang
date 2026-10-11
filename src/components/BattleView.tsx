@@ -35,8 +35,6 @@ import {
   CharStrokePoint,
   CharMatchResult,
 } from '../utils/charRecognizer';
-import { Joystick } from './Joystick';
-import { FloatingJoystick } from './FloatingJoystick';
 import { PauseOverlay } from './PauseOverlay';
 import { BlessingModal } from './BlessingModal';
 import bgInkMountains from '../assets/images/bg_ink_mountains_1791652099827.jpg';
@@ -59,12 +57,10 @@ import {
   Wind,
   Moon,
   PenTool,
-  Gamepad2,
   HelpCircle,
   Pause,
   Infinity as InfinityIcon,
   X,
-  Hand,
   Gem,
   Type,
 } from 'lucide-react';
@@ -117,39 +113,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
   // Sound Mute State
   const [isMuted, setIsMuted] = useState(sound.getMuted());
 
-  // Input Control Mode: 'GESTURE' 挥毫手势 | 'DUAL' 双区操控（浮动摇杆+手势） | 'CLASSIC' 经典摇杆按键
-  // 首次进入：触屏设备默认双区，桌面默认挥毫；选择持久化
-  const [controlMode, setControlModeState] = useState<'GESTURE' | 'DUAL' | 'CLASSIC'>(() => {
-    try {
-      const saved = localStorage.getItem('ink_steel_control_mode');
-      if (saved === 'GESTURE' || saved === 'DUAL' || saved === 'CLASSIC') return saved;
-    } catch {}
-    const isTouch =
-      typeof window !== 'undefined' &&
-      ('ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0);
-    return isTouch ? 'DUAL' : 'GESTURE';
-  });
-  const controlModeRef = useRef(controlMode);
-  const setControlMode = useCallback((m: 'GESTURE' | 'DUAL' | 'CLASSIC') => {
-    controlModeRef.current = m;
-    setControlModeState(m);
-    try {
-      localStorage.setItem('ink_steel_control_mode', m);
-    } catch {}
-  }, []);
+  // 操控：全平台统一「挥毫手势」（点地漫步 / 点敌出剑 / 横竖提折画圆施法 / 字诀书字），
+  // 虚拟摇杆已随三模式机制移除；桌面端 WASD + J/Q/W/E/R 键盘全程原生支持
   const [showGestureGuide, setShowGestureGuide] = useState(false);
-
-  // ===== 浮动摇杆状态（DUAL 模式：左半屏触点生成，多点触控安全） =====
-  const FLOAT_JOY_RADIUS = 60; // 底盘半径 px
-  const [floatJoy, setFloatJoy] = useState<{
-    active: boolean;
-    pointerId: number;
-    baseX: number;
-    baseY: number;
-    knobX: number;
-    knobY: number;
-  }>({ active: false, pointerId: -1, baseX: 0, baseY: 0, knobX: 0, knobY: 0 });
-  const floatJoyRef = useRef(floatJoy);
 
   // ===== 高频游戏状态：真相源在 ref，节流同步到 state（避免每帧 setState 性能灾难） =====
   const [ink, setInk] = useState(level.initialInk);
@@ -326,9 +292,6 @@ export const BattleView: React.FC<BattleViewProps> = ({
   // Screen Shake & Hitstop Refs
   const screenShakeRef = useRef({ x: 0, y: 0, intensity: 0, duration: 0 });
   const hitStopTimerRef = useRef(0);
-
-  // Joystick Input Vector (for Classic mode)
-  const joystickVector = useRef({ x: 0, y: 0 });
 
   // Unified Gesture Recognizer Ref
   const gestureRecognizer = useRef(new GestureRecognizer());
@@ -1414,37 +1377,15 @@ export const BattleView: React.FC<BattleViewProps> = ({
   };
 
   // --- UNIFIED CALLIGRAPHY GESTURE & TOUCH HANDLERS (Screen-as-Canvas) ---
-  // 指针路由策略：
-  //  · DUAL 模式 + 触屏 + 左 45% 区域 → 浮动摇杆（可移动，多点触控安全）
-  //  · 其余指针 → 挥毫手势（点按/横竖提/画圆/折线/拖动）
-  //  · 右半屏 + 技能按钮（DOM 层，不穿透到画布）
+  // 指针路由策略（全平台统一，摇杆已移除）：
+  //  · 所有指针 → 挥毫手势（点按/横竖提/画圆/折线/拖动/字诀书字）
+  //  · 技能按钮（DOM 层，不穿透到画布）
   const handlePointerDown = (e: React.PointerEvent) => {
     // Canvas client bounds
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
-
-    // DUAL 双区模式：左半屏触点生成浮动摇杆（一次只允许一个摇杆实例）
-    if (
-      controlModeRef.current === 'DUAL' &&
-      e.pointerType === 'touch' &&
-      clientX < rect.width * 0.45 &&
-      !floatJoyRef.current.active
-    ) {
-      const next = {
-        active: true,
-        pointerId: e.pointerId,
-        baseX: clientX,
-        baseY: clientY,
-        knobX: 0,
-        knobY: 0,
-      };
-      floatJoyRef.current = next;
-      setFloatJoy(next);
-      heroTargetMove.current = null; // 切入手动操控，停止自动寻路
-      return;
-    }
 
     // 字诀模式：新笔入字时取消待判定的收笔计时
     if (charModeRef.current && charCommitTimerRef.current) {
@@ -1460,26 +1401,6 @@ export const BattleView: React.FC<BattleViewProps> = ({
     if (!rect) return;
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
-
-    // 浮动摇杆跟踪：以按下点为圆心，摇杆帽钳制在底盘半径内
-    const joy = floatJoyRef.current;
-    if (joy.active && e.pointerId === joy.pointerId) {
-      let dx = clientX - joy.baseX;
-      let dy = clientY - joy.baseY;
-      const dist = Math.hypot(dx, dy);
-      if (dist > FLOAT_JOY_RADIUS) {
-        dx = (dx / dist) * FLOAT_JOY_RADIUS;
-        dy = (dy / dist) * FLOAT_JOY_RADIUS;
-      }
-      const next = { ...joy, knobX: dx, knobY: dy };
-      floatJoyRef.current = next;
-      setFloatJoy(next);
-      joystickVector.current = {
-        x: dx / FLOAT_JOY_RADIUS,
-        y: dy / FLOAT_JOY_RADIUS,
-      };
-      return;
-    }
 
     if (!gestureRecognizer.current.getIsTracing()) return;
 
@@ -1585,23 +1506,6 @@ export const BattleView: React.FC<BattleViewProps> = ({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    // 浮动摇杆释放：归零输入并隐藏
-    const joy = floatJoyRef.current;
-    if (joy.active && e.pointerId === joy.pointerId) {
-      const cleared = {
-        active: false,
-        pointerId: -1,
-        baseX: 0,
-        baseY: 0,
-        knobX: 0,
-        knobY: 0,
-      };
-      floatJoyRef.current = cleared;
-      setFloatJoy(cleared);
-      joystickVector.current = { x: 0, y: 0 };
-      return;
-    }
-
     // 字诀模式：先截取轨迹点再走集字管线；不触发经典手势（避免写字被误判为滑动）
     if (charModeRef.current) {
       const strokePts = gestureRecognizer.current
@@ -1851,7 +1755,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
         }
       }
 
-      // Check input sources (Keyboard + Joystick + Tap-to-move pathing)
+      // Check input sources (Keyboard + Tap-to-move pathing)
       let inputX = 0;
       let inputY = 0;
 
@@ -1859,11 +1763,6 @@ export const BattleView: React.FC<BattleViewProps> = ({
       if (keysPressed.current['d'] || keysPressed.current['arrowright']) inputX += 1;
       if (keysPressed.current['w'] || keysPressed.current['arrowup']) inputY -= 1;
       if (keysPressed.current['s'] || keysPressed.current['arrowdown']) inputY += 1;
-
-      if (Math.hypot(joystickVector.current.x, joystickVector.current.y) > 0.1) {
-        inputX += joystickVector.current.x;
-        inputY += joystickVector.current.y;
-      }
 
       // Handle Tap/Drag Gesture Target Move
       if (heroTargetMove.current && inputX === 0 && inputY === 0) {
@@ -2541,7 +2440,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           </button>
         </div>
 
-        {/* Resources, Input Mode Switcher & Sound Action */}
+        {/* Resources & Sound Action */}
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
           {/* 暂停按钮 */}
           <button
@@ -2551,46 +2450,6 @@ export const BattleView: React.FC<BattleViewProps> = ({
           >
             <Pause className="w-4 h-4" />
           </button>
-
-          {/* Mode Switcher: 挥毫手势 / 双区操控 / 经典按键 */}
-          <div className="flex items-center bg-stone-900 border border-stone-800 rounded-lg p-0.5">
-            <button
-              onClick={() => setControlMode('GESTURE')}
-              className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md transition-colors cursor-pointer ${
-                controlMode === 'GESTURE'
-                  ? 'bg-cyan-900/80 text-cyan-200 font-bold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-              title="全屏挥毫手势：以笔驭剑（桌面鼠标友好）"
-            >
-              <PenTool className="w-3 h-3 text-cyan-400" />
-              <span>挥毫</span>
-            </button>
-            <button
-              onClick={() => setControlMode('DUAL')}
-              className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md transition-colors cursor-pointer ${
-                controlMode === 'DUAL'
-                  ? 'bg-emerald-900/80 text-emerald-200 font-bold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-              title="双区操控：左手浮动摇杆移动 + 右手手势/技能（触屏推荐）"
-            >
-              <Hand className="w-3 h-3 text-emerald-400" />
-              <span>双区</span>
-            </button>
-            <button
-              onClick={() => setControlMode('CLASSIC')}
-              className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md transition-colors cursor-pointer ${
-                controlMode === 'CLASSIC'
-                  ? 'bg-stone-800 text-stone-100 font-bold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-              title="传统虚拟摇杆+按键模式"
-            >
-              <Gamepad2 className="w-3 h-3 text-amber-400" />
-              <span>经典</span>
-            </button>
-          </div>
 
           {/* 字诀模式：汉字识别手势（逐笔书写，停笔判定） */}
           <button
@@ -2639,17 +2498,6 @@ export const BattleView: React.FC<BattleViewProps> = ({
         onPointerCancel={handlePointerUp}
         className="w-full h-full block touch-none cursor-crosshair"
       />
-
-      {/* 浮动摇杆（双区模式：触点处浮现，松手即隐） */}
-      {controlMode === 'DUAL' && floatJoy.active && (
-        <FloatingJoystick
-          baseX={floatJoy.baseX}
-          baseY={floatJoy.baseY}
-          knobX={floatJoy.knobX}
-          knobY={floatJoy.knobY}
-          size={FLOAT_JOY_RADIUS * 2}
-        />
-      )}
 
       {/* 文房四宝收集进度 + 已获墨灵祝福 */}
       <div className="absolute left-4 md:left-6 top-28 z-30 pointer-events-none flex flex-col gap-1.5">
@@ -2732,7 +2580,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       {showGestureGuide && (
         <div className="absolute top-16 right-4 md:right-6 z-40 max-w-xs p-4 bg-stone-900/95 border border-stone-700 rounded-2xl shadow-2xl backdrop-blur-md text-xs text-stone-300 space-y-2 animate-fade-in font-sans max-h-[75vh] overflow-y-auto">
           <div className="flex items-center justify-between font-serif font-bold text-amber-200 border-b border-stone-800 pb-1.5">
-            <span>操控心诀 · 三式任选</span>
+            <span>操控心诀 · 挥毫归一</span>
             <button
               onClick={() => setShowGestureGuide(false)}
               className="text-stone-400 hover:text-white"
@@ -2740,8 +2588,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
               ✕
             </button>
           </div>
-          <p className="text-[11px] font-bold text-emerald-300">
-            【双区操控 · 触屏推荐】左半屏任意处按住浮现摇杆移动；右半屏点按/手势施法；右下技能按钮随时可点，双手齐用！
+          <p className="text-[11px] font-bold text-cyan-300">
+            【挥毫操控 · 全平台统一】整屏即纸：点地漫步、点敌出剑、划字施法；右下技能按钮随时可点，电脑端键盘全程待命！
           </p>
           <p><strong className="text-cyan-300">轻点地面：</strong>剑仙踏墨巡行至该位置</p>
           <p><strong className="text-cyan-300">轻点敌军：</strong>施展落墨三式剑招</p>
@@ -2959,71 +2807,50 @@ export const BattleView: React.FC<BattleViewProps> = ({
             </div>
           </div>
 
-          {controlMode === 'GESTURE' ? (
-            <div className="text-[11px] font-serif text-stone-400 bg-stone-950/70 border border-stone-800 px-3 py-1 rounded-lg">
-              ✨ 挥毫手势：点地漫步 · 横划破水 · 画圆起盾 · 点「字诀」可写字施法（C）
-            </div>
-          ) : controlMode === 'DUAL' ? (
-            <div className="text-[11px] font-serif text-emerald-300/90 bg-stone-950/70 border border-emerald-800/50 px-3 py-1 rounded-lg">
-              🖐 双区操控：左半屏按住浮现摇杆移动 · 右半屏点按/手势施法 · 技能常驻右下
-            </div>
-          ) : (
-            /* Classic Joystick on Bottom Left when in Classic Mode */
-            <div className="mt-2">
-              <Joystick
-                size={110}
-                onMove={(dx, dy) => {
-                  joystickVector.current = { x: dx, y: dy };
-                }}
-                onEnd={() => {
-                  joystickVector.current = { x: 0, y: 0 };
-                }}
-              />
-            </div>
-          )}
+          <div className="text-[11px] font-serif text-stone-400 bg-stone-950/70 border border-stone-800 px-3 py-1 rounded-lg">
+            ✨ 挥毫手势：点地漫步 · 横划破水 · 画圆起盾 · 折线引星 · 点「字诀」可写字施法（C）
+          </div>
         </div>
 
-        {/* Right: Ultimate Seal & Action Cluster (双区/经典模式都显示实体技能键，挥毫模式仅保留绝技印) */}
+        {/* Right: Ultimate Seal & Action Cluster（挥毫一统后技能键常驻，手势之外多一手保险） */}
         <div className="pointer-events-auto flex items-center gap-2">
-          {controlMode !== 'GESTURE' && (
-            <div className="flex items-center gap-1.5 p-2 bg-stone-950/90 backdrop-blur-md border border-stone-800 rounded-2xl shadow-2xl">
-              <button
-                onClick={triggerHeroJump}
-                className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-stone-200 active:scale-95"
-              >
-                <ArrowUp className="w-4 h-4 text-cyan-300 mb-0.5" />
-                <span className="text-[9px] font-serif">腾跃</span>
-              </button>
-              <button
-                onClick={() => triggerSkillDashSlash()}
-                className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-cyan-200 active:scale-95"
-              >
-                <Zap className="w-4 h-4 text-cyan-400 mb-0.5" />
-                <span className="text-[9px] font-serif">断水</span>
-              </button>
-              <button
-                onClick={() => triggerSkillBambooShield()}
-                className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-emerald-200 active:scale-95"
-              >
-                <Shield className="w-4 h-4 text-emerald-400 mb-0.5" />
-                <span className="text-[9px] font-serif">竹影</span>
-              </button>
-              <button
-                onClick={() => triggerSkillStarlightBarrage()}
-                className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-amber-200 active:scale-95"
-              >
-                <Sparkles className="w-4 h-4 text-amber-400 mb-0.5" />
-                <span className="text-[9px] font-serif">笔阵</span>
-              </button>
-              <button
-                onClick={() => triggerHeroAttack()}
-                className="w-13 h-13 flex flex-col items-center justify-center bg-stone-800 border-2 border-stone-600 rounded-2xl text-white active:scale-95 cursor-pointer"
-              >
-                <Sword className="w-5 h-5 text-stone-100 mb-0.5" />
-                <span className="text-[10px] font-serif font-bold">落墨</span>
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-1.5 p-2 bg-stone-950/90 backdrop-blur-md border border-stone-800 rounded-2xl shadow-2xl">
+            <button
+              onClick={triggerHeroJump}
+              className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-stone-200 active:scale-95"
+            >
+              <ArrowUp className="w-4 h-4 text-cyan-300 mb-0.5" />
+              <span className="text-[9px] font-serif">腾跃</span>
+            </button>
+            <button
+              onClick={() => triggerSkillDashSlash()}
+              className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-cyan-200 active:scale-95"
+            >
+              <Zap className="w-4 h-4 text-cyan-400 mb-0.5" />
+              <span className="text-[9px] font-serif">断水</span>
+            </button>
+            <button
+              onClick={() => triggerSkillBambooShield()}
+              className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-emerald-200 active:scale-95"
+            >
+              <Shield className="w-4 h-4 text-emerald-400 mb-0.5" />
+              <span className="text-[9px] font-serif">竹影</span>
+            </button>
+            <button
+              onClick={() => triggerSkillStarlightBarrage()}
+              className="w-11 h-12 flex flex-col items-center justify-center bg-stone-900 border border-stone-700 rounded-xl text-amber-200 active:scale-95"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400 mb-0.5" />
+              <span className="text-[9px] font-serif">笔阵</span>
+            </button>
+            <button
+              onClick={() => triggerHeroAttack()}
+              className="w-13 h-13 flex flex-col items-center justify-center bg-stone-800 border-2 border-stone-600 rounded-2xl text-white active:scale-95 cursor-pointer"
+            >
+              <Sword className="w-5 h-5 text-stone-100 mb-0.5" />
+              <span className="text-[10px] font-serif font-bold">落墨</span>
+            </button>
+          </div>
 
           {/* Luminous Ultimate Seal Button: River Immortal (临江仙) */}
           <button
@@ -3072,8 +2899,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
                 （顶栏「采墨 50」）→ 他们会自动汲取墨韵运回墨阁
               </li>
               <li>
-                <strong className="text-shilv">触屏推荐双区模式</strong>
-                ：左半屏按住浮现摇杆移动，右手点敌攻击或划手势施法；电脑端 WASD + J 攻击
+                <strong className="text-shilv">全平台挥毫手势</strong>
+                ：点地漫步、点敌出剑、划手势施法；电脑端 WASD + J 攻击，右下技能键随时可点
               </li>
               <li>
                 <strong className="text-cinnabar">横划屏幕</strong>

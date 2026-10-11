@@ -197,3 +197,23 @@ Stage Summary:
 - 新文件：public/favicon.svg + public/icons/*.png×3 + public/apple-touch-icon.png + scripts/gen_pwa_icons.py + scripts/pwa_smoke.py + src/vite-env.d.ts
 - 修改：vite.config.ts / src/main.tsx / index.html；依赖 +vite-plugin-pwa@2.0.0
 - 游戏Now可安装到主屏幕（Android/iOS/桌面 Chrome）且断网可玩；架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js
+
+---
+Task ID: 10
+Agent: 主 agent (Super Z)
+Task: PWA 自动检查新版本与更新功能 + 移除虚拟摇杆（全平台统一挥毫手势），保持 Vite 架构未迁移 Next.js
+
+Work Log:
+- PWA 更新链路重构：registerType autoUpdate → prompt（新版本由玩家定夺更新时机，避免战斗中被静默重启）
+- 新建 src/components/PwaUpdatePrompt.tsx：useRegisterSW 接管 SW 注册（main.tsx 原 registerSW 移除防双注册）；自动巡检 = 每 30 分钟 registration.update() + visibilitychange 回前台补查（5 分钟节流）；发现新版本弹「墨韵阁 · 新笺已至」朱印浮签（panel-paper + seal 新 + btn-seal 立即更新/btn-ink 稍后，updateServiceWorker(true) 换新重启）；首次缓存完毕弹「墨已收齐 · 离线可战」ghost 印轻提示（5s 自散）
+- App.tsx 根节点挂载 <PwaUpdatePrompt/>（全视图常驻）；修复 updateServiceWorker 解构遗漏（TS2552）
+- 摇杆移除（用户指示：手势识别已完整）：删除 Joystick.tsx / FloatingJoystick.tsx 两组件；BattleView 十六处外科编辑 —— 三模式 state/persistence/顶栏切换器/浮动摇杆状态与渲染/joystickVector/指针路由 DUAL 分支/游戏循环摇杆输入全数退场；rg 确认零残留
+- 操控归一后安排：触屏=点地漫步/拖动引路/划手势/字诀书字，桌面=WASD+J/Q/W/E/R；实体技能键簇（腾跃/断水/竹影/笔阵/落墨）改为常驻右下（原仅双区/经典可见），手势之外多一手保险；文案全面同步（教学卡/手势指南「三式任选→挥毫归一」/LoreModal 三式描述→挥毫统一/底栏提示增「折线引星」）
+- 验证：tsc --noEmit 零错误；vite build 成功（precache 272 项 12.5MB，dist/sw.js + workbox 再生成）；守护进程重启后 curl 全 200（/manifest.webmanifest、/dev-sw.js、图标）；scripts/verify_unified_and_pwa.py 全绿 —— SW 注册✓ manifest 200✓ 双区/经典按钮 0✓ 摇杆 DOM 0✓ 战斗 canvas✓ 字诀按钮✓ 技能键簇六键齐全✓ 无双区文案✓ 脚本化横划手势触发「横」徽标✓ 控制台零错误✓；截图 verify7_battle_unified.png / verify7_pwa_toast.png
+- 备注：dev 环境 offlineReady 亦会触发（dev-SW 即装即活）；生产环境该提示在预缓存完成后出现，语义准确
+
+Stage Summary:
+- 新文件：src/components/PwaUpdatePrompt.tsx / scripts/verify_unified_and_pwa.py
+- 删除：src/components/Joystick.tsx / src/components/FloatingJoystick.tsx
+- 修改：vite.config.ts（prompt）/ src/main.tsx / src/App.tsx / src/components/BattleView.tsx / src/components/LoreModal.tsx
+- 操控三模式归一为挥毫手势单模式；PWA 具备自动版本巡检 + 玩家可控更新；架构保持 Vite+React19+TS+Tailwind4，未迁移 Next.js
