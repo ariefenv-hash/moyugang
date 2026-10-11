@@ -19,6 +19,9 @@ export default defineConfig(() => {
       entries: ['index.html', 'src/**/*.{ts,tsx}'],
     },
     server: {
+      // 允许通过 IM 预览网关域名（fcapp.run 子域）访问 dev server，
+      // 前导点写法允许该后缀下的所有子域名，避免预览 host 变化后再报 Blocked request
+      allowedHosts: ['.fcapp.run', 'localhost', '127.0.0.1'],
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
