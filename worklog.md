@@ -384,3 +384,18 @@ Stage Summary:
 - 修改：BattleView.tsx（连招七件套+bug修复+钩子）/ types/game.ts（CalligraphyCombo.dmgMult）/ canvasRenderer.ts（段位光环）
 - 新增：scripts/verify_combo.py（21 项连招实测）
 - 提交待推送（本轮连同 Task 17 的 a1f1085 一并推上线）
+
+---
+Task ID: 18-b
+Agent: 主 agent (Super Z)
+Task: PAT 推送上线 + Pages 部署验证
+
+Work Log:
+- 推送前终检：git 历史全量扫描零令牌泄漏；PAT /user 验证有效（ariefenv-hash）
+- 远端 0c0834e 为本地祖先 → 常规快进推送成功（无需强推）：0c0834e..e5078bf，含 Task 17 手势强化（a1f1085）+ Task 18 连招升级（e5078bf）共 4 提交
+- Actions run 38122141243 completed success（e5078bf）
+- 线上终验：新 bundle index-FJiW-h20.js 含 翰墨通神/衔招/文思/墨势回落/衔·技能增伤中/伤×/六段位名 全部运行时标记；sw.js 与 manifest 200
+
+Stage Summary:
+- https://ariefenv-hash.github.io/moyugang/ 已更新为连招升级版（e5078bf）
+- 提醒用户立即撤销本轮临时 PAT
