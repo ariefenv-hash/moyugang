@@ -441,3 +441,39 @@ Stage Summary:
 - 新增：scripts/verify_story_ch3.py（36 项）
 - 仓库新里程碑：主线十章已启其三（风雅集/山河谣/漱玉词）
 - 待办：推送 GitHub（PAT 验证后快进推送，Actions 自动部署 Pages）
+
+---
+Task ID: 21
+Agent: 主 agent (Super Z)
+Task: Part1 手势增强包——移动连贯性修复 + 方向语义化 + 段位染色 + 字迹化灵
+
+Work Log:
+- 移动修复：点地/拖动 ease-out 缓停带(80px, 下限0.16)；相机 lerp 帧率归一 1-0.88^(dt*60)；攻击后摇 0.24s 后 55% 移速走位(攻击取消)；朝向翻转死区 0.3；SCRIBE/FOLLOW_HERO lerp 帧率归一
+- 方向语义化：横划改朝向相对——顺向=断水斩、逆向=撤步剑气(新技能 triggerRetreatSlash：撤 150px+双穿透剑气 1.55x+共享 dash_slash CD 3.2s+残影粒子)
+- 段位染色：TIER_INK 七档配色(NONE→TRANSCEND 墨青→鎏金)，接入 drawBrushTrail/drawCharStrokesPreview
+- 字迹化灵：commitCharStrokes 成功后 charGhostRef 记录字稿(世界锚定 camX0)，0.95s 淡出+沿写序发射灵韵粒子(CHAR_GHOST_FX 七字各配色彩/流向/粒子类型)
+- 冒烟测试 11/11（移动连续性/缓停/双划/字诀/后摇走位/零 console 错误）
+
+Stage Summary:
+- Part1 全部落地并真机验证；已知观察：ACT 区滑动手势中笔尖牵引会先行带跑英雄（Task 22 修复）
+
+---
+Task ID: 22
+Agent: 主 agent (Super Z)
+Task: 字体子集缺字修复 + P0 止血（HOLD军令/友军护盾/暂停波次）+ #10 施法缓冲 + 推送
+
+Work Log:
+- 字体：subset_wenkai.py 路径硬编码 /home/z/my-project → 仓库相对(__file__)；重扫当前全量源码(ts/tsx/css+index.html)重建 Regular/Medium 子集(2286 字符, ~965KB)；新增输出覆盖校验（源码字符集 ⊆ 输出 cmap，区分子集漏字/文楷本身缺字）防回归；修复「新增文案缺字回退系统默认字体」
+- P0-2 HOLD 实装：types/game.ts 单位状态新增 'GUARD'（渲染器默认站姿分支零改动）；AI 命令区 HOLD 分支(原地驻守仅迎击攻击圈内目标) + 推进门 DEFEND/HOLD 双豁免
+- P0-3 护盾扣减：applyDamage 单位分支护盾先于气血承伤（竹影墨盾 200×共鸣此前只加不扣）；完全承接不触发重击腾空；飘字用 finalDmg，全吸收显示「盾承」（英雄分支同步）
+- P0-4 暂停波次一致：新增 pendingSpawnsRef 游戏时间错峰落兵队列，替换 safeTimeout 真实时间调度（剧本波次/基础波/无尽模式三处 + 无尽霸主压轴）；暂停时 at 与 now 同冻结，敌兵不再凭空出现
+- #10 施法缓冲：pendingGestureRef 结印(SKILL_)期间手势入队(0.8s 游戏时间有效期)，收势回 IDLE 自动补发；连带修复「结印期笔尖牵引拽破姿势」——handlePointerMove 牵引豁免扩展至 SKILL_ 状态（与字诀/书符区豁免同语义）
+- charRecognizer 头注释阈值与实现对齐（神品≤0.048/妙品≤0.068/驳回>0.078，原注释 0.14/0.20/0.28/0.34 为旧版）
+- DEV 钩子扩展：units()/spawnQueue()/gameTime()/armyCommand()（无头实测 HOLD·暂停波次·施法缓冲）
+- 测试：smoke_moyugang.py 扩至 16 项全 PASS（新增 HOLD 原地驻守/暂停队列冻结/结印缓冲不抢占/收势补发）；tsc 零错误；vite build 成功（PWA 272 条预缓存）
+- 推送：PAT 快进推送 main，Actions 自动部署 Pages
+
+Stage Summary:
+- 修改：BattleView.tsx/types/game.ts/charRecognizer.ts/gestureRecognizer.ts/subset_wenkai.py/双 woff2
+- 新增：scripts/smoke_moyugang.py（16 项冒烟）
+- 待用户实测确认后撤销临时 PAT
