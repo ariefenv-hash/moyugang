@@ -5,7 +5,7 @@
   2. 进入第一折战斗
   3. 移动连贯性：按住 D 匀速采样；点地移动 ease-out 缓停
   4. 右划 = 断水斩（突进）；左划 = 剑气逆寒（撤步 + CD 共享）
-  5. 字诀写「山」= 识别成功 + 文思连段 + 粒子化灵
+  5. 分屏路由：上区写「山」= 识别成功 + 文思连段 + 粒子化灵；上区划横不触发手势
 """
 import json
 import sys
@@ -182,28 +182,41 @@ with sync_playwright() as pw:
         f"ret_dx={ret_dx:.0f} cd={cds2.get('dash_slash', 0):.2f}",
     )
 
-    # 5. 字诀写「山」
-    page.keyboard.press("c")
-    page.wait_for_timeout(400)
-    char_mode = page.evaluate("() => window.__inkGestureDebug.isCharMode()")
+    # 5. 分屏路由：书符区（上）写「山」→ 字诀管线；上区划横不触发手势
+    # 等 dash_slash CD 走完（4b 撤步剑气与其共享 3.2s CD，否则 5a 负例误判）
+    for _ in range(20):
+        cd_now = page.evaluate(
+            "() => window.__inkGestureDebug.battleState().skillCds"
+        ).get("dash_slash", 0)
+        if cd_now <= 0:
+            break
+        page.wait_for_timeout(300)
     combo_before = page.evaluate("() => window.__inkGestureDebug.comboInfo().charChain")
     parts_before = page.evaluate("() => window.__inkGestureDebug.fxStats().particles")
-    if char_mode:
-        draw_stroke(page, [(640, 255), (639, 300), (638, 348)])  # 中竖
-        draw_stroke(page, [(588, 288), (586, 340), (585, 348), (700, 350)])  # 左竖+底横
-        draw_stroke(page, [(694, 292), (696, 340), (697, 348)])  # 右竖
-        page.wait_for_timeout(900)
-        combo_after = page.evaluate("() => window.__inkGestureDebug.comboInfo().charChain")
-        parts_after = page.evaluate("() => window.__inkGestureDebug.fxStats().particles")
-        ok_char = combo_after > combo_before
-        check(
-            "5. 字诀「山」识别+化灵",
-            ok_char,
-            f"charChain {combo_before}->{combo_after} particles {parts_before}->{parts_after}",
-        )
-    else:
-        check("5. 字诀「山」识别+化灵", False, "C 键未开启字诀模式")
-    page.keyboard.press("c")  # 关闭字诀
+    # 5a. 负例：上区快速横划（y=300 < 403 分区线）→ 入字诀管线，断水斩不触发
+    swipe(page, 500, 300, 800, 304)
+    page.wait_for_timeout(800)
+    dash_cd = page.evaluate(
+        "() => window.__inkGestureDebug.battleState().skillCds"
+    ).get("dash_slash", -1)
+    check(
+        "5a. 上区划横不入手势管线",
+        dash_cd <= 0,
+        f"dash_cd={dash_cd}（应为 0/负，未触发突进）",
+    )
+    # 5b. 正例：上区写「山」三笔 → 识别 + 文思连段 + 化灵粒子
+    draw_stroke(page, [(640, 255), (639, 300), (638, 348)])  # 中竖
+    draw_stroke(page, [(588, 288), (586, 340), (585, 348), (700, 350)])  # 左竖+底横
+    draw_stroke(page, [(694, 292), (696, 340), (697, 348)])  # 右竖
+    page.wait_for_timeout(900)
+    combo_after = page.evaluate("() => window.__inkGestureDebug.comboInfo().charChain")
+    parts_after = page.evaluate("() => window.__inkGestureDebug.fxStats().particles")
+    ok_char = combo_after > combo_before
+    check(
+        "5b. 上区写「山」识别+化灵",
+        ok_char,
+        f"charChain {combo_before}->{combo_after} particles {parts_before}->{parts_after}",
+    )
 
     # 6. 汇总 console 错误
     real_errors = [e for e in console_errors if "favicon" not in e.lower()]
@@ -279,9 +292,14 @@ with sync_playwright() as pw:
         check("9. 暂停期落兵队列冻结", True, "skip—18s 内无落兵窗口")
 
     # 10. 施法缓冲（#10）：结印中手势入队不抢占，收势后自动补发
-    cds_pre = page.evaluate("() => window.__inkGestureDebug.battleState().skillCds")
+    # 等 bamboo_shield CD 走完（5b 写「山」触发竹影墨盾，CD 未完则画圆会转墨荷灵阵）
+    for _ in range(40):
+        cds_pre = page.evaluate("() => window.__inkGestureDebug.battleState().skillCds")
+        if cds_pre.get("bamboo_shield", 99) <= 0 and cds_pre.get("dash_slash", 99) <= 0:
+            break
+        page.wait_for_timeout(400)
     if cds_pre.get("bamboo_shield", 99) <= 0 and cds_pre.get("dash_slash", 99) <= 0:
-        draw_circle(page, 640, 250, 45)  # 竹影墨盾 → 结印姿势
+        draw_circle(page, 640, 550, 45)  # 行止区（下）画圆 → 竹影墨盾结印姿势
         page.wait_for_timeout(150)
         st_mid = page.evaluate("() => window.__inkGestureDebug.heroState().state")
         check(
@@ -290,18 +308,35 @@ with sync_playwright() as pw:
             f"state={st_mid}",
         )
         # 结印未收势（0.6s 窗口内）右划 → 断水斩应入缓冲而非立即抢占
-        #（快出手快求值：playwright 每次调用有 IPC 开销，需抢在 0.6s 收势前采样）
+        #（页内轮询状态迁移：单次 evaluate 记录 1.5s 状态序列，规避 IPC 延迟竞态）
         swipe(page, 420, 460, 640, 462, steps=8, step_ms=8)
-        st_swipe = page.evaluate("() => window.__inkGestureDebug.heroState().state")
-        dash_hold = page.evaluate(
-            "() => window.__inkGestureDebug.battleState().skillCds"
-        ).get("dash_slash", -1)
+        seen = page.evaluate(
+            """() => new Promise(res => {
+                const dbg = window.__inkGestureDebug;
+                const seq = [];
+                const t0 = performance.now();
+                const iv = setInterval(() => {
+                    const s = dbg.heroState().state;
+                    if (!seq.length || seq[seq.length-1].s !== s) {
+                        seq.push({ s, t: Math.round(performance.now() - t0) });
+                    }
+                    if (performance.now() - t0 > 1500) { clearInterval(iv); res(seq); }
+                }, 30);
+            })"""
+        )
+        states_seq = [e["s"] for e in seen]
+        shield_idx = next((i for i, s in enumerate(states_seq) if "SHIELD" in s), -1)
+        dash_idx = next((i for i, s in enumerate(states_seq) if "DASH" in s), -1)
+        buffered_ok = (
+            shield_idx >= 0
+            and (dash_idx == -1 or dash_idx > shield_idx)  # 突进未抢占，晚于结印出现
+        )
         check(
             "10b. 结印中划招被缓冲不抢占",
-            "SKILL_SHIELD" in str(st_swipe) and dash_hold == 0,
-            f"state={st_swipe} dash_cd={dash_hold}",
+            buffered_ok,
+            f"states={[(e['s'], e['t']) for e in seen[:5]]}",
         )
-        page.wait_for_timeout(1300)  # 结印 0.6s 收势 + 缓冲补发 + 突进
+        page.wait_for_timeout(300)  # 结印 0.6s 收势 + 缓冲补发 + 突进
         dash_post = page.evaluate(
             "() => window.__inkGestureDebug.battleState().skillCds"
         ).get("dash_slash", -1)

@@ -477,3 +477,22 @@ Stage Summary:
 - 修改：BattleView.tsx/types/game.ts/charRecognizer.ts/gestureRecognizer.ts/subset_wenkai.py/双 woff2
 - 新增：scripts/smoke_moyugang.py（16 项冒烟）
 - 待用户实测确认后撤销临时 PAT
+
+---
+Task ID: 23
+Agent: 主 agent (Super Z)
+Task: 分屏手势路由——上区书符写字 / 下区快速划招
+
+Work Log:
+- 分屏即法度：起笔分区直接决定识别管线——上区(书符区, CAST_ZONE_RATIO=0.56)恒走字诀集字管线，下区(行止区)恒走经典快速手势(TAP/横竖提圆折/拖动)
+- 移除字诀全局模式开关：charModeRef/charMode/toggleCharMode 全退场；顶栏「字诀」按钮移除（Type 图标清理）
+- C 键转义「清纸」：废弃写坏的笔画一键重写；书写悬浮条（退笔/重写）改为「有未判定笔画即浮现」不再依赖模式
+- 书符区点煞保留：上区点敌（<3 点或 <6px 微笔）仍出剑——「点敌出剑两区通用」原则不因分屏回退
+- 牵引法度简化：书符区恒不带跑角色（去 charMode 豁免条件，仅按分区判定）；行止区续笔不再打断待判定的收笔计时
+- UI 同步：分区线恒显示（行止 · 划招移形）；墨稿预览改为有笔画即显示；手势指南/首段文案全量改写为分屏语义
+- 冒烟测试扩至 17 项：新增 5a 上区划横不入手势管线（负例）/5b 上区写「山」识别化灵；10 组改页内轮询状态迁移单次求值（SHIELD→DASH 序列断言）根治 IPC 竞态；画圆移至行止区
+- 验证：tsc 零错误；vite build 成功（272 条预缓存）；冒烟 17/17 PASS
+
+Stage Summary:
+- 手势输入进入分屏时代：写字专注上半屏、划招专注下半屏，互不误伤
+- 修改：BattleView.tsx / scripts/smoke_moyugang.py

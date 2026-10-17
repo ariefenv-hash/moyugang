@@ -66,7 +66,6 @@ import {
   Infinity as InfinityIcon,
   X,
   Gem,
-  Type,
   Umbrella,
 } from 'lucide-react';
 
@@ -328,9 +327,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
   /** 徽章序号：每次点亮自增，清除时按序号比对——彻底根治「行」「周」等文案与手势名不一致导致的永不清散 */
   const gestureBadgeSeqRef = useRef(0);
 
-  // ===== 字诀模式（汉字识别手势）：逐笔集字，停笔自动判定，朱印评级定威力 =====
-  const charModeRef = useRef(false);
-  const [charMode, setCharMode] = useState(false);
+  // ===== 字诀（汉字识别手势）：逐笔集字，停笔自动判定，朱印评级定威力 =====
+  // 分屏时代（上区书符/下区行止）：起笔分区直接决定识别管线，不再需要全局模式开关
   const charStrokesRef = useRef<CharStrokePoint[][]>([]);
   const charCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [charStrokeCount, setCharStrokeCount] = useState(0);
@@ -618,7 +616,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
       } else if (code === 'r' || code === 'i') {
         triggerSkillUltimate();
       } else if (code === 'c') {
-        toggleCharMode();
+        // 分屏书写时代：C 键转义为「清纸」——废弃写坏的笔画重写
+        clearCharStrokes();
       } else if (code === 'v') {
         toggleWeapon();
       } else if (code === '1') {
@@ -838,33 +837,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     if (splats.length > 26) splats.splice(0, splats.length - 26);
   };
 
-  // ===== 字诀助手：模式切换 / 收笔判定 / 技能投射 =====
-  const toggleCharMode = useCallback(() => {
-    charModeRef.current = !charModeRef.current;
-    setCharMode(charModeRef.current);
-    charStrokesRef.current = [];
-    setCharStrokeCount(0);
-    if (charCommitTimerRef.current) {
-      clearTimeout(charCommitTimerRef.current);
-      charCommitTimerRef.current = null;
-    }
-    setCharHint({
-      text: charModeRef.current ? '字诀 · 开' : '字诀 · 合',
-      sub: charModeRef.current ? '以指书字：之 山 火 水 川 心 王' : '回归挥毫手势',
-    });
-    // 条件式清空：只在提示仍是「字诀 · 开/合」本身时才散去，
-    // 避免延迟计时器误杀快速书写后弹出的识别结果提示
-    safeTimeout(
-      () =>
-        setCharHint(
-          (prev) =>
-            prev?.text === '字诀 · 开' || prev?.text === '字诀 · 合' ? null : prev
-        ),
-      1700
-    );
-    sound.playPluck(charModeRef.current ? 783.99 : 523.25, 0.5);
-  }, [safeTimeout]);
-
+  // ===== 字诀助手：收笔判定 / 技能投射（分屏时代：上区即纸，无模式开关） =====
   // 字诀收笔判定：停笔 550ms 自动识别（集满笔画数则立即判定）——笔间自然停顿实测约 300-500ms，550ms 不拆字
   const commitCharStrokes = () => {
     if (charCommitTimerRef.current) {
@@ -2132,15 +2105,15 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
     }
 
-    // 字诀模式：新笔入字时取消待判定的收笔计时
-    if (charModeRef.current && charCommitTimerRef.current) {
+    // 上下分区：记录起笔所属区（上=书符区 恒为纸只写字；下=行止区 快速手势/点地移形）
+    strokeZoneRef.current =
+      clientY < rect.height * CAST_ZONE_RATIO ? 'CAST' : 'ACT';
+
+    // 书符区续笔：新笔入字时取消待判定的收笔计时（行止区起笔不打断书写节奏）
+    if (strokeZoneRef.current === 'CAST' && charCommitTimerRef.current) {
       clearTimeout(charCommitTimerRef.current);
       charCommitTimerRef.current = null;
     }
-
-    // 上下分区：记录起笔所属区（上=书符区 只出招不出行；下=行止区 可点地移形/拖动引路）
-    strokeZoneRef.current =
-      clientY < rect.height * CAST_ZONE_RATIO ? 'CAST' : 'ACT';
 
     gestureRecognizer.current.startStroke(clientX, clientY);
   };
@@ -2158,11 +2131,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
     gestureRecognizer.current.addPoint(clientX, clientY);
 
     // If dragging slowly in gesture mode, continuously lead the hero!
-    // 字诀模式豁免：专注书写，角色不被笔尖牵引（防写一字全场乱跑）
-    // 书符区起笔同样豁免：画字/划手势只出招不出行，笔尖绝不带跑角色
+    // 分屏牵引法度：书符区（上）恒为纸绝不带跑角色；行止区（下）拖动引路
     const pts = gestureRecognizer.current.getPoints();
     if (
-      !charModeRef.current &&
       strokeZoneRef.current === 'ACT' &&
       pts.length > 5 &&
       // 结印期间笔尖同样不带跑英雄：结印是出招承诺，滑笔意图由施法缓冲
@@ -2312,8 +2283,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
     }
 
-    // 字诀模式：先截取轨迹点再走集字管线；不触发经典手势（避免写字被误判为滑动）
-    if (charModeRef.current) {
+    // 分屏路由：书符区（上）→ 字诀集字管线；行止区（下）→ 经典快速手势
+    if (strokeZoneRef.current === 'CAST') {
       const strokePts = gestureRecognizer.current
         .getPoints()
         .map((p) => ({ x: p.x, y: p.y }));
@@ -2325,6 +2296,23 @@ export const BattleView: React.FC<BattleViewProps> = ({
           strokePts[i].x - strokePts[i - 1].x,
           strokePts[i].y - strokePts[i - 1].y
         );
+      }
+      // 点煞：书符区点敌同样出剑（攻击意图明确，一个点不成字）——
+      // 分屏后保留「点敌出剑两区通用」原则，其余微小误触仍走集字豁免
+      if (strokePts.length < 3 || pathLen < 6) {
+        const lastPt = strokePts[strokePts.length - 1];
+        if (lastPt) {
+          const worldX = lastPt.x + cameraX.current;
+          const worldY = lastPt.y;
+          const hitEnemy = unitsRef.current.some(
+            (u) => u.isEnemy && u.hp > 0 && Math.hypot(u.x - worldX, u.y - worldY) <= 75
+          );
+          if (hitEnemy) {
+            triggerHeroAttack(worldX, worldY);
+            flashGestureBadge('「点」', '落墨点煞');
+            return;
+          }
+        }
       }
       if (strokePts.length >= 2 && pathLen >= 6) {
         charStrokesRef.current.push(strokePts);
@@ -2373,12 +2361,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
     if (!dbg.__inkGestureDebug) {
       dbg.__inkGestureDebug = {
         heroPos: () => ({ x: 0, y: 0 }),
-        isCharMode: () => false,
         trace: [] as unknown[],
       };
     }
     dbg.__inkGestureDebug.heroPos = () => ({ x: heroRef.current.x, y: heroRef.current.y });
-    dbg.__inkGestureDebug.isCharMode = () => charModeRef.current;
     // 状态机/分区/战况观测（无头实测用）：突刺收势/移动目标/基地血量/波次进度
     dbg.__inkGestureDebug.heroState = () => ({
       state: heroRef.current.state,
@@ -2603,8 +2589,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
           // 连墨段位染色：笔迹随段位由墨青渐至鎏金，指尖实时感知连击价值
           const inkTint = inkTintFor(comboRef.current.tier);
           gestureRecognizer.current.drawBrushTrail(ctx, inkTint);
-          // 字诀模式：已收笔画的墨稿预览（停笔判定前可见所书之字，随段位染色）
-          if (charModeRef.current && charStrokesRef.current.length > 0) {
+          // 字诀墨稿预览：书符区已收笔画停笔判定前可见所书之字（随段位染色）
+          if (charStrokesRef.current.length > 0) {
             drawCharStrokesPreview(ctx, charStrokesRef.current, inkTint);
           }
           // 字迹化灵：成字墨稿化作灵韵飞散（世界锚定，镜头移动不飘屏）
@@ -3696,20 +3682,6 @@ export const BattleView: React.FC<BattleViewProps> = ({
             <Pause className="w-4 h-4" />
           </button>
 
-          {/* 字诀模式：汉字识别手势（逐笔书写，停笔判定） */}
-          <button
-            onClick={toggleCharMode}
-            className={`flex items-center gap-1 px-2.5 py-1.5 text-[11px] rounded-lg border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-              charMode
-                ? 'bg-amber-800/90 text-amber-100 border-amber-400/80 font-bold shadow-[0_0_10px_rgba(245,158,11,0.45)]'
-                : 'bg-stone-900 text-stone-300 border-stone-800 hover:text-stone-100'
-            }`}
-            title="字诀模式：逐笔书写汉字施法（之=断水斩 山=墨盾 火=笔阵 水=墨荷 川=三江引 心=归元 王=大招）· 快捷键 C"
-          >
-            <Type className="w-3.5 h-3.5 text-amber-400" />
-            <span>字诀</span>
-          </button>
-
           <button
             onClick={() => setShowGestureGuide((prev) => !prev)}
             className="p-1.5 text-stone-400 hover:text-stone-100 bg-stone-900 border border-stone-800 rounded-lg transition-colors cursor-pointer"
@@ -3756,8 +3728,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
         className="w-full h-full block touch-none select-none cursor-crosshair"
       />
 
-      {/* 上下分区指示线：上=书符区（画字施法） / 下=行止区（点地移形）；字诀模式全屏皆纸时隐去 */}
-      {!charMode && (
+      {/* 上下分区指示线：上=书符区（画字施法） / 下=行止区（划招移形）；分屏即法度恒显示 */}
+      {(
         <div
           className="absolute left-0 right-0 z-10 pointer-events-none"
           style={{ top: `${CAST_ZONE_RATIO * 100}%` }}
@@ -3780,7 +3752,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
               className="absolute right-3 top-1 px-1.5 py-px text-[9px] font-serif tracking-[0.2em] rounded"
               style={{ color: 'rgba(214,211,209,0.40)', background: 'rgba(8,12,14,0.28)' }}
             >
-              行止 · 点地移形
+              行止 · 划招移形
             </span>
           </div>
         </div>
@@ -3853,7 +3825,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
           </div>
         </div>
       )}
-      {charMode && !charHint && (
+      {/* 书写悬浮条：书符区有未判定笔画时浮现（退笔/重写后悔药） */}
+      {charStrokeCount > 0 && !charHint && (
         <div className="absolute top-56 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
           <div className="px-4 py-1.5 bg-stone-950/85 border border-amber-600/50 rounded-xl backdrop-blur-md flex items-center gap-2">
             <span className="text-xs font-serif text-amber-200 tracking-wider">
@@ -3895,13 +3868,13 @@ export const BattleView: React.FC<BattleViewProps> = ({
             </button>
           </div>
           <p className="text-[11px] font-bold text-cyan-300">
-            【挥毫操控 · 全平台统一】上下分区各司其职：上区画字施法、下区行动移动；右下技能按钮随时可点，电脑端键盘全程待命！
+            【挥毫操控 · 全平台统一】上下分屏各司其职：上区书字施法、下区划招移形；右下技能按钮随时可点，电脑端键盘全程待命！
           </p>
           <div className="rounded-lg border border-cyan-800/50 bg-stone-950/60 px-2 py-1.5 space-y-0.5">
-            <p className="text-[11px] font-bold text-cyan-200">【上下分区 · 各司其职】</p>
-            <p className="text-cyan-100/90">屏幕偏上＝书符区：画字/划手势只出招，空点不会误走</p>
-            <p className="text-cyan-100/90">屏幕偏下＝行止区：点地漫步、拖动引路、点敌出剑</p>
-            <p className="text-[10px] text-stone-400">字诀模式开启后全屏皆纸，分区线自动隐去</p>
+            <p className="text-[11px] font-bold text-cyan-200">【上下分屏 · 各司其职】</p>
+            <p className="text-cyan-100/90">屏幕偏上＝书符区：以指书字，逐笔集字停笔判定，只出招不误走</p>
+            <p className="text-cyan-100/90">屏幕偏下＝行止区：快速划招（横竖提圆折）、点地漫步、拖动引路、点敌出剑</p>
+            <p className="text-[10px] text-stone-400">写坏按 C 清纸重写；书写中可点悬浮条「退笔/重写」</p>
           </div>
           <p><strong className="text-cyan-300">轻点地面（下区）：</strong>剑仙踏墨巡行至该位置</p>
           <p><strong className="text-cyan-300">轻点敌军：</strong>施展落墨三式剑招</p>
@@ -3916,13 +3889,13 @@ export const BattleView: React.FC<BattleViewProps> = ({
           </div>
           <div className="pt-1.5 border-t border-stone-800">
             <p className="text-[11px] font-bold text-amber-300">
-              【字诀 · 以指书字】点「字诀」开启（快捷键 C），逐笔写整个字，停笔自动判定：
+              【字诀 · 以指书字】在书符区（屏幕上半）直接逐笔写整个字，停笔自动判定：
             </p>
             <p className="text-amber-200">「之」→ 断水斩 ·「山」→ 竹影墨盾 ·「火」→ 星河笔阵</p>
             <p className="text-amber-200">「水」→ 墨荷灵阵 ·「川」→ 三江引 ·「心」→ 墨心归元</p>
             <p className="text-amber-200">「王」→ 临江仙（需绝意满）</p>
             <p className="text-[10px] text-stone-400">笔顺随意、大小随意；笔数齐且写得正立即施放（无需久停）；「之」「山」支持连笔快写</p>
-            <p className="text-[10px] text-stone-400">书写时角色站定不被笔尖牵引；写错了点浮签上的「退笔 / 重写」</p>
+            <p className="text-[10px] text-stone-400">书写时角色站定不被笔尖牵引；写坏了按 C 清纸，或点浮签上的「退笔 / 重写」</p>
             <p className="text-[10px] text-stone-400">字写得越正评级越高：神品 ×1.35 · 妙品 ×1.15 · 能品 ×1.0</p>
           </div>
           <div className="pt-1 border-t border-stone-800 text-[10px] text-stone-400 space-y-1">
