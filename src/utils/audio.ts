@@ -15,7 +15,7 @@ class SoundEngine {
         this.ctx = new AudioCtx();
         this.master = this.ctx.createGain();
         this.master.gain.setValueAtTime(this.isMuted ? 0 : 0.9, this.ctx.currentTime);
-        this.master.connect(this.master);
+        this.master.connect(this.ctx.destination);
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
