@@ -222,7 +222,8 @@ export class GestureRecognizer {
 
   // Draw Wet Calligraphy Brush Trail directly onto canvas
   // 运笔中全量实时墨迹；收笔后 240ms 余墨渐隐（书写结束有收笔余韵，视觉连续）
-  public drawBrushTrail(ctx: CanvasRenderingContext2D) {
+  // tierTint：连墨段位染色（高段位笔锋随段位变色，指尖实时感知连击价值）
+  public drawBrushTrail(ctx: CanvasRenderingContext2D, tierTint?: InkTint | null) {
     const pts = this.points;
     if (pts.length < 2) return;
 
@@ -233,6 +234,9 @@ export class GestureRecognizer {
       if (age > 240) return;
       alpha = 1 - age / 240;
     }
+
+    const coreColor = tierTint?.core ?? '#09090b';
+    const haloColor = tierTint?.halo ?? 'rgba(56, 189, 248, 0.28)';
 
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -252,8 +256,8 @@ export class GestureRecognizer {
       // Calligraphy dynamics: faster swipe = thinner bristle (4-8px), slow drag = thick wet saturated ink (14-22px)
       const strokeWidth = Math.max(5, Math.min(22, 22 - speed * 10));
 
-      // Wet black ink with subtle cyan glow
-      ctx.strokeStyle = '#09090b';
+      // Wet black ink with subtle cyan glow（段位染色：核心墨色随段位偏色）
+      ctx.strokeStyle = coreColor;
       ctx.lineWidth = strokeWidth;
 
       ctx.beginPath();
@@ -261,14 +265,14 @@ export class GestureRecognizer {
       ctx.lineTo(p2.x, p2.y);
       ctx.stroke();
 
-      // Outer ink dispersion halo
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.28)';
+      // Outer ink dispersion halo（段位染色：外晕承载段位色）
+      ctx.strokeStyle = haloColor;
       ctx.lineWidth = strokeWidth + 6;
       ctx.stroke();
 
       // Occasional ink splatter drop along the brush（仅运笔中；余墨期重绘会闪烁，跳过）
       if (this.isTracing && i % 5 === 0 && Math.random() < 0.4) {
-        ctx.fillStyle = '#09090b';
+        ctx.fillStyle = coreColor;
         ctx.beginPath();
         const splashX = p2.x + (Math.random() - 0.5) * (strokeWidth + 12);
         const splashY = p2.y + (Math.random() - 0.5) * (strokeWidth + 12);
@@ -279,4 +283,10 @@ export class GestureRecognizer {
 
     ctx.restore();
   }
+}
+
+/** 墨迹段位染色：核心墨色 + 外晕色（连墨段位越高，笔墨越见风骨） */
+export interface InkTint {
+  core: string;
+  halo: string;
 }

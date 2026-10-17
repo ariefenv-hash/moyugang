@@ -29,7 +29,7 @@ import {
 } from '../data/gameData';
 import { CanvasRenderer } from '../utils/canvasRenderer';
 import { sound } from '../utils/audio';
-import { GestureRecognizer, GestureResult } from '../utils/gestureRecognizer';
+import { GestureRecognizer, GestureResult, InkTint } from '../utils/gestureRecognizer';
 import {
   recognizeChar,
   peekCharMatch,
@@ -81,12 +81,42 @@ const COMBO_TIERS: { min: number; tier: ComboTier; text: string; ink: number; dm
 ];
 const tierInfoFor = (count: number) => COMBO_TIERS.find((t) => count >= t.min);
 
-/** 字诀模式：已收笔画的墨稿预览（青晕 + 墨芯双描，停笔判定前可见所书之字） */
+/** 连墨段位墨色：段位越高，笔锋染色愈贵气（笔迹外晕承载段位色，指尖实时感知连击价值） */
+const TIER_INK: Record<ComboTier, InkTint> = {
+  NONE: { core: 'rgba(9, 9, 11, 0.92)', halo: 'rgba(56, 189, 248, 0.28)' },
+  ENTRY: { core: 'rgba(9, 9, 11, 0.92)', halo: 'rgba(56, 189, 248, 0.3)' },
+  PROGRESS: { core: 'rgba(13, 42, 51, 0.94)', halo: 'rgba(56, 189, 248, 0.36)' }, // 黛青
+  FLOW: { core: 'rgba(11, 58, 67, 0.94)', halo: 'rgba(45, 212, 191, 0.4)' }, // 行云·青金
+  DRAGON: { core: 'rgba(61, 17, 20, 0.94)', halo: 'rgba(248, 113, 113, 0.44)' }, // 笔走龙蛇·朱砂
+  DIVINE: { core: 'rgba(42, 18, 64, 0.94)', halo: 'rgba(192, 132, 252, 0.46)' }, // 出神入化·紫金
+  TRANSCEND: { core: 'rgba(58, 42, 8, 0.95)', halo: 'rgba(251, 191, 36, 0.52)' }, // 翰墨通神·鎏金
+};
+const inkTintFor = (tier: ComboTier): InkTint => TIER_INK[tier] ?? TIER_INK.NONE;
+
+/** 字迹化灵：字诀成字后墨稿化作该字属性的灵韵飞散（色/流向/粒子形态） */
+const CHAR_GHOST_FX: Record<
+  string,
+  { color: string; vx: number; vy: number; type: Particle['type'] }
+> = {
+  '之': { color: '#38bdf8', vx: 230, vy: -50, type: 'SLASH' },
+  '山': { color: '#34d399', vx: 0, vy: -80, type: 'BAMBOO' },
+  '火': { color: '#fbbf24', vx: 150, vy: -150, type: 'STAR' },
+  '水': { color: '#2dd4bf', vx: 40, vy: 130, type: 'WATER_RIPPLE' },
+  '川': { color: '#7dd3fc', vx: 300, vy: -20, type: 'WATER_RIPPLE' },
+  '心': { color: '#4ade80', vx: 0, vy: -140, type: 'PETAL' },
+  '王': { color: '#fcd34d', vx: 0, vy: -190, type: 'STAR' },
+};
+
+/** 字诀模式：已收笔画的墨稿预览（青晕 + 墨芯双描，停笔判定前可见所书之字）
+ *  tint：连墨段位染色；alphaOverride：字迹化灵淡出时复用本函数绘制残稿 */
 const drawCharStrokesPreview = (
   ctx: CanvasRenderingContext2D,
-  strokes: CharStrokePoint[][]
+  strokes: CharStrokePoint[][],
+  tint?: InkTint,
+  alphaOverride?: number
 ) => {
   ctx.save();
+  if (alphaOverride !== undefined) ctx.globalAlpha = alphaOverride;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   for (const s of strokes) {
@@ -94,10 +124,10 @@ const drawCharStrokesPreview = (
     ctx.beginPath();
     ctx.moveTo(s[0].x, s[0].y);
     for (let i = 1; i < s.length; i++) ctx.lineTo(s[i].x, s[i].y);
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.28)';
+    ctx.strokeStyle = tint?.halo ?? 'rgba(56, 189, 248, 0.28)';
     ctx.lineWidth = 13;
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(9, 9, 11, 0.85)';
+    ctx.strokeStyle = tint?.core ?? 'rgba(9, 9, 11, 0.85)';
     ctx.lineWidth = 6.5;
     ctx.stroke();
   }
@@ -306,6 +336,20 @@ export const BattleView: React.FC<BattleViewProps> = ({
   const [charStrokeCount, setCharStrokeCount] = useState(0);
   const [charHint, setCharHint] = useState<{ text: string; sub: string } | null>(null);
 
+  // ===== 字迹化灵：成字墨稿化作灵韵飞散（世界锚定：记录起笔时镜头，镜头移动字迹不飘屏） =====
+  const charGhostRef = useRef<{
+    strokes: CharStrokePoint[][];
+    /** 扁平笔画点序（沿写序发射灵韵粒子用） */
+    flatPts: { x: number; y: number }[];
+    bornAt: number;
+    camX0: number;
+    tint: InkTint;
+    fx: { color: string; vx: number; vy: number; type: Particle['type'] };
+    /** 粒子发射游标：沿写序自起笔向收笔燃尽 */
+    emitCursor: number;
+    totalPoints: number;
+  } | null>(null);
+
   // ===== 地面墨渍贴花（击杀/重击飞溅痕迹） =====
   const inkSplatsRef = useRef<InkSplat[]>([]);
 
@@ -374,6 +418,11 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
   // Target navigation destination for Tap-to-move
   const heroTargetMove = useRef<{ x: number; y: number } | null>(null);
+
+  // #10 施法缓冲：结印（SKILL_）期间的手势暂存队列，收势回位后自动补发
+  //（有效期按游戏时间计，暂停自动顺延；过期作废防陈旧指令）
+  const GESTURE_BUFFER_SEC = 0.8;
+  const pendingGestureRef = useRef<{ gesture: GestureResult; expiresAt: number } | null>(null);
 
   // ===== 上下分区操控：偏上「书符区」画字施法，下方「行止区」点地移形/拖动引路 =====
   // 分区线取视口高 56% 处：上区只出招不出行（画字/划手势绝不带跑角色），
@@ -462,6 +511,19 @@ export const BattleView: React.FC<BattleViewProps> = ({
   const lastTimeRef = useRef(performance.now());
   const spawnedWavesRef = useRef<Set<number>>(new Set());
   const nextEnemyWaveTimeRef = useRef(level.enemyWaveInterval);
+  // 游戏时间错峰落兵队列（P0-4 修复：替代真实时间 safeTimeout——
+  // 暂停/凝滞时 at 与 now 一同冻结，不再出现「暂停期间敌兵凭空出现」的时序不一致）
+  const pendingSpawnsRef = useRef<
+    Array<{
+      at: number;
+      type: UnitType;
+      isEnemy: boolean;
+      x: number;
+      y?: number;
+      isBoss?: boolean;
+      diff?: number;
+    }>
+  >([]);
   const nextWeatherEventTimeRef = useRef(25);
   const isGameOverRef = useRef(false);
   const bossSpawnedRef = useRef(false);
@@ -834,6 +896,25 @@ export const BattleView: React.FC<BattleViewProps> = ({
     triggerHaptic(match.grade === 'SHEN' ? [20, 30, 20] : 20);
     triggerSealStamp(heroRef.current.x, heroRef.current.y - 72, match.char);
 
+    // 字迹化灵：成字墨稿不即散，化作该字属性的灵韵（0.95s 内沿写序燃尽飞散，世界锚定）
+    const ghostFx = CHAR_GHOST_FX[match.char];
+    if (ghostFx) {
+      const flatPts: { x: number; y: number }[] = [];
+      for (const s of strokes) {
+        for (const p of s) flatPts.push({ x: p.x, y: p.y });
+      }
+      charGhostRef.current = {
+        strokes: strokes.map((s) => s.map((p) => ({ x: p.x, y: p.y }))),
+        flatPts,
+        bornAt: performance.now(),
+        camX0: cameraX.current,
+        tint: inkTintFor(comboRef.current.tier),
+        fx: ghostFx,
+        emitCursor: 0,
+        totalPoints: flatPts.length,
+      };
+    }
+
     // 文思连段：8s 内连续写中 → 每段 +10% 增伤（至多 +30%），连写流玩家额外受益
     const nowT = gameTimeRef.current;
     const cc = charChainRef.current;
@@ -1061,7 +1142,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
         id: `dmg_${Math.random()}`,
         x: hero.x,
         y: hero.y - hero.altitudeZ - 75,
-        text: `-${Math.round(dmg)}`,
+        text: finalDmg > 0 ? `-${Math.round(finalDmg)}` : '盾承',
         color: '#f87171',
         alpha: 1,
         scale: isCritical ? 1.4 : 1,
@@ -1146,10 +1227,22 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
 
     const unit = target;
-    unit.hp -= dmg;
+    // 护盾先于气血承伤（P0-3 修复：竹影墨盾给部队的 200×共鸣护盾此前只加不扣，形同虚设）
+    let finalDmg = dmg;
+    if (unit.shieldHp > 0) {
+      if (unit.shieldHp >= finalDmg) {
+        unit.shieldHp -= finalDmg;
+        finalDmg = 0;
+      } else {
+        finalDmg -= unit.shieldHp;
+        unit.shieldHp = 0;
+      }
+    }
+    unit.hp -= finalDmg;
     const killShot = unit.hp <= 0 && unit.isEnemy;
-    const heavyHit = isCritical || dmg > 80 || killShot;
-    unit.flinchTimer = heavyHit ? 0.32 : 0.2;
+    // 完全被护盾承接的攻击不触发重击腾空（盾扛住了不该被挑飞）
+    const heavyHit = finalDmg > 0 && (isCritical || dmg > 80 || killShot);
+    unit.flinchTimer = heavyHit ? 0.32 : finalDmg > 0 ? 0.2 : 0.1;
     // 连墨只计「我方攻势」：敌军受击才累积；我方部队挨打不再给连击充值（修复被动连墨漏洞）
     if (unit.isEnemy) registerHit(isCritical);
 
@@ -1190,10 +1283,12 @@ export const BattleView: React.FC<BattleViewProps> = ({
       x: unit.x,
       y: unit.y - unit.altitudeZ - 55,
       text: killShot
-        ? `斩落 -${Math.round(dmg)}`
-        : isCritical
-          ? `暴击 -${Math.round(dmg)}`
-          : `-${Math.round(dmg)}`,
+        ? `斩落 -${Math.round(finalDmg)}`
+        : finalDmg <= 0
+          ? '盾承'
+          : isCritical
+            ? `暴击 -${Math.round(finalDmg)}`
+            : `-${Math.round(finalDmg)}`,
       color: unit.isEnemy
         ? killShot
           ? '#fbbf24'
@@ -1582,6 +1677,82 @@ export const BattleView: React.FC<BattleViewProps> = ({
     safeTimeout(() => {
       hero.isInvulnerable = false;
     }, 350);
+  };
+
+  // 逆势横划「剑气逆寒」：撤步剑气——后撤步拉开身位，向面前敌阵荡出两道穿透剑气
+  // （与断水斩共用 dash_slash 冷却槽；人退剑进，攻防一体，朝向不变始终面向敌阵）
+  const triggerRetreatSlash = () => {
+    const hero = heroRef.current;
+    if (hero.state === 'DEAD' || skillCdsRef.current.dash_slash > 0 || isPausedRef.current) return;
+
+    const startX = hero.x;
+    const backX = Math.max(120, Math.min(WORLD_WIDTH - 120, hero.x - hero.facing * 150));
+    sound.playDash();
+    sound.playSlash(false);
+    triggerSealStamp(hero.x - hero.facing * 40, hero.y - 30, '逆');
+
+    const chainMult = takeChainBonus();
+    applySkillCd('dash_slash', 3.2);
+
+    hero.state = 'SKILL_DASH';
+    hero.stateTime = 0;
+    hero.isInvulnerable = true;
+    hero.x = backX;
+    safeTimeout(() => {
+      hero.isInvulnerable = false;
+    }, 300);
+
+    // 撤步残影带 + 双冲击环（与断水斩同构演出，方向反向）
+    triggerShake(4, 0.18);
+    const fxColor = 'rgba(125, 211, 252, 0.85)';
+    rendererRef.current?.addFxRing(startX, hero.y, fxColor, 7, 58, 0.3, 2.6, true);
+    rendererRef.current?.addFxRing(backX, hero.y, fxColor, 5, 40, 0.28, 2.2, true);
+    for (let i = 0; i < 9; i++) {
+      const tt = i / 8;
+      particlesRef.current.push({
+        id: `p_retreat_${Date.now()}_${i}`,
+        x: startX + (backX - startX) * tt,
+        y: hero.y + (Math.random() - 0.5) * 26,
+        altitudeZ: 10 + Math.random() * 36,
+        vx: -hero.facing * (40 + Math.random() * 70),
+        vy: (Math.random() - 0.5) * 50,
+        vz: 30 + Math.random() * 80,
+        color: i % 3 === 0 ? '#e0f2fe' : '#38bdf8',
+        size: Math.random() * 3 + 1.4,
+        alpha: 1,
+        life: 0.38,
+        maxLife: 0.38,
+        type: 'SLASH',
+        rotation: hero.facing === 1 ? Math.PI - 0.5 : 0.5,
+        vRot: -hero.facing * 8,
+      });
+    }
+
+    // 剑气逆寒：两道穿透剑气荡向面前（delay 后自当前位置发出，覆盖撤步后的安全距离）
+    const qiDmg = hero.attack * 1.55 * chainMult * getComboDmgMult();
+    for (let i = 0; i < 2; i++) {
+      safeTimeout(() => {
+        const h = heroRef.current;
+        if (h.state === 'DEAD') return;
+        projectilesRef.current.push({
+          id: `qi_${Date.now()}_${i}`,
+          x: h.x + 22 * h.facing,
+          y: h.y,
+          altitudeZ: 24 + i * 8,
+          targetX: h.x + 640 * h.facing,
+          targetY: h.y,
+          vx: 430 * h.facing,
+          vy: 0,
+          vz: 0,
+          damage: qiDmg,
+          isEnemy: false,
+          type: 'INK_BLADE',
+          pierce: true,
+          duration: 0,
+          maxDuration: 1.5,
+        });
+      }, 90 + i * 110);
+    }
   };
 
   // Skill 2: Bamboo Shield (W / L or Circle Gesture 「圆」 or 字诀「山」)
@@ -1993,7 +2164,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
     if (
       !charModeRef.current &&
       strokeZoneRef.current === 'ACT' &&
-      pts.length > 5
+      pts.length > 5 &&
+      // 结印期间笔尖同样不带跑英雄：结印是出招承诺，滑笔意图由施法缓冲
+      // 在收势后补发——否则牵引把英雄拽出 SKILL_ 姿势，缓冲与结印全部落空
+      !heroRef.current.state.startsWith('SKILL_')
     ) {
       const worldX = clientX + cameraX.current;
       const clampedY = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, clientY));
@@ -2014,6 +2188,19 @@ export const BattleView: React.FC<BattleViewProps> = ({
     // 防「划手势出招后角色仍走向旧落点」与「点敌出剑后继续行进」的残留移动
     if (gesture.type !== 'DRAG') {
       heroTargetMove.current = null;
+    }
+
+    // #10 施法缓冲：结印期间手势不丢弃——先入缓冲，收势回 IDLE 自动补发，
+    // 写字/点敌/划招不再被施法动作吃掉；攻击后摇保持即点即发（连招取消已打通）
+    const busyHero = heroRef.current;
+    if (busyHero.state === 'DEAD') return;
+    if (busyHero.state.startsWith('SKILL_')) {
+      pendingGestureRef.current = {
+        gesture,
+        expiresAt: gameTimeRef.current + GESTURE_BUFFER_SEC,
+      };
+      if (gesture.type !== 'DRAG') flashGestureBadge('「蓄」', '结印收势 · 随势即发');
+      return;
     }
 
     // Execute actions based on recognized gesture
@@ -2047,9 +2234,16 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
 
       case 'SWIPE_HORIZONTAL': {
-        // 「横」- 断水斩 (Dash Slash)
-        triggerSkillDashSlash(gesture.direction as any);
-        flashGestureBadge('「横」', gesture.poeticCalligraphy);
+        // 「横」双向语义（朝向相对）：顺向横划 = 断水斩（突进攻击）；
+        // 逆向横划 = 剑气逆寒（撤步剑气：后撤拉开身位，向面前敌阵荡出穿透剑气）
+        const swipeDir: 1 | -1 = gesture.direction === 'LEFT' ? -1 : 1;
+        if (swipeDir === heroRef.current.facing) {
+          triggerSkillDashSlash(swipeDir === 1 ? 'RIGHT' : 'LEFT');
+          flashGestureBadge('「横」', '断水东流');
+        } else {
+          triggerRetreatSlash();
+          flashGestureBadge('「逆」', '剑气逆寒 · 撤步剑气');
+        }
         break;
       }
 
@@ -2243,6 +2437,20 @@ export const BattleView: React.FC<BattleViewProps> = ({
       cameraX: Math.round(cameraX.current),
       friendlyCount: unitsRef.current.filter((u) => !u.isEnemy && u.hp > 0).length,
     });
+    // 本轮修复观测：部队快照（军令/护盾）/落兵队列/游戏时间（无头实测 HOLD·暂停波次·施法缓冲）
+    dbg.__inkGestureDebug.units = () =>
+      unitsRef.current.map((u) => ({
+        x: Math.round(u.x),
+        y: Math.round(u.y),
+        isEnemy: u.isEnemy,
+        type: u.type as string,
+        hp: Math.round(u.hp),
+        shieldHp: Math.round(u.shieldHp),
+        state: u.state as string,
+      }));
+    dbg.__inkGestureDebug.spawnQueue = () => pendingSpawnsRef.current.length;
+    dbg.__inkGestureDebug.gameTime = () => Math.round(gameTimeRef.current * 100) / 100;
+    dbg.__inkGestureDebug.armyCommand = () => armyCommandRef.current;
     // 原生捕获层指针轨迹（诊断指针捕获/弃笔；元素级去重防重渲染重复绑定）
     const cv = canvasRef.current as (HTMLCanvasElement & { __inkTraceBound?: boolean }) | null;
     if (cv && !cv.__inkTraceBound) {
@@ -2392,10 +2600,58 @@ export const BattleView: React.FC<BattleViewProps> = ({
         // Render Real-time Calligraphy Brush Trail on screen
         const ctx = canvasRef.current.getContext('2d');
         if (ctx) {
-          gestureRecognizer.current.drawBrushTrail(ctx);
-          // 字诀模式：已收笔画的墨稿预览（停笔判定前可见所书之字）
+          // 连墨段位染色：笔迹随段位由墨青渐至鎏金，指尖实时感知连击价值
+          const inkTint = inkTintFor(comboRef.current.tier);
+          gestureRecognizer.current.drawBrushTrail(ctx, inkTint);
+          // 字诀模式：已收笔画的墨稿预览（停笔判定前可见所书之字，随段位染色）
           if (charModeRef.current && charStrokesRef.current.length > 0) {
-            drawCharStrokesPreview(ctx, charStrokesRef.current);
+            drawCharStrokesPreview(ctx, charStrokesRef.current, inkTint);
+          }
+          // 字迹化灵：成字墨稿化作灵韵飞散（世界锚定，镜头移动不飘屏）
+          const ghost = charGhostRef.current;
+          if (ghost) {
+            const ageMs = performance.now() - ghost.bornAt;
+            const age = ageMs / 1000;
+            if (age >= 0.95) {
+              charGhostRef.current = null;
+            } else {
+              const fadeAlpha = Math.max(0, 1 - age / 0.95);
+              const camDx = cameraX.current - ghost.camX0;
+              ctx.save();
+              ctx.translate(-camDx, -age * 24);
+              drawCharStrokesPreview(ctx, ghost.strokes, ghost.tint, fadeAlpha);
+              ctx.restore();
+              // 沿写序发射灵韵粒子：字迹如被点燃，自起笔向收笔化灵而去
+              if (ghost.totalPoints > 0 && age < 0.6) {
+                const targetCursor = Math.min(
+                  ghost.totalPoints,
+                  Math.floor(ghost.totalPoints * (age / 0.6))
+                );
+                let emitted = 0;
+                while (ghost.emitCursor < targetCursor && emitted < 14) {
+                  const pt = ghost.flatPts[ghost.emitCursor];
+                  ghost.emitCursor += 1;
+                  emitted += 1;
+                  if (!pt || Math.random() < 0.35) continue;
+                  particlesRef.current.push({
+                    id: `p_ghost_${Date.now()}_${ghost.emitCursor}`,
+                    x: pt.x + ghost.camX0,
+                    y: pt.y,
+                    altitudeZ: 0,
+                    vx: ghost.fx.vx + (Math.random() - 0.5) * 60,
+                    vy: ghost.fx.vy + (Math.random() - 0.5) * 60,
+                    vz: 30 + Math.random() * 60,
+                    color: ghost.fx.color,
+                    size: Math.random() * 2.6 + 1.4,
+                    alpha: 1,
+                    life: 0.55 + Math.random() * 0.3,
+                    maxLife: 0.85,
+                    type: ghost.fx.type,
+                    vRot: (Math.random() - 0.5) * 6,
+                  });
+                }
+              }
+            }
           }
         }
       }
@@ -2413,6 +2669,15 @@ export const BattleView: React.FC<BattleViewProps> = ({
     const units = unitsRef.current;
     const now = gameTimeRef.current;
     const lv = levelRef.current;
+
+    // 清算到期落兵（游戏时间驱动：暂停时 at 与 now 同冻结，恢复后按序补齐）
+    if (pendingSpawnsRef.current.length > 0) {
+      const dueSpawns = pendingSpawnsRef.current.filter((s) => s.at <= now);
+      if (dueSpawns.length > 0) {
+        pendingSpawnsRef.current = pendingSpawnsRef.current.filter((s) => s.at > now);
+        dueSpawns.forEach((s) => spawnUnit(s.type, s.isEnemy, s.x, s.y, s.isBoss, s.diff));
+      }
+    }
 
     const weatherMult = weatherRef.current?.type === 'INK_RAIN' ? 3.0 : 1.0;
     inkRef.current +=
@@ -2585,9 +2850,13 @@ export const BattleView: React.FC<BattleViewProps> = ({
         const dy = heroTargetMove.current.y - hero.y;
         const dist = Math.hypot(dx, dy);
 
-        if (dist > 15) {
-          inputX = dx / dist;
-          inputY = dy / dist;
+        if (dist > 12) {
+          // 行止区点地/拖动跟手：80px 缓停带内按距离比例减速（ease-out 归位），
+          // 根治「满速抵达急停」与「拖动引路停-走-停」顿挫；下限 0.16 高于位移阈值 0.15，
+          // 保证最后 12px 也能平滑蠕进而非悬挂在半路
+          const ease = Math.max(0.16, Math.min(1, (dist - 12) / 80));
+          inputX = (dx / dist) * ease;
+          inputY = (dy / dist) * ease;
         } else {
           heroTargetMove.current = null;
         }
@@ -2619,6 +2888,15 @@ export const BattleView: React.FC<BattleViewProps> = ({
         hero.state = 'IDLE';
       }
 
+      // #10 施法缓冲：收势回位后补发结印期间的手势（有效期按游戏时间计，暂停自动顺延）
+      const bufferedGesture = pendingGestureRef.current;
+      if (bufferedGesture && !hero.state.startsWith('SKILL_')) {
+        pendingGestureRef.current = null;
+        if (gameTimeRef.current <= bufferedGesture.expiresAt) {
+          executeGesture(bufferedGesture.gesture);
+        }
+      }
+
       if (!hero.state.startsWith('ATTACK_')) {
         if (inputMag > 0.15) {
           hero.x = Math.max(120, Math.min(WORLD_WIDTH - 120, hero.x + inputX * effectiveHeroSpeed * dt));
@@ -2627,7 +2905,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
             Math.min(LANE_MAX_Y.current, hero.y + inputY * (effectiveHeroSpeed * 0.7) * dt)
           );
 
-          if (inputX !== 0) {
+          if (inputMag > 0.3 && inputX !== 0) {
+            // 朝向翻转死区：缓停带/跟手近距时不再因微小 dx 翻面抖动
             hero.facing = inputX > 0 ? 1 : -1;
           }
 
@@ -2643,17 +2922,33 @@ export const BattleView: React.FC<BattleViewProps> = ({
         }
       } else {
         hero.stateTime += dt;
-        if (hero.stateTime > 0.35 && hero.isGrounded) {
+        // 攻击后摇走位（命中帧 0.24s 后允许 55% 移速提前走位，衔接即攻击取消）：
+        // 连招不再「打一下顿一顿」，收招与起步融为一体——移动连贯性核心
+        if (hero.stateTime > 0.24 && hero.isGrounded && inputMag > 0.15) {
+          const recoverSpeed = effectiveHeroSpeed * 0.55;
+          hero.x = Math.max(120, Math.min(WORLD_WIDTH - 120, hero.x + inputX * recoverSpeed * dt));
+          hero.y = Math.max(
+            LANE_MIN_Y.current,
+            Math.min(LANE_MAX_Y.current, hero.y + inputY * (recoverSpeed * 0.7) * dt)
+          );
+          if (inputMag > 0.3 && inputX !== 0) {
+            hero.facing = inputX > 0 ? 1 : -1;
+          }
+          hero.state = 'WALK';
+        } else if (hero.stateTime > 0.35 && hero.isGrounded) {
           hero.state = 'IDLE';
         }
       }
     }
 
     // Camera follow hero（逻辑视宽，兼容高分屏）
+    // 指数平滑按 dt 归一（0.12^(dt·60) 等效）：60fps 与 30fps 行云模式手感一致，
+    // 消除低帧下相机拖沓、变帧率下跟拍松紧不一的漂移感（帧率不敏感 lerp）
     const viewW = viewWRef.current;
     const targetCamX = hero.x - viewW * 0.4;
     const clampedCamX = Math.max(0, Math.min(WORLD_WIDTH - viewW, targetCamX));
-    cameraX.current += (clampedCamX - cameraX.current) * 0.12;
+    const camLerp = 1 - Math.pow(0.88, Math.min(3, dt * 60));
+    cameraX.current += (clampedCamX - cameraX.current) * camLerp;
 
     // Wave Progression（剧本波次：普通关卡）
     if (!lv.endless) {
@@ -2661,9 +2956,12 @@ export const BattleView: React.FC<BattleViewProps> = ({
         if (now >= spawn.time && !spawnedWavesRef.current.has(idx)) {
           spawnedWavesRef.current.add(idx);
           for (let i = 0; i < spawn.count; i++) {
-            safeTimeout(() => {
-              spawnUnit(spawn.unitType, true, WORLD_WIDTH - 140 - Math.random() * 60);
-            }, i * 380);
+            pendingSpawnsRef.current.push({
+              at: now + (i * 380) / 1000,
+              type: spawn.unitType,
+              isEnemy: true,
+              x: WORLD_WIDTH - 140 - Math.random() * 60,
+            });
           }
         }
       });
@@ -2673,7 +2971,12 @@ export const BattleView: React.FC<BattleViewProps> = ({
         // 周期性基础波次：编成由关卡数据驱动（baselineWaves），缺省剑客打底
         const baseline: UnitType[] = lv.baselineWaves ?? ['SWORD'];
         baseline.forEach((unitT, i) => {
-          safeTimeout(() => spawnUnit(unitT, true, WORLD_WIDTH - 140 - i * 14), i * 320);
+          pendingSpawnsRef.current.push({
+            at: now + (i * 320) / 1000,
+            type: unitT,
+            isEnemy: true,
+            x: WORLD_WIDTH - 140 - i * 14,
+          });
         });
       }
 
@@ -2734,20 +3037,28 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
         for (let i = 0; i < count; i++) {
           const pick = pool[Math.floor(Math.random() * pool.length)];
-          safeTimeout(
-            () => spawnUnit(pick, true, WORLD_WIDTH - 140 - Math.random() * 60, undefined, false, diff),
-            i * 380
-          );
+          pendingSpawnsRef.current.push({
+            at: now + (i * 380) / 1000,
+            type: pick,
+            isEnemy: true,
+            x: WORLD_WIDTH - 140 - Math.random() * 60,
+            diff,
+          });
         }
 
-        // 每 5 波玄墨霸主压阵
+        // 每 5 波玄墨霸主压阵（入场预告即时播报，霸主本体走游戏时间队列压轴登场）
         if (waveNo % 5 === 0 && lv.boss) {
-          safeTimeout(() => {
-            spawnUnit('GUARDIAN', true, WORLD_WIDTH - 200, undefined, true, diff);
-            setBossAnnounced(true);
-            safeTimeout(() => setBossAnnounced(false), 4500);
-            sound.playUltimate();
-          }, count * 380);
+          pendingSpawnsRef.current.push({
+            at: now + (count * 380) / 1000,
+            type: 'GUARDIAN',
+            isEnemy: true,
+            x: WORLD_WIDTH - 200,
+            isBoss: true,
+            diff,
+          });
+          setBossAnnounced(true);
+          safeTimeout(() => setBossAnnounced(false), 4500);
+          sound.playUltimate();
         }
 
         endlessWaveRef.current += 1;
@@ -2978,7 +3289,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           if (Math.abs(unit.x - targetWell.x) > 20) {
             unit.facing = 1;
             unit.x += effectiveSpeed * dt;
-            unit.y += (targetWell.y - unit.y) * 0.05;
+            unit.y += (targetWell.y - unit.y) * (1 - Math.pow(0.95, dt * 60));
             unit.state = 'WALK';
           } else {
             unit.state = 'MINE';
@@ -2993,7 +3304,11 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
 
       if (!unit.isEnemy) {
-        if (armyCommandRef.current === 'DEFEND') {
+        if (armyCommandRef.current === 'HOLD') {
+          // 坚守军令（P0-2 修复：此前 HOLD 只有 UI 无实装）：原地驻守，不推进不跟队，
+          // 仅迎击进入攻击圈的目标（交战判定在下方通用逻辑，HOLD 不影响出手）
+          if (unit.state !== 'ATTACK') unit.state = 'GUARD';
+        } else if (armyCommandRef.current === 'DEFEND') {
           if (unit.x > 180) {
             unit.facing = -1;
             unit.x -= effectiveSpeed * dt;
@@ -3004,8 +3319,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
           const targetY = hero.y + (Math.cos(unit.limbPhase) * 35);
           if (Math.hypot(unit.x - targetX, unit.y - targetY) > 35) {
             unit.facing = unit.x < targetX ? 1 : -1;
-            unit.x += (targetX - unit.x) * 0.08;
-            unit.y += (targetY - unit.y) * 0.08;
+            const followLerp = 1 - Math.pow(0.92, dt * 60);
+            unit.x += (targetX - unit.x) * followLerp;
+            unit.y += (targetY - unit.y) * followLerp;
             unit.state = 'WALK';
           }
         }
@@ -3115,7 +3431,11 @@ export const BattleView: React.FC<BattleViewProps> = ({
           }
         }
       } else {
-        if (armyCommandRef.current !== 'DEFEND' || unit.isEnemy) {
+        // DEFEND/HOLD 军令下我方不主动推进（HOLD 原地驻守 / DEFEND 退守墨阁一线）
+        if (
+          (armyCommandRef.current !== 'DEFEND' && armyCommandRef.current !== 'HOLD') ||
+          unit.isEnemy
+        ) {
           unit.state = 'WALK';
           unit.facing = unit.isEnemy ? -1 : 1;
           unit.x += unit.facing * effectiveSpeed * dt;

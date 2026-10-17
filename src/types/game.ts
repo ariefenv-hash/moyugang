@@ -45,7 +45,7 @@ export interface UnitInstance {
   attackCooldown: number;
   speed: number;
   facing: 1 | -1; // 1 = right (player), -1 = left (enemy)
-  state: 'WALK' | 'ATTACK' | 'MINE' | 'RETREAT' | 'HURT' | 'DEAD';
+  state: 'WALK' | 'ATTACK' | 'MINE' | 'RETREAT' | 'HURT' | 'DEAD' | 'GUARD';
   stateTime: number;
   miningTimer?: number;
   carriedInk?: number;
