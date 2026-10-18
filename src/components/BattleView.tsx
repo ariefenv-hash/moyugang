@@ -427,6 +427,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
   // 下区点地漫步、拖动引路、点敌出剑（移动泳道本就在屏幕底部泳道带，天然吻合）
   const CAST_ZONE_RATIO = 0.56;
   const strokeZoneRef = useRef<'CAST' | 'ACT'>('ACT');
+  /** 起笔指针类型：触摸端点煞容差放宽（手指轻点天然带滑移） */
+  const activePointerTypeRef = useRef<'mouse' | 'touch' | 'pen'>('mouse');
   const castZoneHintShownRef = useRef(false);
 
   // Core Simulation Entities Refs
@@ -2108,6 +2110,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     // 上下分区：记录起笔所属区（上=书符区 恒为纸只写字；下=行止区 快速手势/点地移形）
     strokeZoneRef.current =
       clientY < rect.height * CAST_ZONE_RATIO ? 'CAST' : 'ACT';
+    activePointerTypeRef.current = e.pointerType;
 
     // 书符区续笔：新笔入字时取消待判定的收笔计时（行止区起笔不打断书写节奏）
     if (strokeZoneRef.current === 'CAST' && charCommitTimerRef.current) {
@@ -2115,7 +2118,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       charCommitTimerRef.current = null;
     }
 
-    gestureRecognizer.current.startStroke(clientX, clientY);
+    gestureRecognizer.current.startStroke(clientX, clientY, e.pointerType);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -2132,10 +2135,19 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     // If dragging slowly in gesture mode, continuously lead the hero!
     // 分屏牵引法度：书符区（上）恒为纸绝不带跑角色；行止区（下）拖动引路
+    // 笔速门控：快划（flick >0.55px/ms）不牵引——划招是出招不是引路，
+    // 移动端「一划英雄先跑」的体验坑就此拔除；慢拖（≤0.55px/ms）才带跑
     const pts = gestureRecognizer.current.getPoints();
+    let lastSpeed = Infinity;
+    if (pts.length >= 2) {
+      const a = pts[pts.length - 2];
+      const b = pts[pts.length - 1];
+      lastSpeed = Math.hypot(b.x - a.x, b.y - a.y) / Math.max(1, b.time - a.time);
+    }
     if (
       strokeZoneRef.current === 'ACT' &&
       pts.length > 5 &&
+      lastSpeed <= 0.55 &&
       // 结印期间笔尖同样不带跑英雄：结印是出招承诺，滑笔意图由施法缓冲
       // 在收势后补发——否则牵引把英雄拽出 SKILL_ 姿势，缓冲与结印全部落空
       !heroRef.current.state.startsWith('SKILL_')
@@ -2148,6 +2160,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
   /** 经典手势 → 技能执行（挥毫模式与字诀模式的快速滑笔共用） */
   const executeGesture = (gesture: GestureResult) => {
+    if (import.meta.env.DEV) {
+      const dbgG = (window as unknown as Record<string, any>).__inkGestureDebug;
+      if (dbgG) dbgG.lastGesture = { type: gesture.type, dir: gesture.direction ?? null };
+    }
     const worldStartX = gesture.startX + cameraX.current;
     const worldEndX = gesture.endX + cameraX.current;
     const worldY = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, gesture.endY));
@@ -2298,8 +2314,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
         );
       }
       // 点煞：书符区点敌同样出剑（攻击意图明确，一个点不成字）——
-      // 分屏后保留「点敌出剑两区通用」原则，其余微小误触仍走集字豁免
-      if (strokePts.length < 3 || pathLen < 6) {
+      // 分屏后保留「点敌出剑两区通用」原则；触摸端容差放宽（手指轻点带滑移）
+      const touchPtr = activePointerTypeRef.current !== 'mouse';
+      const dotSlop = touchPtr ? 14 : 6;
+      if (strokePts.length < 3 || pathLen < dotSlop) {
         const lastPt = strokePts[strokePts.length - 1];
         if (lastPt) {
           const worldX = lastPt.x + cameraX.current;
@@ -2340,6 +2358,24 @@ export const BattleView: React.FC<BattleViewProps> = ({
       return;
     }
 
+    // 无头透视：游戏侧真实笔画时长/点数/路径/指针类型（触摸阈值校准排查）
+    if (import.meta.env.DEV) {
+      const dbgS = (window as unknown as Record<string, any>).__inkGestureDebug;
+      if (dbgS) {
+        const sp = gestureRecognizer.current.getPoints();
+        let pathAcc = 0;
+        for (let i = 1; i < sp.length; i++) {
+          pathAcc += Math.hypot(sp[i].x - sp[i - 1].x, sp[i].y - sp[i - 1].y);
+        }
+        dbgS.lastStroke = {
+          durMs: sp.length > 1 ? Math.round(sp[sp.length - 1].time - sp[0].time) : 0,
+          points: sp.length,
+          pathLen: Math.round(pathAcc),
+          ptr: activePointerTypeRef.current,
+        };
+      }
+    }
+
     const gesture = gestureRecognizer.current.endStroke();
     if (!gesture) return;
     // 识别成功触觉反馈（轻震）
@@ -2373,6 +2409,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
     });
     dbg.__inkGestureDebug.heroTarget = () => heroTargetMove.current;
     dbg.__inkGestureDebug.strokeZone = () => strokeZoneRef.current;
+    // 最近一次经典手势识别结果（无头透视 TAP/DRAG 误判排查；仅首次初始化，渲染不重置）
+    if (dbg.__inkGestureDebug.lastGesture === undefined) {
+      dbg.__inkGestureDebug.lastGesture = null;
+    }
     dbg.__inkGestureDebug.forceVictory = () => {
       if (isGameOverRef.current || levelRef.current.endless) return false;
       enemyBaseHpRef.current = Math.min(5, enemyBaseHpRef.current);
@@ -3875,6 +3915,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
             <p className="text-cyan-100/90">屏幕偏上＝书符区：以指书字，逐笔集字停笔判定，只出招不误走</p>
             <p className="text-cyan-100/90">屏幕偏下＝行止区：快速划招（横竖提圆折）、点地漫步、拖动引路、点敌出剑</p>
             <p className="text-[10px] text-stone-400">写坏按 C 清纸重写；书写中可点悬浮条「退笔/重写」</p>
+            <p className="text-[10px] text-cyan-200/75">手机端：轻点选敌 · 快划出招（慢划也算） · 慢拖引路——笔速自动分辨，划招不再带跑英雄</p>
           </div>
           <p><strong className="text-cyan-300">轻点地面（下区）：</strong>剑仙踏墨巡行至该位置</p>
           <p><strong className="text-cyan-300">轻点敌军：</strong>施展落墨三式剑招</p>

@@ -496,3 +496,24 @@ Work Log:
 Stage Summary:
 - 手势输入进入分屏时代：写字专注上半屏、划招专注下半屏，互不误伤
 - 修改：BattleView.tsx / scripts/smoke_moyugang.py
+
+---
+Task ID: 24
+Agent: 主 agent (Super Z)
+Task: 移动端触摸手势修复——滑动困难/滑动无效/点选变跑步
+
+Work Log:
+- 根因（识别器阈值按鼠标快甩标定，触摸端全面失配）：
+  ① TAP 容差 24px：手指轻点天然带 20-35px 滑移 → 误判 DRAG → 点敌出剑变跑步（选择无效主因）
+  ② 慢划窗口 650ms：手机端有意慢划常 700-1000ms → 直接坠入 DRAG（滑动无效主因一）
+  ③ 轴向比 1.35：拇指弧摆斜划被驳回（滑动无效主因二）
+  ④ 快划牵引英雄先行带跑（划招体验差）
+- gestureRecognizer 指针类型自适应：startStroke 接收 pointerType（touch/pen 全级放宽）——TAP 36px/900ms；快扫 260ms/比1.15/位移26；慢划 1000ms/比1.22/位移40/阈值32；>1000ms 慢划救援（直线度<1.55 且笔速>0.22px/ms 按主导轴出招，弯曲慢拖引路不受影响）
+- BattleView：笔速门控牵引（>0.55px/ms 快划不带跑英雄，≤0.55 慢拖仍引路）；书符区点煞触摸容差 6→14px；手势指南补手机端口诀
+- DEV 钩子：lastGesture（识别结果透视，仅首次初始化防渲染重置）/ lastStroke（游戏侧时长/点数/路径/指针类型）
+- 冒烟 19 项：新增触摸组（CDP dispatchTouchEvent 合成 pointerType=touch）——11 点选滑移 26px 仍出剑（steps=4 避牵引致相机漂移破坏命中）/ 12 慢划 ~800ms 出断水斩 / 13 斜划上提出跳；触摸组前重开干净战场（60s 消耗战英雄易阵亡吞手势）；CDP 调度开销 ~65ms/次需计入时序设计
+- 验证：tsc 零错误；vite build 272 条预缓存；冒烟 19/19（触摸三项实跑非跳过）
+
+Stage Summary:
+- 移动端手势进入触摸自适应时代：轻点/慢划/斜划/快甩四类全部可靠出招
+- 修改：gestureRecognizer.ts / BattleView.tsx / scripts/smoke_moyugang.py

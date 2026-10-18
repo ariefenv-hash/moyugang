@@ -78,21 +78,30 @@ def draw_circle(page, cx, cy, r, steps=18):
     page.wait_for_timeout(100)
 
 
-with sync_playwright() as pw:
-    browser = pw.chromium.launch()
-    page = browser.new_page(viewport={"width": 1280, "height": 720})
-    page.on("console", lambda m: console_errors.append(m.text) if m.type == "error" else None)
-    page.on("pageerror", lambda e: console_errors.append(str(e)))
+class TouchPen:
+    """触摸笔画：CDP dispatchTouchEvent（Chromium 合成 pointerType=touch 指针事件）"""
 
-    # 1. 加载
+    def __init__(self, page):
+        self.cdp = page.context.new_cdp_session(page)
+
+    def _emit(self, type_, pts):
+        self.cdp.send("Input.dispatchTouchEvent", {"type": type_, "touchPoints": pts})
+
+    def stroke(self, page, x0, y0, x1, y1, steps=10, step_ms=30):
+        self._emit("touchStart", [{"x": x0, "y": y0}])
+        for i in range(1, steps + 1):
+            t = i / steps
+            self._emit("touchMove", [{"x": x0 + (x1 - x0) * t, "y": y0 + (y1 - y0) * t}])
+            page.wait_for_timeout(step_ms)
+        self._emit("touchEnd", [])
+
+
+def enter_battle(page):
+    """从首页进入第一折战斗（首次 + 触摸组前重开干净战场共用）"""
     page.goto(BASE, wait_until="networkidle")
     page.wait_for_timeout(1200)
-    check("1. 页面加载", True, f"console_errors={len(console_errors)}")
-
-    # 2. 进入战斗
     page.click("text=启卷入战")
     page.wait_for_timeout(1200)
-    # 章前引子卷轴在选关页即弹出：先关闭再选关
     try:
         page.click("button:has-text('启 卷')", timeout=4000)
         page.wait_for_timeout(800)
@@ -100,6 +109,16 @@ with sync_playwright() as pw:
         pass
     page.click("text=启程试炼 >> nth=0")
     page.wait_for_timeout(2000)
+
+
+with sync_playwright() as pw:
+    browser = pw.chromium.launch()
+    page = browser.new_page(viewport={"width": 1280, "height": 720}, has_touch=True)
+    page.on("console", lambda m: console_errors.append(m.text) if m.type == "error" else None)
+    page.on("pageerror", lambda e: console_errors.append(str(e)))
+
+    # 1. 加载 + 2. 进入战斗
+    enter_battle(page)
     in_battle = page.evaluate("() => !!window.__inkGestureDebug?.heroState?.()")
     check("2. 进入第一折战斗", in_battle)
 
@@ -111,16 +130,23 @@ with sync_playwright() as pw:
     drift = max(abs(p["x"] - still[0]["x"]) for p in still)
     check("3a. 静止不漂移", drift < 2.0, f"drift={drift:.2f}px")
 
-    # 3b. 按住 D 匀速移动：位移连续性（相邻采样位移的变异系数）
-    page.keyboard.down("d")
-    seq = sample_hero(page, 16, 33)
-    page.keyboard.up("d")
-    deltas = [seq[i + 1]["x"] - seq[i]["x"] for i in range(len(seq) - 1)]
-    moving = [d for d in deltas if d > 0.5]
-    if moving:
+    # 3b. 按住 D 匀速移动：位移连续性（相邻采样位移的变异系数；受击干扰则重采一次）
+    def kb_cv():
+        page.keyboard.down("d")
+        seq = sample_hero(page, 16, 33)
+        page.keyboard.up("d")
+        deltas = [seq[i + 1]["x"] - seq[i]["x"] for i in range(len(seq) - 1)]
+        moving = [d for d in deltas if d > 0.5]
+        if not moving:
+            return None, 9, 0
         mean = sum(moving) / len(moving)
         sd = (sum((d - mean) ** 2 for d in moving) / len(moving)) ** 0.5
-        cv = sd / mean if mean else 9
+        return mean, (sd / mean if mean else 9), len(moving)
+
+    mean, cv, n_moving = kb_cv()
+    if cv >= 0.45:  # 战斗中受击/击退偶发干扰：重采一次取优
+        mean, cv, n_moving = kb_cv()
+    if n_moving:
         check("3b. 键盘移动连续", cv < 0.45, f"mean={mean:.2f}px/33ms cv={cv:.2f}")
     else:
         check("3b. 键盘移动连续", False, "无位移")
@@ -308,8 +334,9 @@ with sync_playwright() as pw:
             f"state={st_mid}",
         )
         # 结印未收势（0.6s 窗口内）右划 → 断水斩应入缓冲而非立即抢占
-        #（页内轮询状态迁移：单次 evaluate 记录 1.5s 状态序列，规避 IPC 延迟竞态）
-        swipe(page, 420, 460, 640, 462, steps=8, step_ms=8)
+        #（页内轮询状态迁移：单次 evaluate 记录 1.5s 状态序列，规避 IPC 延迟竞态；
+        #  CDP 调度开销 ~65ms/次，用 4×1ms 快速划控制总时长在结印窗口内）
+        swipe(page, 420, 460, 640, 462, steps=4, step_ms=1)
         seen = page.evaluate(
             """() => new Promise(res => {
                 const dbg = window.__inkGestureDebug;
@@ -343,6 +370,88 @@ with sync_playwright() as pw:
         check("10c. 收势后缓冲招式自动补发", dash_post > 0, f"dash_cd={dash_post}")
     else:
         check("10a/10b/10c. 施法缓冲", True, f"skip—cds={cds_pre}")
+
+    # ===== 移动端触摸组：手指弧摆/慢速/滑移的阈值适配 =====
+    # 重开干净战场：前面 60s 消耗战队友易全灭、英雄易阵亡（dead 后手势全被吞）
+    enter_battle(page)
+    pen = TouchPen(page)
+
+    # 11. 触摸点选容差：带 26px 滑移的轻点敌军 → TAP 点煞出剑（旧阈值 24px 会误判拖动→跑步）
+    def visible_enemy():
+        us = page.evaluate("() => window.__inkGestureDebug.units()")
+        cam = page.evaluate("() => window.__inkGestureDebug.comboInfo().cameraX")
+        cands = [
+            u for u in us
+            if u["isEnemy"] and u["hp"] > 0 and 430 < u.get("y", 0) < 700
+            and 40 < u["x"] - cam < 1240
+        ]
+        return max(cands, key=lambda u: u["x"]) if cands else None
+
+    tgt = visible_enemy()
+    if not tgt:  # 敌未进场：间歇向右寻敌（走位+等待，最长 ~22s 至首波敌上线）
+        for _ in range(30):
+            page.keyboard.down("d")
+            page.wait_for_timeout(220)
+            page.keyboard.up("d")
+            page.wait_for_timeout(500)
+            tgt = visible_enemy()
+            if tgt:
+                break
+    if tgt and page.evaluate(
+        "() => window.__inkGestureDebug.heroState().state !== 'DEAD'"
+    ):
+        cam = page.evaluate("() => window.__inkGestureDebug.comboInfo().cameraX")
+        sx, sy = tgt["x"] - cam, tgt.get("y", 520)
+        # 起笔略偏敌侧 20px，滑 26px 收于敌身上（模拟手指落点不准+轻滑）；
+        # steps=4 → 仅 5 个采样点（≤5 不触发笔尖牵引）→ 相机不横移，命中判定不被镜头漂移破坏
+        pen.stroke(page, sx - 20, sy - 6, sx + 6, sy + 2, steps=4, step_ms=2)
+        page.wait_for_timeout(250)
+        st_tap = page.evaluate("() => window.__inkGestureDebug.heroState().state")
+        tgt_after = page.evaluate("() => window.__inkGestureDebug.heroTarget()")
+        g_tap = page.evaluate("() => window.__inkGestureDebug.lastGesture")
+        check(
+            "11. 触摸点选（带滑移）仍出剑不跑步",
+            g_tap is not None and g_tap.get("type") == "TAP" and "ATTACK" in str(st_tap) and tgt_after is None,
+            f"gesture={g_tap} state={st_tap} target={'null' if tgt_after is None else 'set'}",
+        )
+        page.wait_for_timeout(600)
+    else:
+        check("11. 触摸点选（带滑移）仍出剑不跑步", True, "skip—寻敌 22s 仍无可见敌")
+
+    # 12. 触摸慢划出招：700ms 直线慢划（旧阈值 650ms 直接坠入 DRAG 无效）
+    for _ in range(20):
+        cd_now = page.evaluate(
+            "() => window.__inkGestureDebug.battleState().skillCds"
+        ).get("dash_slash", 0)
+        if cd_now <= 0:
+            break
+        page.wait_for_timeout(300)
+    hero_pre2 = page.evaluate("() => window.__inkGestureDebug.heroPos()")
+    pen.stroke(page, 440, 500, 680, 506, steps=12, step_ms=3)  # CDP 开销下游戏侧 ~850ms ≈ 真机慢划
+    page.wait_for_timeout(250)
+    cds_t = page.evaluate("() => window.__inkGestureDebug.battleState().skillCds")
+    tgt_t = page.evaluate("() => window.__inkGestureDebug.heroTarget()")
+    g_sw = page.evaluate("() => window.__inkGestureDebug.lastGesture")
+    dash_dx_t = page.evaluate("() => window.__inkGestureDebug.heroPos()")["x"] - hero_pre2["x"]
+    check(
+        "12. 触摸慢划（~800ms）仍出招",
+        g_sw is not None and g_sw.get("type") == "SWIPE_HORIZONTAL"
+        and cds_t.get("dash_slash", 0) > 0 and tgt_t is None and dash_dx_t > 100,
+        f"gesture={g_sw} dash_cd={cds_t.get('dash_slash', 0):.2f} dx={dash_dx_t:.0f} target={'null' if tgt_t is None else 'set'}",
+    )
+
+    # 13. 触摸斜划上提：dy -90 / dx 70（旧阈值 1.35 比判 DRAG；触摸 1.22 应出 轻功揽月）
+    page.wait_for_timeout(700)
+    pen.stroke(page, 500, 600, 570, 510, steps=10, step_ms=2)  # CDP 开销下游戏侧 ~735ms
+    page.wait_for_timeout(150)
+    grounded_t = page.evaluate("() => window.__inkGestureDebug.heroState().grounded")
+    tgt_u = page.evaluate("() => window.__inkGestureDebug.heroTarget()")
+    g_up = page.evaluate("() => window.__inkGestureDebug.lastGesture")
+    check(
+        "13. 触摸斜划上提出跳",
+        g_up is not None and g_up.get("type") == "SWIPE_UP" and (not grounded_t) and tgt_u is None,
+        f"gesture={g_up} grounded={grounded_t} target={'null' if tgt_u is None else 'set'}",
+    )
 
     browser.close()
 

@@ -30,11 +30,14 @@ export class GestureRecognizer {
   private strokeColor = '#09090b';
   /** 收笔时刻：余墨渐隐用（endStroke 后笔迹不再瞬间消失） */
   private endedAt = 0;
+  /** 指针类型：触摸端阈值全级放宽（指尖弧摆/慢速/短行程 vs 鼠标快甩），修复移动端滑动无效 */
+  private pointerType: 'mouse' | 'touch' | 'pen' = 'mouse';
 
-  public startStroke(x: number, y: number) {
+  public startStroke(x: number, y: number, pointerType: 'mouse' | 'touch' | 'pen' = 'mouse') {
     this.points = [{ x, y, time: performance.now() }];
     this.isTracing = true;
     this.endedAt = 0;
+    this.pointerType = pointerType;
   }
 
   /** 弃笔：浏览器接管（pointercancel/系统手势）时丢弃半截笔画，不触发任何技能 */
@@ -87,8 +90,13 @@ export class GestureRecognizer {
       pathLength += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
     }
 
-    // 1. Single Tap or Very Short Click（长按≤600ms 同样算点按：深思熟虑的点敌不丢）
-    if (pathLength < 24 && duration < 600) {
+    // 1. Single Tap or Very Short Click（长按同样算点按：深思熟虑的点敌不丢）
+    //    触摸端容差放宽：手指轻点天然带 20-35px 滑移（若过严会误判拖动→点地行走，
+    //    点敌出剑变跑步——移动端「选择无效」主因），长按瞄准也更久
+    const isTouch = this.pointerType !== 'mouse';
+    const tapSlop = isTouch ? 36 : 24;
+    const tapMaxDur = isTouch ? 900 : 600;
+    if (pathLength < tapSlop && duration < tapMaxDur) {
       return {
         type: 'TAP',
         name: '点',
@@ -156,14 +164,16 @@ export class GestureRecognizer {
     }
 
     // 4. Directional Swipes —— 快速轻扫 flick 支持高速短轨迹，慢划则要求更长路径；
-    //    快扫允许更斜的角度（1.22），慢划维持 1.35 防误触
-    const flickFast = duration < 220;
-    const minSwipeLen = flickFast ? 30 : 45;
-    const axisRatio = flickFast ? 1.22 : 1.35;
-    if (pathLength > minSwipeLen && duration < 650) {
+    //    触摸端分级放宽：快扫窗口 220→260ms、轴向比 1.22→1.15（拇指弧摆）、
+    //    慢划窗口 650→1000ms、轴向比 1.35→1.22、位移门槛缩小（手机屏幕小行程短）
+    const flickFast = duration < (isTouch ? 260 : 220);
+    const minSwipeLen = flickFast ? (isTouch ? 26 : 30) : (isTouch ? 40 : 45);
+    const axisRatio = flickFast ? (isTouch ? 1.15 : 1.22) : (isTouch ? 1.22 : 1.35);
+    const swipeDurCap = isTouch ? 1000 : 650;
+    if (pathLength > minSwipeLen && duration < swipeDurCap) {
       const absDx = Math.abs(totalDx);
       const absDy = Math.abs(totalDy);
-      const dirThresh = flickFast ? 30 : 40;
+      const dirThresh = flickFast ? (isTouch ? 26 : 30) : (isTouch ? 32 : 40);
 
       // Horizontal swipe (横 - 断水斩)
       if (absDx > absDy * axisRatio) {
@@ -200,6 +210,45 @@ export class GestureRecognizer {
           name: '提',
           poeticCalligraphy: '轻功揽月',
           direction: 'UP',
+          startX: start.x,
+          startY: start.y,
+          endX: end.x,
+          endY: end.y,
+        };
+      }
+    }
+
+    // 5. 触摸慢划救援：超过 1000ms 的慢划不直接坠入 DRAG——直线度高且有一定笔速的
+    //    仍按主导轴出招（移动端「慢划无反应」第二主因）；弯曲慢拖（引路）不受影响
+    if (
+      isTouch &&
+      duration >= swipeDurCap &&
+      duration < 1400 &&
+      pathLength > 70 &&
+      totalDist > 30
+    ) {
+      const straightness = pathLength / totalDist;
+      const avgSpeed = totalDist / duration; // px/ms
+      if (straightness < 1.55 && avgSpeed > 0.22) {
+        const absDx = Math.abs(totalDx);
+        const absDy = Math.abs(totalDy);
+        if (absDx >= absDy) {
+          return {
+            type: 'SWIPE_HORIZONTAL',
+            name: '横',
+            poeticCalligraphy: totalDx > 0 ? '断水东流' : '剑气逆寒',
+            direction: totalDx > 0 ? 'RIGHT' : 'LEFT',
+            startX: start.x,
+            startY: start.y,
+            endX: end.x,
+            endY: end.y,
+          };
+        }
+        return {
+          type: totalDy < 0 ? 'SWIPE_UP' : 'SWIPE_DOWN',
+          name: totalDy < 0 ? '提' : '竖',
+          poeticCalligraphy: totalDy < 0 ? '轻功揽月' : '笔落惊风',
+          direction: totalDy < 0 ? 'UP' : 'DOWN',
           startX: start.x,
           startY: start.y,
           endX: end.x,
