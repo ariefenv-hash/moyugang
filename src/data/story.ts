@@ -39,7 +39,7 @@ export const MAIN_STORY_OUTLINE: StoryOutlineEntry[] = [
     anthology: '边塞引',
     name: '孤城万仞',
     teaser: '褪色之潮北上边关，铁血将士以血肉护碑。',
-    status: 'UPCOMING',
+    status: 'RELEASED',
   },
   {
     id: 5,
@@ -542,6 +542,161 @@ const CH3_LEVELS: LevelConfig[] = [
 ];
 
 /* ============================================================
+   第四大章 《边塞引·孤城万仞》
+   断弦之音散后，褪色之潮北上边关：边关「英名碑」上的戍卒
+   名字被一个个洗去——名字消失者自同袍记忆中淡出，化作无名
+   墨傀儡。玄墨北庭统帅「黑云都督·摧城」欲拔碑断名，云砚持
+   广陵散青光北上，与铁血戍卒共护残碑。（词境取意边塞诗五篇）
+   ============================================================ */
+
+const CH4_LEVELS: LevelConfig[] = [
+  {
+    id: 16,
+    chapter: '边塞引·第一折',
+    title: '大漠孤烟',
+    subtitle: '长河落日，初抵边关',
+    poeticVerse: '大漠孤烟直，长河落日圆。',
+    poeticAuthor: '—— 使至塞上',
+    description: '北出玉门，大漠孤烟。褪色之潮已蚀入沙海，黄沙褪作灰白，戍卒的家书尽成白纸。守住漠北墨阁，为云砚夺得北上第一处落脚之地！',
+    storyIntro: '长河落日，大漠孤烟。可烟是灰的，沙是白的——褪色之潮漫过边关，连夕阳都在一寸寸变淡。',
+    ambientType: 'DESERT',
+    playerBaseHp: 4800,
+    enemyBaseHp: 7000,
+    initialInk: 580,
+    rewardJade: 780,
+    enemyWaveInterval: 15,
+    baselineWaves: ['SWORD', 'ARCHER', 'GUARDIAN'],
+    enemySpawns: [
+      { time: 8, unitType: 'SWORD', count: 3 },
+      { time: 26, unitType: 'ARCHER', count: 3 },
+      { time: 48, unitType: 'GUARDIAN', count: 2 },
+      { time: 70, unitType: 'SWORD', count: 4 },
+      { time: 94, unitType: 'ARCHER', count: 3 },
+      { time: 118, unitType: 'GUARDIAN', count: 3 },
+    ],
+  },
+  {
+    id: 17,
+    chapter: '边塞引·第二折',
+    title: '烽火家书',
+    subtitle: '烽燧连天，纸短情长',
+    poeticVerse: '烽火连三月，家书抵万金。',
+    poeticAuthor: '—— 春望',
+    description: '烽燧连天三月不熄，戍卒的家书却在火光里一页页褪成白纸。蚀文军欲焚尽烽台、断绝边关音讯——守住烽燧墨阁，让家书继续南飞！',
+    storyIntro: '烽火连三月，家书抵万金。可如今烽台被围，信使折戟，每一封家书都在火光里褪成白纸——那些等信的人，快要记不清儿子的眉眼了。',
+    ambientType: 'BEACON',
+    playerBaseHp: 5000,
+    enemyBaseHp: 7400,
+    initialInk: 600,
+    rewardJade: 840,
+    enemyWaveInterval: 15,
+    baselineWaves: ['SWORD', 'GUARDIAN', 'HARPIST'],
+    enemySpawns: [
+      { time: 6, unitType: 'GUARDIAN', count: 2 },
+      { time: 24, unitType: 'ARCHER', count: 3 },
+      { time: 46, unitType: 'HARPIST', count: 2 },
+      { time: 68, unitType: 'SWORD', count: 4 },
+      { time: 92, unitType: 'GUARDIAN', count: 3 },
+      { time: 116, unitType: 'ARCHER', count: 4 },
+    ],
+  },
+  {
+    id: 18,
+    chapter: '边塞引·第三折',
+    title: '羌笛怨柳',
+    subtitle: '春风不度，笛仙守关',
+    poeticVerse: '羌笛何须怨杨柳，春风不度玉门关。',
+    poeticAuthor: '—— 凉州词',
+    description: '玉门关外杨柳尽枯，羌笛客以哀音蚀去关内最后的春色——凡闻笛者，心中诗行尽成枯枝。击败羌笛客，让春风重度玉门关！',
+    storyIntro: '玉门关的杨柳死了。羌笛声里，柳絮化作灰蝶纷纷坠落——吹笛的人立在关墙之上，说要把春天永远挡在关外。',
+    ambientType: 'WITHER',
+    playerBaseHp: 5200,
+    enemyBaseHp: 7800,
+    initialInk: 620,
+    rewardJade: 900,
+    enemyWaveInterval: 15,
+    baselineWaves: ['SWORD', 'ARCHER', 'GUARDIAN'],
+    boss: {
+      name: '羌笛客·怨柳',
+      title: '洗墨麾下笛仙',
+      hp: 5800,
+      attack: 115,
+      speed: 160,
+    },
+    bossUnit: 'HARPIST',
+    bossTime: 35,
+    enemySpawns: [
+      { time: 6, unitType: 'SWORD', count: 3 },
+      { time: 24, unitType: 'ARCHER', count: 3 },
+      { time: 44, unitType: 'GUARDIAN', count: 2 },
+      { time: 66, unitType: 'HARPIST', count: 2 },
+      { time: 88, unitType: 'SWORD', count: 4 },
+      { time: 112, unitType: 'GUARDIAN', count: 3 },
+    ],
+  },
+  {
+    id: 19,
+    chapter: '边塞引·第四折',
+    title: '铁衣寒光',
+    subtitle: '朔气金柝，守碑达旦',
+    poeticVerse: '朔气传金柝，寒光照铁衣。',
+    poeticAuthor: '—— 木兰诗',
+    description: '朔风卷夜，玄甲军夜袭碑林，英名碑上的名字正一个个褪去。燃起金柝，守至天明——碑上三万名字，一个都不能少！',
+    storyIntro: '朔气传金柝，寒光照铁衣。夜袭的玄甲军踏碎了碑林的寂静——碑上每褪去一个名字，就有一名戍卒忘记自己为何而战。',
+    ambientType: 'IRON',
+    playerBaseHp: 5400,
+    enemyBaseHp: 8200,
+    initialInk: 640,
+    rewardJade: 960,
+    enemyWaveInterval: 16,
+    baselineWaves: ['ARCHER', 'GUARDIAN', 'HARPIST'],
+    enemySpawns: [
+      { time: 8, unitType: 'GUARDIAN', count: 3 },
+      { time: 28, unitType: 'HARPIST', count: 2 },
+      { time: 50, unitType: 'SWORD', count: 4 },
+      { time: 74, unitType: 'GUARDIAN', count: 3 },
+      { time: 98, unitType: 'ARCHER', count: 4 },
+      { time: 122, unitType: 'HARPIST', count: 3 },
+    ],
+  },
+  {
+    id: 20,
+    chapter: '边塞引·第五折',
+    title: '黑云压城',
+    subtitle: '孤城万仞，甲光向日',
+    poeticVerse: '黑云压城城欲摧，甲光向日金鳞开。',
+    poeticAuthor: '—— 雁门太守行',
+    description: '黑云压城，玄墨北庭倾巢而出。黑云都督·摧城携洗墨余烬亲征，欲将英名碑连根拔起——提携玉龙为君死！以剑为笔，在残碑上重写边关的名字！',
+    storyIntro: '黑云压城城欲摧，甲光向日金鳞开。摧城的战鼓震碎了长空——英名碑就在身后，碑上是三万戍卒的名字。半步，也不能退。',
+    ambientType: 'SIEGE',
+    playerBaseHp: 5800,
+    enemyBaseHp: 9000,
+    initialInk: 680,
+    rewardJade: 1100,
+    enemyWaveInterval: 17,
+    baselineWaves: ['SWORD', 'GUARDIAN', 'HARPIST'],
+    boss: {
+      name: '黑云都督·摧城',
+      title: '玄墨北庭统帅',
+      hp: 6400,
+      attack: 130,
+      speed: 150,
+    },
+    bossUnit: 'GUARDIAN',
+    bossTime: 25,
+    enemySpawns: [
+      { time: 5, unitType: 'GUARDIAN', count: 2 },
+      { time: 24, unitType: 'ARCHER', count: 3 },
+      { time: 46, unitType: 'HARPIST', count: 2 },
+      { time: 70, unitType: 'SWORD', count: 5 },
+      { time: 96, unitType: 'GUARDIAN', count: 3 },
+      { time: 122, unitType: 'ARCHER', count: 4 },
+      { time: 148, unitType: 'SWORD', count: 4 },
+    ],
+  },
+];
+
+/* ============================================================
    大章元数据全集（章前引子 / 卷首诗 / 通关尾声）
    ============================================================ */
 
@@ -587,12 +742,12 @@ export const STORY_CHAPTERS: StoryChapterMeta[] = [
     key: 'biansai',
     anthology: '边塞引',
     name: '孤城万仞',
-    verse: '孤城遥望玉门关，墨护残碑万仞间。',
-    verseAuthor: '—— 边塞引·预告',
-    intro: '',
-    epilogue: '',
-    status: 'UPCOMING',
-    teaser: MAIN_STORY_OUTLINE[3].teaser,
+    verse: '孤城遥望玉门关，墨护残碑万仞间。铁衣戍客名未冷，笔底春风度阴山。',
+    verseAuthor: '—— 边塞引·卷首',
+    intro: '断弦之音散去不过一月，北地的铁蹄声便踏碎了冻河。边关的「英名碑」上，刻着三百年来每一位戍卒的名字——褪色之潮北上，碑文便一字字消隐：名字被洗去的戍卒，会从同袍的记忆里淡出，化作无名的墨傀儡，继续机械地挥刀守关。玄墨北庭统帅「黑云都督·摧城」拾得了洗墨之笔的余烬，欲将英名碑连根拔起，令十万铁血之师尽数「无名」。云砚携广陵散青光北上，与戍边将士歃血为盟：残碑在，边关在；名字在，文脉在。',
+    epilogue: '摧城的黑云终于散了。朝阳跃出地平线的刹那，英名碑上三万个名字次第亮起，如星河倒卷——忘了名字的戍卒们热泪纵横：他们想起故乡的春柳、母亲的家书、未寄出的平安。摧城消散前留下一笑：「都护铁衣冷难着……可你们的碑，比铁还冷吗？墨之源头不在大漠，在湘水之畔——去问问那位行吟的诗人吧，他招的魂，从来不止是楚辞。」云砚收剑南望，湘水之上，神游之音隐隐可闻。',
+    status: 'RELEASED',
+    levels: CH4_LEVELS,
   },
   {
     id: 5,
@@ -672,7 +827,7 @@ export const STORY_CHAPTERS: StoryChapterMeta[] = [
    工具函数（UI 与解锁链使用）
    ============================================================ */
 
-/** 所有已启章节的平铺关卡（含第一、二、三大章） */
+/** 所有已启章节的平铺关卡（含第一、二、三、四大章） */
 export const RELEASED_LEVELS: LevelConfig[] = STORY_CHAPTERS.flatMap(
   (c) => c.levels ?? []
 );

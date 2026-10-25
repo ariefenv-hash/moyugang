@@ -581,6 +581,36 @@ export class CanvasRenderer {
       skyGrad.addColorStop(0.5, '#101822');
       skyGrad.addColorStop(0.8, '#1e2c38');
       skyGrad.addColorStop(1, '#384a52');
+    } else if (level.ambientType === 'DESERT') {
+      // 大漠孤烟：长河落日，黄沙映天
+      skyGrad.addColorStop(0, '#20140c');
+      skyGrad.addColorStop(0.45, '#4a2a12');
+      skyGrad.addColorStop(0.75, '#9a5a22');
+      skyGrad.addColorStop(1, '#e8b060');
+    } else if (level.ambientType === 'BEACON') {
+      // 烽火家书：烽燧映夜，火光烛天
+      skyGrad.addColorStop(0, '#100604');
+      skyGrad.addColorStop(0.5, '#2e110a');
+      skyGrad.addColorStop(0.8, '#5c2010');
+      skyGrad.addColorStop(1, '#a04e24');
+    } else if (level.ambientType === 'WITHER') {
+      // 羌笛怨柳：无春之关，灰败枯黄
+      skyGrad.addColorStop(0, '#13130d');
+      skyGrad.addColorStop(0.5, '#33331f');
+      skyGrad.addColorStop(0.8, '#5c5a3a');
+      skyGrad.addColorStop(1, '#8f8a60');
+    } else if (level.ambientType === 'IRON') {
+      // 铁衣寒光：关山月冷，钢蓝霜夜
+      skyGrad.addColorStop(0, '#04070e');
+      skyGrad.addColorStop(0.5, '#0e1626');
+      skyGrad.addColorStop(0.8, '#1e2c44');
+      skyGrad.addColorStop(1, '#3d4f68');
+    } else if (level.ambientType === 'SIEGE') {
+      // 黑云压城：墨云压顶，城下火光
+      skyGrad.addColorStop(0, '#040407');
+      skyGrad.addColorStop(0.5, '#10101a');
+      skyGrad.addColorStop(0.82, '#241e28');
+      skyGrad.addColorStop(1, '#4a2c22');
     } else {
       skyGrad.addColorStop(0, '#120d1c');
       skyGrad.addColorStop(0.4, '#2e192f');
@@ -729,6 +759,63 @@ export class CanvasRenderer {
       ctx.beginPath();
       ctx.arc(celestialX + 9, 72, 15, 0, Math.PI * 2);
       ctx.fill();
+    } else if (level.ambientType === 'DESERT') {
+      // 长河落日圆：巨大浑圆落日半悬地平线，晕染大漠
+      const sunY = laneMinY - 34;
+      const desertSun = ctx.createRadialGradient(celestialX, sunY, 16, celestialX, sunY, 150);
+      desertSun.addColorStop(0, 'rgba(255, 236, 180, 0.95)');
+      desertSun.addColorStop(0.25, 'rgba(250, 180, 90, 0.45)');
+      desertSun.addColorStop(1, 'rgba(200, 110, 50, 0)');
+      ctx.fillStyle = desertSun;
+      ctx.beginPath();
+      ctx.arc(celestialX, sunY, 150, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f5c878';
+      ctx.beginPath();
+      ctx.arc(celestialX, sunY, 34, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (level.ambientType === 'WITHER') {
+      // 无春之关：惨淡白日，有形无温
+      const paleGlow = ctx.createRadialGradient(celestialX, 80, 8, celestialX, 80, 52);
+      paleGlow.addColorStop(0, 'rgba(228, 228, 210, 0.75)');
+      paleGlow.addColorStop(0.4, 'rgba(200, 200, 180, 0.22)');
+      paleGlow.addColorStop(1, 'rgba(180, 180, 160, 0)');
+      ctx.fillStyle = paleGlow;
+      ctx.beginPath();
+      ctx.arc(celestialX, 80, 52, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#dcdcc8';
+      ctx.beginPath();
+      ctx.arc(celestialX, 80, 17, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (level.ambientType === 'IRON') {
+      // 关山月：明月出天山，苍茫云海间
+      const ironMoon = ctx.createRadialGradient(celestialX, 82, 12, celestialX, 82, 86);
+      ironMoon.addColorStop(0, 'rgba(235, 242, 252, 0.95)');
+      ironMoon.addColorStop(0.4, 'rgba(190, 210, 235, 0.38)');
+      ironMoon.addColorStop(1, 'rgba(140, 170, 205, 0)');
+      ctx.fillStyle = ironMoon;
+      ctx.beginPath();
+      ctx.arc(celestialX, 82, 86, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#eaf1fa';
+      ctx.beginPath();
+      ctx.arc(celestialX, 82, 30, 0, Math.PI * 2);
+      ctx.fill();
+      // 月轮蚀缺（玄墨啃月）
+      ctx.fillStyle = '#0a0e16';
+      ctx.beginPath();
+      ctx.arc(celestialX - 10, 74, 13, 0, Math.PI * 2);
+      ctx.fill();
+      // 苍茫云海横带
+      ctx.fillStyle = 'rgba(90, 110, 140, 0.2)';
+      ctx.beginPath();
+      ctx.ellipse(this.width * 0.5, laneMinY * 0.55, this.width * 0.62, 22, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(70, 90, 120, 0.16)';
+      ctx.beginPath();
+      ctx.ellipse(this.width * 0.42, laneMinY * 0.62, this.width * 0.5, 15, 0, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.restore();
 
@@ -776,6 +863,69 @@ export class CanvasRenderer {
           ctx.stroke();
         }
       }
+      ctx.restore();
+    }
+
+    // 烽火家书：远处烽燧剪影 + 塔顶火光明灭（视差随相机缓移）
+    if (level.ambientType === 'BEACON') {
+      ctx.save();
+      for (let b = 0; b < 3; b++) {
+        const bx = ((b * 470 + 180 - cameraX * 0.1) % (this.width + 340) + this.width + 340) % (this.width + 340) - 170;
+        const bh = 54 + (b % 2) * 16;
+        const by = laneMinY - bh;
+        // 烽燧梯台剪影
+        ctx.fillStyle = 'rgba(14, 8, 6, 0.72)';
+        ctx.beginPath();
+        ctx.moveTo(bx - 15, laneMinY);
+        ctx.lineTo(bx - 10, by);
+        ctx.lineTo(bx + 10, by);
+        ctx.lineTo(bx + 15, laneMinY);
+        ctx.closePath();
+        ctx.fill();
+        // 垛口
+        ctx.fillRect(bx - 12, by - 5, 4, 5);
+        ctx.fillRect(bx - 2, by - 5, 4, 5);
+        ctx.fillRect(bx + 8, by - 5, 4, 5);
+        // 塔顶火光明灭
+        const fa = 0.5 + Math.sin(gameTime * 3.2 + b * 2.1) * 0.28;
+        const fire = ctx.createRadialGradient(bx, by - 10, 1, bx, by - 10, 30);
+        fire.addColorStop(0, `rgba(255, 190, 90, ${fa})`);
+        fire.addColorStop(0.4, `rgba(255, 120, 40, ${fa * 0.5})`);
+        fire.addColorStop(1, 'rgba(255, 80, 30, 0)');
+        ctx.fillStyle = fire;
+        ctx.beginPath();
+        ctx.arc(bx, by - 10, 30, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255, 210, 120, ${fa})`;
+        ctx.beginPath();
+        ctx.arc(bx, by - 10, 3.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // 黑云压城：翻滚墨云横陈天际（雁门太守行·终章异象）
+    if (level.ambientType === 'SIEGE') {
+      ctx.save();
+      ctx.fillStyle = 'rgba(5, 5, 9, 0.82)';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      for (let x = 0; x <= this.width; x += 26) {
+        const wx = x + Math.sin(gameTime * 0.22) * 8;
+        const wy = laneMinY * 0.2
+          + Math.sin(wx * 0.011 + gameTime * 0.16) * 16
+          + Math.cos(wx * 0.023 - gameTime * 0.1) * 9;
+        ctx.lineTo(x, Math.max(6, wy));
+      }
+      ctx.lineTo(this.width, 0);
+      ctx.closePath();
+      ctx.fill();
+      // 云隙压下的暗红天光
+      const siegeGlow = ctx.createLinearGradient(0, laneMinY * 0.2, 0, laneMinY);
+      siegeGlow.addColorStop(0, 'rgba(120, 40, 26, 0)');
+      siegeGlow.addColorStop(1, 'rgba(150, 52, 30, 0.14)');
+      ctx.fillStyle = siegeGlow;
+      ctx.fillRect(0, laneMinY * 0.2, this.width, laneMinY * 0.8);
       ctx.restore();
     }
 
@@ -1129,6 +1279,192 @@ export class CanvasRenderer {
         ctx.restore();
       }
       ctx.restore();
+    } else if (level.ambientType === 'DESERT') {
+      // 大漠孤烟：孤烟笔直 + 黄沙横扫 + 沙粒打旋
+      ctx.save();
+      // 孤烟（远处笔直上升的狼烟，随风缓摇）
+      const smokeX = W * 0.72;
+      ctx.strokeStyle = 'rgba(58, 46, 38, 0.32)';
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      for (let y = laneMinY - 12; y > laneMinY * 0.12; y -= 8) {
+        const rise = (laneMinY - y) / laneMinY;
+        const sway = Math.sin(t * 0.6 + y * 0.05) * 6 * rise;
+        if (y === laneMinY - 12) ctx.moveTo(smokeX + sway, y);
+        else ctx.lineTo(smokeX + sway, y);
+      }
+      ctx.stroke();
+      if (!this.qualityLow) {
+        // 黄沙横扫线
+        ctx.strokeStyle = 'rgba(216, 178, 118, 0.3)';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        for (let i = 0; i < 26; i++) {
+          const seed = i * 83.7;
+          const sx = ((seed * 71 + t * 330) % (W + 80)) - 40;
+          const sy = laneMinY * 0.35 + ((seed * 43) % (H * 0.55));
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx - 18 - (seed % 14), sy + 2.5);
+        }
+        ctx.stroke();
+        // 沙粒打旋
+        const sandCols = ['#d8b070', '#c49a52', '#e8cc90'];
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 167.3;
+          const px = ((seed * 47) % (W + 60)) - 30 + Math.sin(t * 1.3 + seed) * 30;
+          const py = laneMinY * 0.5 + ((seed * 97 + t * 120) % (H * 0.4));
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(t * 2.4 + seed);
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = sandCols[i % 3];
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 3.4, 1.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'BEACON') {
+      // 烽火家书：烽火光晕呼吸 + 灰烬火星上浮 + 家书纸页飘零
+      ctx.save();
+      // 地平线烽火光晕（呼吸）
+      const pulse = 0.16 + Math.sin(t * 2.1) * 0.05;
+      const glow = ctx.createLinearGradient(0, laneMinY - 70, 0, laneMinY + 20);
+      glow.addColorStop(0, 'rgba(255, 120, 40, 0)');
+      glow.addColorStop(0.7, `rgba(255, 120, 40, ${pulse})`);
+      glow.addColorStop(1, `rgba(255, 160, 60, ${pulse * 1.6})`);
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, laneMinY - 70, W, 90);
+      if (!this.qualityLow) {
+        // 上升灰烬 / 火星
+        for (let i = 0; i < 22; i++) {
+          const seed = i * 137.9;
+          const ex = ((seed * 53) % (W + 40)) - 20 + Math.sin(t * 0.9 + seed) * 26;
+          const ey = H - ((seed * 79 + t * (36 + (seed % 30))) % (H + 40));
+          const isSpark = i % 4 === 0;
+          ctx.globalAlpha = isSpark ? 0.75 : 0.4;
+          ctx.fillStyle = isSpark ? '#ffb050' : '#8a7a6a';
+          ctx.beginPath();
+          ctx.arc(ex, ey, isSpark ? 1.8 : 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // 飘零家书纸页
+        ctx.fillStyle = 'rgba(228, 216, 190, 0.5)';
+        for (let i = 0; i < 5; i++) {
+          const seed = i * 211.3;
+          const px = ((seed * 61) % (W + 60)) - 30 + Math.sin(t * 0.7 + seed) * 40;
+          const py = ((seed * 83 + t * 55) % (H + 50)) - 25;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(Math.sin(t * 0.8 + seed) * 0.9 + seed);
+          ctx.fillRect(-4.5, -6, 9, 12);
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'WITHER') {
+      // 羌笛怨柳：枯枝剪影 + 灰柳絮打旋坠落
+      ctx.save();
+      if (!this.qualityLow) {
+        ctx.strokeStyle = 'rgba(30, 30, 22, 0.3)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let i = 0; i < 7; i++) {
+          const seed = i * 173.1;
+          const bx = (seed * 53) % W;
+          const by = laneMinY * (0.24 + (seed % 40) / 160);
+          ctx.moveTo(bx, by);
+          ctx.quadraticCurveTo(bx + 16, by - 9, bx + 34, by - 4);
+          ctx.moveTo(bx + 17, by - 6.5);
+          ctx.quadraticCurveTo(bx + 22, by - 15, bx + 30, by - 17);
+        }
+        ctx.stroke();
+      }
+      const fuzzCols = ['rgba(196, 198, 176, 0.55)', 'rgba(168, 172, 148, 0.5)', 'rgba(214, 214, 194, 0.45)'];
+      for (let i = 0; i < 16; i++) {
+        const seed = i * 127.7;
+        const fx = ((seed * 67) % (W + 60)) - 30 + Math.sin(t * 1.1 + seed) * 44;
+        const fy = ((seed * 89 + t * 72) % (H + 60)) - 30;
+        ctx.save();
+        ctx.translate(fx, fy);
+        ctx.rotate(t * 1.8 + seed);
+        ctx.fillStyle = fuzzCols[i % 3];
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 3.6, 1.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'IRON') {
+      // 铁衣寒光：寒光星芒明灭 + 长风掠沙
+      ctx.save();
+      if (!this.qualityLow) {
+        for (let i = 0; i < 9; i++) {
+          const seed = i * 197.3;
+          const sx = ((seed * 71) % (W + 40)) - 20;
+          const sy = laneMinY * (0.2 + (seed % 50) / 110);
+          const tw = Math.max(0, Math.sin(t * 2.2 + seed));
+          if (tw < 0.25) continue;
+          ctx.strokeStyle = `rgba(220, 235, 250, ${tw * 0.5})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(sx - 4.5, sy);
+          ctx.lineTo(sx + 4.5, sy);
+          ctx.moveTo(sx, sy - 4.5);
+          ctx.lineTo(sx, sy + 4.5);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = 'rgba(150, 170, 195, 0.14)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 16; i++) {
+          const seed = i * 149.7;
+          const wx = ((seed * 83 + t * 260) % (W + 100)) - 50;
+          const wy = laneMinY * 0.3 + ((seed * 47) % (H * 0.5));
+          ctx.moveTo(wx, wy);
+          ctx.lineTo(wx + 40 + (seed % 26), wy + 3);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'SIEGE') {
+      // 黑云压城：战鼓暗红脉冲 + 火矢流光 + 灰烬弥漫
+      ctx.save();
+      const drumPh = t % 7;
+      if (drumPh < 1.1) {
+        const da = drumPh < 0.14 ? 0.16 : Math.max(0, 0.16 * (1 - (drumPh - 0.14) / 0.96));
+        const dg = ctx.createRadialGradient(W * 0.5, laneMinY, 40, W * 0.5, laneMinY, H * 0.75);
+        dg.addColorStop(0, `rgba(255, 70, 30, ${da})`);
+        dg.addColorStop(1, 'rgba(255, 70, 30, 0)');
+        ctx.fillStyle = dg;
+        ctx.fillRect(0, 0, W, H);
+      }
+      if (!this.qualityLow) {
+        ctx.strokeStyle = 'rgba(255, 120, 50, 0.5)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const seed = i * 233.9;
+          const cyc = (t * 0.9 + i * 0.37) % 1;
+          const ax = ((seed * 71) % W) + cyc * 240;
+          const ay = laneMinY * 0.1 + ((seed * 37) % (H * 0.5)) + cyc * 200;
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(ax - 26, ay - 18);
+        }
+        ctx.stroke();
+        for (let i = 0; i < 14; i++) {
+          const seed = i * 151.3;
+          const ex = ((seed * 59) % (W + 40)) - 20 + Math.sin(t * 0.6 + seed) * 20;
+          const ey = H - ((seed * 73 + t * 40) % (H + 40));
+          ctx.globalAlpha = 0.32;
+          ctx.fillStyle = '#6a5a50';
+          ctx.beginPath();
+          ctx.arc(ex, ey, 2.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
     }
   }
 
@@ -1198,6 +1534,31 @@ export class CanvasRenderer {
       groundGrad.addColorStop(0, '#1c242e');
       groundGrad.addColorStop(0.3, '#10161d');
       groundGrad.addColorStop(1, '#06090d');
+    } else if (level.ambientType === 'DESERT') {
+      // 大漠沙丘：金黄渐暗
+      groundGrad.addColorStop(0, '#a87838');
+      groundGrad.addColorStop(0.3, '#6e4e22');
+      groundGrad.addColorStop(1, '#241608');
+    } else if (level.ambientType === 'BEACON') {
+      // 烽燧焦土：赤褐灼痕
+      groundGrad.addColorStop(0, '#5c3418');
+      groundGrad.addColorStop(0.3, '#38200e');
+      groundGrad.addColorStop(1, '#140a05');
+    } else if (level.ambientType === 'WITHER') {
+      // 无春枯柳：灰绿枯土
+      groundGrad.addColorStop(0, '#565030');
+      groundGrad.addColorStop(0.3, '#34301c');
+      groundGrad.addColorStop(1, '#12100a');
+    } else if (level.ambientType === 'IRON') {
+      // 碑林冻土：铁灰霜夜
+      groundGrad.addColorStop(0, '#33404e');
+      groundGrad.addColorStop(0.3, '#202a36');
+      groundGrad.addColorStop(1, '#0a0e14');
+    } else if (level.ambientType === 'SIEGE') {
+      // 攻城战场：焦黑染血
+      groundGrad.addColorStop(0, '#2e2620');
+      groundGrad.addColorStop(0.3, '#1c1610');
+      groundGrad.addColorStop(1, '#0a0705');
     } else {
       groundGrad.addColorStop(0, '#26262b');
       groundGrad.addColorStop(0.3, '#1c1c20');

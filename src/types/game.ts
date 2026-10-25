@@ -226,7 +226,12 @@ export interface LevelConfig {
     | 'GOOSE'
     | 'CHRYS'
     | 'GLOOM'
-    | 'STRING';
+    | 'STRING'
+    | 'DESERT'
+    | 'BEACON'
+    | 'WITHER'
+    | 'IRON'
+    | 'SIEGE';
   initialInk: number;
   enemySpawns: {
     time: number;

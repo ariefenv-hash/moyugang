@@ -453,6 +453,57 @@ with sync_playwright() as pw:
         f"gesture={g_up} grounded={grounded_t} target={'null' if tgt_u is None else 'set'}",
     )
 
+    # ===== 14. 第四大章《边塞引·孤城万仞》：解锁链/章签/五折卡/氛围战斗 =====
+    err_count_before_ch4 = len(console_errors)
+    page.evaluate(
+        """() => {
+            localStorage.setItem('ink_and_steel_progress_v1', JSON.stringify({
+                unlockedLevel: 16,
+                completedLevels: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+                tutorialDone: true,
+            }));
+        }"""
+    )
+    page.goto(BASE, wait_until="networkidle")
+    page.wait_for_timeout(1200)
+    page.click("text=启卷入战")
+    page.wait_for_timeout(1400)
+    # 14a. 默认章签落在进度所在章（第四章）
+    ch_title = page.evaluate("() => document.querySelector('h2')?.textContent || ''")
+    check(
+        "14a. 章签总纲默认第四大章《边塞引·孤城万仞》",
+        "边塞引" in ch_title and "孤城万仞" in ch_title,
+        f"title={ch_title}",
+    )
+    # 14b. 章前引子自动展开（storySeen 未含第 4 章）
+    try:
+        page.wait_for_selector("button:has-text('启 卷')", timeout=4000)
+        intro_appeared = True
+    except Exception:
+        intro_appeared = False
+    check("14b. 章前引子自动展开", intro_appeared)
+    if intro_appeared:
+        page.click("button:has-text('启 卷')")
+        page.wait_for_timeout(600)
+    # 14c. 五折关卡卡全量渲染
+    fold_titles = page.evaluate(
+        "() => Array.from(document.querySelectorAll('h3')).map(e => e.textContent.trim())"
+    )
+    expected_folds = ["大漠孤烟", "烽火家书", "羌笛怨柳", "铁衣寒光", "黑云压城"]
+    folds_ok = all(any(t in x for x in fold_titles) for t in expected_folds)
+    check("14c. 五折关卡卡全量渲染", folds_ok, f"folds={fold_titles}")
+    page.screenshot(path="scripts/shot_ch4_select.png")
+    # 14d. 进入第一折战斗（DESERT 大漠孤烟）
+    page.click("text=启程试炼 >> nth=0")
+    page.wait_for_timeout(2200)
+    in_ch4 = page.evaluate("() => !!window.__inkGestureDebug?.heroState?.()")
+    check("14d. 进入第四章第一折战斗（大漠孤烟）", in_ch4)
+    page.wait_for_timeout(1500)
+    page.screenshot(path="scripts/shot_ch4_battle.png")
+    # 14e. 第四章章签/战斗渲染无新增 console 错误
+    new_errs = console_errors[err_count_before_ch4:]
+    check("14e. 第四章渲染无 console 错误", len(new_errs) == 0, f"errors={new_errs[:3]}")
+
     browser.close()
 
 print("\n===== 冒烟测试汇总 =====")
