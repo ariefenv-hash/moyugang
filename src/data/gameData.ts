@@ -101,6 +101,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'chapter4_clear', name: '孤城万仞', description: '完卷第四大章，摧城散去，英名碑三万名字次第重亮', icon: 'CROWN' },
   { id: 'chapter5_half', name: '河伯归渊', description: '通关第五大章第三折《扶桑金乌》，破玄墨河伯，晨光重照湘水', icon: 'FEATHER' },
   { id: 'chapter5_clear', name: '九歌天问', description: '完卷第五大章，大司命玄册焚尽，列星重亮文脉源头', icon: 'CROWN' },
+  { id: 'chapter6_half', name: '豁然开朗', description: '通关第六大章第三折《豁然开朗》，破守隘墨魁，向光而行', icon: 'FEATHER' },
+  { id: 'chapter6_clear', name: '武陵迷津', description: '完卷第六大章，守源人灯灭谜开，千年无人问津终有回响', icon: 'CROWN' },
   { id: 'combo_dragon', name: '笔走龙蛇', description: '单场战斗连墨达到 20 连', icon: 'FLAME' },
   { id: 'combo_transcend', name: '翰墨通神', description: '单场战斗连墨达到 45 连', icon: 'STAR' },
   { id: 'slayer_40', name: '妙笔生花', description: '单场战斗击杀 40 名敌军', icon: 'SWORD' },

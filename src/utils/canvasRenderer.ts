@@ -641,6 +641,36 @@ export class CanvasRenderer {
       skyGrad.addColorStop(0.45, '#2e2262');
       skyGrad.addColorStop(0.8, '#40306e');
       skyGrad.addColorStop(1, '#543c7a');
+    } else if (level.ambientType === 'RIVULET') {
+      // 缘溪行：青碧溪谷，晨雾未散
+      skyGrad.addColorStop(0, '#12242a');
+      skyGrad.addColorStop(0.5, '#1e3c3c');
+      skyGrad.addColorStop(0.82, '#3a5c52');
+      skyGrad.addColorStop(1, '#7a9a84');
+    } else if (level.ambientType === 'PEACHDAWN') {
+      // 夹岸桃霞：粉金满天，落英如雨
+      skyGrad.addColorStop(0, '#2e1424');
+      skyGrad.addColorStop(0.45, '#64283e');
+      skyGrad.addColorStop(0.78, '#b4525c');
+      skyGrad.addColorStop(1, '#f4b490');
+    } else if (level.ambientType === 'GAPLIGHT') {
+      // 豁然开朗：洞口天光，一线金柱
+      skyGrad.addColorStop(0, '#201a12');
+      skyGrad.addColorStop(0.42, '#463822');
+      skyGrad.addColorStop(0.75, '#8a6c34');
+      skyGrad.addColorStop(1, '#e8c878');
+    } else if (level.ambientType === 'SMOKEFIELD') {
+      // 阆陌炊烟：暖黄昏野，人家烟火
+      skyGrad.addColorStop(0, '#2a1e10');
+      skyGrad.addColorStop(0.45, '#5e4020');
+      skyGrad.addColorStop(0.78, '#a07434');
+      skyGrad.addColorStop(1, '#e0b070');
+    } else if (level.ambientType === 'EERYPEACH') {
+      // 千年迷津：桃霞与玄墨裂隙同框，诡美难辨
+      skyGrad.addColorStop(0, '#1a0e22');
+      skyGrad.addColorStop(0.45, '#3c1e3a');
+      skyGrad.addColorStop(0.78, '#6e3854');
+      skyGrad.addColorStop(1, '#b46870');
     } else {
       skyGrad.addColorStop(0, '#120d1c');
       skyGrad.addColorStop(0.4, '#2e192f');
@@ -921,6 +951,49 @@ export class CanvasRenderer {
         else ctx.lineTo(sX, sY);
       }
       ctx.stroke();
+    } else if (level.ambientType === 'EERYPEACH') {
+      // 千年迷津：桃林尽头一道玄墨裂隙悬于天际，隙内透出桃花色的光
+      const riftX = this.width * 0.7 - cameraX * 0.04;
+      const riftY = laneMinY * 0.34;
+      const riftGlow = ctx.createRadialGradient(riftX, riftY, 4, riftX, riftY, 90);
+      riftGlow.addColorStop(0, 'rgba(255, 170, 190, 0.5)');
+      riftGlow.addColorStop(0.5, 'rgba(180, 90, 140, 0.22)');
+      riftGlow.addColorStop(1, 'rgba(90, 40, 90, 0)');
+      ctx.fillStyle = riftGlow;
+      ctx.beginPath();
+      ctx.arc(riftX, riftY, 90, 0, Math.PI * 2);
+      ctx.fill();
+      // 裂隙缝体（两段曲线夹出一线细缝，随时间呼吸开合）
+      const gapW = 5 + Math.sin(gameTime * 1.3) * 2.2;
+      ctx.fillStyle = 'rgba(8, 4, 12, 0.9)';
+      ctx.beginPath();
+      ctx.moveTo(riftX - 46, riftY - 58);
+      ctx.quadraticCurveTo(riftX - gapW, riftY - 18, riftX - gapW * 0.6, riftY + gapW);
+      ctx.quadraticCurveTo(riftX - 40, riftY + 34, riftX - 58, riftY + 72);
+      ctx.lineTo(riftX - 30, riftY + 66);
+      ctx.quadraticCurveTo(riftX + gapW, riftY + 26, riftX + gapW, riftY - 10);
+      ctx.quadraticCurveTo(riftX + 30, riftY - 44, riftX + 18, riftY - 74);
+      ctx.closePath();
+      ctx.fill();
+      // 缝内桃色光芯
+      ctx.strokeStyle = 'rgba(255, 190, 205, 0.55)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(riftX - gapW * 0.4, riftY - 30);
+      ctx.quadraticCurveTo(riftX + gapW, riftY, riftX - gapW * 0.2, riftY + 30);
+      ctx.stroke();
+      // 千年尘埃：缓浮的桃花瓣与玄色尘埃各半
+      if (!this.qualityLow) {
+        for (let i = 0; i < 10; i++) {
+          const seed = i * 173.3;
+          const px = ((seed * 53) % (this.width + 60)) - 30 + Math.sin(gameTime * 0.4 + seed) * 22;
+          const py = ((seed * 97 + gameTime * 14) % (laneMinY * 0.8));
+          ctx.fillStyle = i % 2 === 0 ? 'rgba(244, 180, 200, 0.4)' : 'rgba(30, 16, 34, 0.5)';
+          ctx.beginPath();
+          ctx.ellipse(px, py, 2.4, 1.2, seed + gameTime * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
     ctx.restore();
 
@@ -1769,6 +1842,210 @@ export class CanvasRenderer {
         }
       }
       ctx.restore();
+    } else if (level.ambientType === 'RIVULET') {
+      // 缘溪行：溪光鳞纹 + 落英随水 + 晨雾带
+      ctx.save();
+      // 溪光鳞纹（地平线下的横向细纹，缓慢流动）
+      if (!this.qualityLow) {
+        for (let i = 0; i < 8; i++) {
+          const seed = i * 211.7;
+          const wy = laneMinY + 14 + (seed % 80);
+          const wx = ((seed * 47 + t * 34) % (W + 140)) - 70;
+          ctx.strokeStyle = `rgba(190, 226, 214, ${0.12 + (seed % 4) * 0.03})`;
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(wx, wy);
+          ctx.quadraticCurveTo(wx + 26, wy - 3, wx + 54, wy);
+          ctx.stroke();
+        }
+      }
+      // 落英随水（粉瓣顺流斜落）
+      if (!this.qualityLow) {
+        const cols = ['#f4b4c8', '#e894ac', '#f8d0da'];
+        for (let i = 0; i < 11; i++) {
+          const seed = i * 157.3;
+          const px = ((seed * 53) % (W + 60)) - 30 + Math.sin(t * 0.65 + seed) * 26;
+          const py = ((seed * 89 + t * 62) % (H + 40)) - 20;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(Math.sin(t * 1.2 + seed) * 0.8 + seed);
+          ctx.globalAlpha = 0.6;
+          ctx.fillStyle = cols[i % 3];
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 4.8, 2.1, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      // 晨雾带
+      for (let i = 0; i < 2; i++) {
+        const bandY = laneMinY - 60 - i * 30;
+        const drift = ((t * (10 + i * 6) + i * 280) % (W + 360)) - 180;
+        const g = ctx.createLinearGradient(drift - 170, 0, drift + 170, 0);
+        g.addColorStop(0, 'rgba(214, 234, 226, 0)');
+        g.addColorStop(0.5, `rgba(214, 234, 226, ${0.13 - i * 0.04})`);
+        g.addColorStop(1, 'rgba(214, 234, 226, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(drift - 170, bandY, 340, 26);
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'PEACHDAWN') {
+      // 夹岸桃霞：桃瓣密雨 + 花枝剪影横斜
+      ctx.save();
+      if (!this.qualityLow) {
+        // 花枝剪影（自两侧斜出）
+        ctx.strokeStyle = 'rgba(40, 16, 28, 0.42)';
+        ctx.lineWidth = 2.4;
+        for (let i = 0; i < 4; i++) {
+          const seed = i * 233.7;
+          const side = i % 2 === 0 ? 1 : -1;
+          const bx = side > 0 ? -10 : W + 10;
+          const by = laneMinY * (0.3 + (seed % 20) / 90);
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.quadraticCurveTo(
+            bx + side * (70 + (seed % 50)), by - 26,
+            bx + side * (150 + (seed % 60)), by - 12
+          );
+          ctx.stroke();
+        }
+        // 桃瓣密雨
+        const cols = ['#f4a8bc', '#e88aa4', '#f8ccd6', '#d8708e'];
+        for (let i = 0; i < 18; i++) {
+          const seed = i * 137.9;
+          const px = ((seed * 47) % (W + 60)) - 30 + Math.sin(t * 0.9 + seed) * 40;
+          const py = ((seed * 83 + t * 92) % (H + 50)) - 25;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(t * 1.7 + seed);
+          ctx.globalAlpha = 0.66;
+          ctx.fillStyle = cols[i % 4];
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 5.4, 2.4, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'GAPLIGHT') {
+      // 豁然开朗：洞口光柱自上而下 + 光尘浮游 + 蝶影
+      ctx.save();
+      // 光柱（顶部斜下的锥形光带，透明度呼吸）
+      const beamA = 0.16 + Math.sin(t * 0.7) * 0.05;
+      const beam = ctx.createLinearGradient(W * 0.36, 0, W * 0.6, laneMinY);
+      beam.addColorStop(0, `rgba(255, 236, 180, ${beamA})`);
+      beam.addColorStop(1, 'rgba(255, 236, 180, 0)');
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.moveTo(W * 0.42, 0);
+      ctx.lineTo(W * 0.56, 0);
+      ctx.lineTo(W * 0.72, laneMinY);
+      ctx.lineTo(W * 0.4, laneMinY);
+      ctx.closePath();
+      ctx.fill();
+      if (!this.qualityLow) {
+        // 光尘浮游（光柱内慢速上升的金屑）
+        for (let i = 0; i < 14; i++) {
+          const seed = i * 191.3;
+          const dx = W * 0.42 + ((seed * 71) % (W * 0.22)) + Math.sin(t * 0.5 + seed) * 14;
+          const dy = laneMinY - ((seed * 83 + t * 22) % (laneMinY * 0.95));
+          ctx.globalAlpha = 0.34 + (seed % 5) * 0.06;
+          ctx.fillStyle = '#ffedbc';
+          ctx.beginPath();
+          ctx.arc(dx, dy, 1.2 + (seed % 3) * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        // 蝶影两点（先睹为快的探路蝶）
+        ctx.strokeStyle = 'rgba(60, 44, 24, 0.5)';
+        ctx.lineWidth = 1.3;
+        for (let i = 0; i < 2; i++) {
+          const seed = i * 331.9;
+          const bx = W * (0.5 + i * 0.14) + Math.sin(t * 0.8 + seed) * 46;
+          const by = laneMinY * (0.5 + i * 0.16) + Math.cos(t * 0.6 + seed) * 24;
+          const flap = Math.sin(t * 7 + seed) * 3;
+          ctx.beginPath();
+          ctx.moveTo(bx - 4, by - flap);
+          ctx.quadraticCurveTo(bx, by + 2, bx + 4, by - flap);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'SMOKEFIELD') {
+      // 阆陌炊烟：炊烟柱袅袅 + 麦穗金粒 + 归鸟一串
+      ctx.save();
+      // 炊烟柱（远处三户人家，烟柱摇曳上升）
+      ctx.strokeStyle = 'rgba(232, 218, 196, 0.26)';
+      ctx.lineWidth = 5;
+      for (let s = 0; s < 3; s++) {
+        const smokeX = W * (0.24 + s * 0.24);
+        ctx.beginPath();
+        for (let y = laneMinY - 16; y > laneMinY * 0.16; y -= 7) {
+          const rise = (laneMinY - y) / laneMinY;
+          const sway = Math.sin(t * 0.55 + y * 0.045 + s * 2) * 9 * rise;
+          if (y === laneMinY - 16) ctx.moveTo(smokeX + sway, y);
+          else ctx.lineTo(smokeX + sway, y);
+        }
+        ctx.stroke();
+      }
+      if (!this.qualityLow) {
+        // 麦穗金粒（地面上方翻滚的暖色颗粒）
+        for (let i = 0; i < 14; i++) {
+          const seed = i * 149.7;
+          const gx = ((seed * 61) % (W + 40)) - 20 + Math.sin(t * 1.1 + seed) * 30;
+          const gy = laneMinY * 0.72 + ((seed * 89 + t * 46) % (H * 0.24));
+          ctx.fillStyle = 'rgba(228, 190, 110, 0.5)';
+          ctx.beginPath();
+          ctx.ellipse(gx, gy, 2.2, 1, t * 1.4 + seed, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // 归鸟一串（五只人字小队掠过暮色）
+        ctx.strokeStyle = 'rgba(52, 36, 22, 0.5)';
+        ctx.lineWidth = 1.4;
+        const flockX = ((t * 13) % (W + 320)) - 160;
+        for (let g = 0; g < 5; g++) {
+          const row = Math.ceil(g / 2);
+          const side = g % 2 === 0 ? 1 : -1;
+          const bx = flockX - row * 15;
+          const by = laneMinY * 0.26 + row * 12 * side + Math.sin(t * 1.1 + g) * 2;
+          const flap = Math.sin(t * 5.4 + g) * 2.8;
+          ctx.beginPath();
+          ctx.moveTo(bx - 5.5, by - flap);
+          ctx.quadraticCurveTo(bx, by + 2, bx + 5.5, by - flap);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'EERYPEACH') {
+      // 千年迷津：桃花与玄墨齐飞 + 裂隙光晕呼吸 + 半瓣半墨
+      ctx.save();
+      // 裂隙光晕（随时间呼吸的桃色地光）
+      const riftA = 0.1 + 0.05 * Math.sin(t * 1.3);
+      const rg = ctx.createLinearGradient(0, laneMinY - 60, 0, laneMinY + 20);
+      rg.addColorStop(0, 'rgba(255, 160, 190, 0)');
+      rg.addColorStop(0.65, `rgba(255, 160, 190, ${riftA})`);
+      rg.addColorStop(1, `rgba(120, 50, 110, ${riftA * 1.3})`);
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, laneMinY - 60, W, 80);
+      if (!this.qualityLow) {
+        // 半桃瓣半墨尘（一半花一半墨，千年谜题的具象）
+        for (let i = 0; i < 16; i++) {
+          const seed = i * 167.3;
+          const px = ((seed * 53) % (W + 60)) - 30 + Math.sin(t * 0.8 + seed) * 38;
+          const py = ((seed * 97 + t * 54) % (H + 50)) - 25;
+          const ink = i % 2 === 1;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(t * (ink ? 1.9 : 1.2) + seed);
+          ctx.globalAlpha = ink ? 0.6 : 0.62;
+          ctx.fillStyle = ink ? '#140a1a' : '#f4b4c8';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, ink ? 3.2 : 5.2, ink ? 1.6 : 2.3, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      ctx.restore();
     }
   }
 
@@ -1888,6 +2165,31 @@ export class CanvasRenderer {
       groundGrad.addColorStop(0, '#322a4e');
       groundGrad.addColorStop(0.3, '#201a34');
       groundGrad.addColorStop(1, '#0a0714');
+    } else if (level.ambientType === 'RIVULET') {
+      // 溪畔青滩：湿石苔痕
+      groundGrad.addColorStop(0, '#3e5648');
+      groundGrad.addColorStop(0.3, '#263a30');
+      groundGrad.addColorStop(1, '#0c1410');
+    } else if (level.ambientType === 'PEACHDAWN') {
+      // 桃林沃土：花壤绯褐
+      groundGrad.addColorStop(0, '#6a4048');
+      groundGrad.addColorStop(0.3, '#442634');
+      groundGrad.addColorStop(1, '#160a10');
+    } else if (level.ambientType === 'GAPLIGHT') {
+      // 洞前石阶：金尘石阶
+      groundGrad.addColorStop(0, '#6a5a3a');
+      groundGrad.addColorStop(0.3, '#463a24');
+      groundGrad.addColorStop(1, '#16100a');
+    } else if (level.ambientType === 'SMOKEFIELD') {
+      // 阆陌暖田：熟金麦壤
+      groundGrad.addColorStop(0, '#8a6838');
+      groundGrad.addColorStop(0.3, '#5c4424');
+      groundGrad.addColorStop(1, '#1e1408');
+    } else if (level.ambientType === 'EERYPEACH') {
+      // 迷津花壤：桃墨相浸
+      groundGrad.addColorStop(0, '#5a3a4c');
+      groundGrad.addColorStop(0.3, '#38243a');
+      groundGrad.addColorStop(1, '#100a16');
     } else {
       groundGrad.addColorStop(0, '#26262b');
       groundGrad.addColorStop(0.3, '#1c1c20');

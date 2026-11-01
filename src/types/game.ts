@@ -236,7 +236,12 @@ export interface LevelConfig {
     | 'CLOUDMARCH'
     | 'MORN'
     | 'HOLLOW'
-    | 'STARQ';
+    | 'STARQ'
+    | 'RIVULET'
+    | 'PEACHDAWN'
+    | 'GAPLIGHT'
+    | 'SMOKEFIELD'
+    | 'EERYPEACH';
   initialInk: number;
   enemySpawns: {
     time: number;
