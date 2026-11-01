@@ -761,6 +761,36 @@ export class CanvasRenderer {
       skyGrad.addColorStop(0.45, '#d0c4a4');
       skyGrad.addColorStop(0.78, '#e8dcbc');
       skyGrad.addColorStop(1, '#f8f0d8');
+    } else if (level.ambientType === 'DAO') {
+      // 原道：玄黄杂栏，天地初开
+      skyGrad.addColorStop(0, '#2a2410');
+      skyGrad.addColorStop(0.45, '#4a3e18');
+      skyGrad.addColorStop(0.78, '#6e5c2c');
+      skyGrad.addColorStop(1, '#a8924a');
+    } else if (level.ambientType === 'SAGE') {
+      // 征圣：圣殿金辉，炳耀重华
+      skyGrad.addColorStop(0, '#584418');
+      skyGrad.addColorStop(0.45, '#7c6028');
+      skyGrad.addColorStop(0.78, '#a8843c');
+      skyGrad.addColorStop(1, '#e0bc6c');
+    } else if (level.ambientType === 'CANON') {
+      // 宗经：万卷凌空，墨海书澜
+      skyGrad.addColorStop(0, '#101c1e');
+      skyGrad.addColorStop(0.45, '#1c3034');
+      skyGrad.addColorStop(0.78, '#2c4450');
+      skyGrad.addColorStop(1, '#54706c');
+    } else if (level.ambientType === 'MUSE') {
+      // 神思：思接千载，灵感如焰
+      skyGrad.addColorStop(0, '#240e1c');
+      skyGrad.addColorStop(0.45, '#3c1428');
+      skyGrad.addColorStop(0.78, '#5c2036');
+      skyGrad.addColorStop(1, '#944048');
+    } else if (level.ambientType === 'ONENESS') {
+      // 万象归宗：玄金相融，文心同辉
+      skyGrad.addColorStop(0, '#2c1c3c');
+      skyGrad.addColorStop(0.45, '#442a52');
+      skyGrad.addColorStop(0.78, '#6e4058');
+      skyGrad.addColorStop(1, '#c89a5c');
     } else {
       skyGrad.addColorStop(0, '#120d1c');
       skyGrad.addColorStop(0.4, '#2e192f');
@@ -1199,6 +1229,57 @@ export class CanvasRenderer {
       bay.addColorStop(1, 'rgba(220, 228, 200, 0)');
       ctx.fillStyle = bay;
       ctx.fillRect(this.width * 0.2, bayY - 14, this.width * 0.55, 26);
+    } else if (level.ambientType === 'ONENESS') {
+      // 万象归宗：殿顶盘龙剪影（龙身盘旋，龙目点金，随时间缓缓游动）
+      const dragonY = laneMinY * 0.3;
+      const headX = this.width * 0.5 - cameraX * 0.03 + Math.sin(gameTime * 0.35) * 26;
+      ctx.save();
+      // 龙身（正弦盘旋的粗线）
+      ctx.strokeStyle = 'rgba(14, 10, 22, 0.72)';
+      ctx.lineWidth = 10;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let x = -180; x <= 180; x += 10) {
+        const wx = headX - x;
+        const wy = dragonY + Math.sin(x * 0.024 + gameTime * 0.7) * 22 + Math.cos(x * 0.011 - gameTime * 0.4) * 10;
+        if (x === -180) ctx.moveTo(wx, wy);
+        else ctx.lineTo(wx, wy);
+      }
+      ctx.stroke();
+      // 龙首（三角吻部+龙角）
+      const headY = dragonY + Math.sin(180 * 0.024 + gameTime * 0.7) * 22;
+      ctx.fillStyle = 'rgba(14, 10, 22, 0.78)';
+      ctx.beginPath();
+      ctx.moveTo(headX + 18, headY - 8);
+      ctx.lineTo(headX + 34, headY + 2);
+      ctx.lineTo(headX + 16, headY + 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(14, 10, 22, 0.78)';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(headX + 16, headY - 8);
+      ctx.lineTo(headX + 8, headY - 20);
+      ctx.moveTo(headX + 20, headY - 8);
+      ctx.lineTo(headX + 16, headY - 21);
+      ctx.stroke();
+      // 龙目点金（文心之证，呼吸明灭）
+      const eyeA = 0.5 + 0.5 * Math.sin(gameTime * 2.2);
+      ctx.fillStyle = `rgba(244, 204, 120, ${0.55 + eyeA * 0.45})`;
+      ctx.beginPath();
+      ctx.arc(headX + 21, headY, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      // 龙爪两点
+      ctx.lineWidth = 3.4;
+      for (let c = 0; c < 2; c++) {
+        const cx = headX - 90 + c * 150;
+        const cy = dragonY + Math.sin((180 - (180 - (c === 0 ? 90 : -90)) * 1) * 0.024 + gameTime * 0.7) * 22;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + 5);
+        ctx.lineTo(cx + 6, cy + 16);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
     ctx.restore();
 
@@ -2905,6 +2986,193 @@ export class CanvasRenderer {
         }
       }
       ctx.restore();
+    } else if (level.ambientType === 'DAO') {
+      // 原道：玄黄二气双流对旋 + 天地初开光隙
+      ctx.save();
+      if (!this.qualityLow) {
+        // 玄黄二气（两道交错的流动气带）
+        for (let i = 0; i < 2; i++) {
+          const isXuan = i === 0;
+          ctx.strokeStyle = isXuan ? 'rgba(24, 20, 34, 0.3)' : 'rgba(196, 164, 88, 0.26)';
+          ctx.lineWidth = 3;
+          for (let b = 0; b < 3; b++) {
+            const seed = b * 173.7 + i * 71;
+            ctx.beginPath();
+            for (let x = 0; x <= W; x += 18) {
+              const wy = laneMinY * (0.24 + b * 0.16) + Math.sin(x * 0.012 + t * (0.9 + i * 0.5) + seed) * 18;
+              if (x === 0) ctx.moveTo(x, wy);
+              else ctx.lineTo(x, wy);
+            }
+            ctx.stroke();
+          }
+        }
+        // 天地初开光隙（中线一道竖直的光缝）
+        const gapX = W * 0.5;
+        const gapA = 0.1 + 0.06 * Math.sin(t * 0.9);
+        const gg = ctx.createLinearGradient(gapX - 40, 0, gapX + 40, 0);
+        gg.addColorStop(0, 'rgba(232, 208, 140, 0)');
+        gg.addColorStop(0.5, `rgba(232, 208, 140, ${gapA})`);
+        gg.addColorStop(1, 'rgba(232, 208, 140, 0)');
+        ctx.fillStyle = gg;
+        ctx.fillRect(gapX - 40, 0, 80, laneMinY);
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'SAGE') {
+      // 征圣：圣殿金辉光柱 + 金袍墨偶剪影列阵 + 经文金字落
+      ctx.save();
+      // 金辉光柱（数道自天而下的圣光）
+      for (let i = 0; i < 3; i++) {
+        const seed = i * 211.3;
+        const bx = W * (0.26 + i * 0.24) + Math.sin(t * 0.5 + seed) * 12;
+        const bg2 = ctx.createLinearGradient(bx - 16, 0, bx + 16, laneMinY);
+        bg2.addColorStop(0, 'rgba(236, 200, 120, 0)');
+        bg2.addColorStop(0.4, `rgba(236, 200, 120, ${0.12 + 0.04 * Math.sin(t * 1.1 + seed)})`);
+        bg2.addColorStop(1, 'rgba(236, 200, 120, 0.02)');
+        ctx.fillStyle = bg2;
+        ctx.beginPath();
+        ctx.moveTo(bx - 14, 0);
+        ctx.lineTo(bx + 14, 0);
+        ctx.lineTo(bx + 30, laneMinY);
+        ctx.lineTo(bx - 30, laneMinY);
+        ctx.closePath();
+        ctx.fill();
+      }
+      if (!this.qualityLow) {
+        // 经文金字（缓缓飘落的金色字块）
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 149.9;
+          const kx = ((seed * 61) % (W + 40)) - 20;
+          const ky = ((seed * 83 + t * 40) % (H + 50)) - 25;
+          ctx.globalAlpha = 0.3 + (seed % 4) * 0.08;
+          ctx.fillStyle = '#e8c470';
+          ctx.fillRect(kx, ky, 2.8, 4.2);
+        }
+        ctx.globalAlpha = 1;
+        // 墨偶剪影（远景列阵的方块人偶，缓行）
+        ctx.fillStyle = 'rgba(16, 12, 20, 0.4)';
+        for (let i = 0; i < 6; i++) {
+          const seed = i * 191.7;
+          const mx = ((seed * 47 + t * 12) % (W + 80)) - 40;
+          const my = laneMinY - 14 - (seed % 10);
+          ctx.fillRect(mx, my, 8, 8);
+          ctx.fillRect(mx + 1, my - 7, 6, 6);
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'CANON') {
+      // 宗经：万卷翻飞 + 墨字横流 + 书澜起伏
+      ctx.save();
+      if (!this.qualityLow) {
+        // 万卷翻飞（矩形书页翻卷飘落，双向旋转）
+        for (let i = 0; i < 14; i++) {
+          const seed = i * 131.9;
+          const px = ((seed * 53) % (W + 60)) - 30 + Math.sin(t * 0.8 + seed) * 40;
+          const py = ((seed * 89 + t * 66) % (H + 60)) - 30;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(t * (i % 2 === 0 ? 1.6 : -1.4) + seed);
+          ctx.fillStyle = i % 3 === 0 ? 'rgba(210, 200, 178, 0.5)' : 'rgba(178, 168, 148, 0.45)';
+          ctx.fillRect(-5, -6.5, 10, 13);
+          ctx.strokeStyle = 'rgba(90, 82, 70, 0.5)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(-5, 0);
+          ctx.lineTo(5, 0);
+          ctx.stroke();
+          ctx.restore();
+        }
+        // 墨字横流（贴地的墨色字迹流线）
+        ctx.strokeStyle = 'rgba(16, 22, 26, 0.4)';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const seed = i * 167.3;
+          const wx = ((seed * 71 + t * 90) % (W + 120)) - 60;
+          const wy = laneMinY * (0.7 + (seed % 20) / 90);
+          ctx.moveTo(wx, wy);
+          ctx.lineTo(wx + 30, wy - 2);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'MUSE') {
+      // 神思：墨焰升腾 + 思维流光 + 火星飘散
+      ctx.save();
+      if (!this.qualityLow) {
+        // 墨焰（地平线处的火焰轮廓，摇曳）
+        for (let i = 0; i < 9; i++) {
+          const seed = i * 149.7;
+          const fx = (seed * 53) % W;
+          const fh = 14 + (seed % 22) + Math.sin(t * 2.4 + seed) * 6;
+          ctx.strokeStyle = `rgba(120, 40, 60, ${0.22 + (seed % 5) * 0.05})`;
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.moveTo(fx, laneMinY);
+          ctx.quadraticCurveTo(fx + 6, laneMinY - fh * 0.6, fx + Math.sin(t * 3 + seed) * 5, laneMinY - fh);
+          ctx.stroke();
+        }
+        // 思维流光（横贯天际的灵感弧光）
+        for (let i = 0; i < 3; i++) {
+          const seed = i * 271.3;
+          const ph = (t * 0.5 + i * 0.33) % 1;
+          ctx.globalAlpha = Math.max(0, 0.24 * (1 - Math.abs(ph - 0.5) * 2));
+          ctx.strokeStyle = '#c47888';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          const ay = laneMinY * (0.3 + i * 0.14);
+          ctx.moveTo(W * 0.1, ay + Math.sin(ph * Math.PI) * -20);
+          ctx.quadraticCurveTo(W * 0.5, ay - 26, W * 0.9, ay + Math.sin(ph * Math.PI) * -8);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        // 火星
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 173.9;
+          const px = ((seed * 59) % (W + 40)) - 20 + Math.sin(t * 1.1 + seed) * 24;
+          const py = H - ((seed * 71 + t * 52) % (H + 40));
+          ctx.fillStyle = `rgba(224, 120, 100, ${0.3 + (seed % 4) * 0.1})`;
+          ctx.beginPath();
+          ctx.arc(px, py, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'ONENESS') {
+      // 万象归宗：文字归流（字块自四周向殿心汇聚）+ 文心光晕 + 金玄双色尘埃
+      ctx.save();
+      if (!this.qualityLow) {
+        // 文字归流（小字块沿曲线向中心汇聚，循环往复）
+        for (let i = 0; i < 16; i++) {
+          const seed = i * 149.3;
+          const ph = (t * 0.14 + (seed % 100) / 100) % 1;
+          const ang = seed % 628 / 100;
+          const r0 = Math.max(W, H) * 0.55 * (1 - ph);
+          const cx = W * 0.5 + Math.cos(ang) * r0;
+          const cy = laneMinY * 0.5 + Math.sin(ang) * r0 * 0.6;
+          ctx.globalAlpha = 0.14 + ph * 0.3;
+          ctx.fillStyle = i % 2 === 0 ? '#e8d0a0' : '#181226';
+          ctx.fillRect(cx, cy, 3, 4.4);
+        }
+        ctx.globalAlpha = 1;
+        // 文心光晕（殿心呼吸的金环）
+        const haloPh = (t * 0.3) % 1;
+        ctx.strokeStyle = `rgba(232, 200, 130, ${(1 - haloPh) * 0.2})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(W * 0.5, laneMinY * 0.55, 30 + haloPh * 150, (30 + haloPh * 150) * 0.36, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // 金玄双色尘埃
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 191.9;
+          const px = ((seed * 61) % (W + 40)) - 20 + Math.sin(t * 0.7 + seed) * 26;
+          const py = ((seed * 89 + t * 30) % (H + 40)) - 20;
+          ctx.fillStyle = i % 2 === 0 ? 'rgba(216, 190, 130, 0.4)' : 'rgba(30, 22, 44, 0.42)';
+          ctx.beginPath();
+          ctx.arc(px, py, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
     }
   }
 
@@ -3124,6 +3392,31 @@ export class CanvasRenderer {
       groundGrad.addColorStop(0, '#c8bc9c');
       groundGrad.addColorStop(0.3, '#a09478');
       groundGrad.addColorStop(1, '#584e3c');
+    } else if (level.ambientType === 'DAO') {
+      // 原道玄壤：玄黄相侵
+      groundGrad.addColorStop(0, '#6e5c30');
+      groundGrad.addColorStop(0.3, '#483c20');
+      groundGrad.addColorStop(1, '#181408');
+    } else if (level.ambientType === 'SAGE') {
+      // 圣殿金阶：炳耀金砖
+      groundGrad.addColorStop(0, '#8a6c34');
+      groundGrad.addColorStop(0.3, '#5c4824');
+      groundGrad.addColorStop(1, '#1e1608');
+    } else if (level.ambientType === 'CANON') {
+      // 经阁书澜：墨青书石
+      groundGrad.addColorStop(0, '#3a4e50');
+      groundGrad.addColorStop(0.3, '#263638');
+      groundGrad.addColorStop(1, '#0c1214');
+    } else if (level.ambientType === 'MUSE') {
+      // 神思焰境：绯墨焦土
+      groundGrad.addColorStop(0, '#5c3440');
+      groundGrad.addColorStop(0.3, '#3c2028');
+      groundGrad.addColorStop(1, '#120a0c');
+    } else if (level.ambientType === 'ONENESS') {
+      // 归宗圣坛：玄金文台
+      groundGrad.addColorStop(0, '#5c4656');
+      groundGrad.addColorStop(0.3, '#3c2c3e');
+      groundGrad.addColorStop(1, '#120c14');
     } else {
       groundGrad.addColorStop(0, '#26262b');
       groundGrad.addColorStop(0.3, '#1c1c20');

@@ -109,6 +109,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'chapter8_clear', name: '江月问舟', description: '完卷第八大章，无尽藏之笔正握归权，洗墨真相水落石出', icon: 'CROWN' },
   { id: 'chapter9_half', name: '砚池映梅', description: '通关第九大章第三折《砚池凝墨》，唤醒守画人洗砚，五百年守心不移', icon: 'FEATHER' },
   { id: 'chapter9_clear', name: '淡墨痕迹', description: '完卷第九大章，砚冰清气归位，握笔之手指向文心殿', icon: 'CROWN' },
+  { id: 'chapter10_half', name: '墨澜归静', description: '通关第十大章第三折《宗经》，镇住万卷遗忘之怨玄澜', icon: 'FEATHER' },
+  { id: 'chapter10_clear', name: '万象归宗', description: '终章完卷：玄墨本源归宗，十卷合拢，天下文章自此不灭', icon: 'CROWN' },
   { id: 'combo_dragon', name: '笔走龙蛇', description: '单场战斗连墨达到 20 连', icon: 'FLAME' },
   { id: 'combo_transcend', name: '翰墨通神', description: '单场战斗连墨达到 45 连', icon: 'STAR' },
   { id: 'slayer_40', name: '妙笔生花', description: '单场战斗击杀 40 名敌军', icon: 'SWORD' },

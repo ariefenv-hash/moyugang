@@ -256,7 +256,12 @@ export interface LevelConfig {
     | 'SHADOW'
     | 'INKSTONE'
     | 'SNOWPLUM'
-    | 'PUREQI';
+    | 'PUREQI'
+    | 'DAO'
+    | 'SAGE'
+    | 'CANON'
+    | 'MUSE'
+    | 'ONENESS';
   initialInk: number;
   enemySpawns: {
     time: number;
