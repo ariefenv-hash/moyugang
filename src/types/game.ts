@@ -251,7 +251,12 @@ export interface LevelConfig {
     | 'MOONRISE'
     | 'XIAO'
     | 'REEF'
-    | 'BOATQ';
+    | 'BOATQ'
+    | 'SCROLLIN'
+    | 'SHADOW'
+    | 'INKSTONE'
+    | 'SNOWPLUM'
+    | 'PUREQI';
   initialInk: number;
   enemySpawns: {
     time: number;

@@ -731,6 +731,36 @@ export class CanvasRenderer {
       skyGrad.addColorStop(0.45, '#101e34');
       skyGrad.addColorStop(0.78, '#1e3450');
       skyGrad.addColorStop(1, '#4a6878');
+    } else if (level.ambientType === 'SCROLLIN') {
+      // 展卷入画：宣纸为天，淡墨为云
+      skyGrad.addColorStop(0, '#8a8272');
+      skyGrad.addColorStop(0.45, '#a89e88');
+      skyGrad.addColorStop(0.78, '#c8bc9e');
+      skyGrad.addColorStop(1, '#e8dcbe');
+    } else if (level.ambientType === 'SHADOW') {
+      // 疏影横斜：月黄昏水清浅
+      skyGrad.addColorStop(0, '#1c2820');
+      skyGrad.addColorStop(0.45, '#2e4234');
+      skyGrad.addColorStop(0.78, '#4e664e');
+      skyGrad.addColorStop(1, '#a0a878');
+    } else if (level.ambientType === 'INKSTONE') {
+      // 砚池凝墨：一池玄墨
+      skyGrad.addColorStop(0, '#0a0710');
+      skyGrad.addColorStop(0.45, '#161020');
+      skyGrad.addColorStop(0.78, '#241a30');
+      skyGrad.addColorStop(1, '#3c2c42');
+    } else if (level.ambientType === 'SNOWPLUM') {
+      // 雪夜梅影：雪压画境，玄青偏白
+      skyGrad.addColorStop(0, '#3c444c');
+      skyGrad.addColorStop(0.45, '#5c6872');
+      skyGrad.addColorStop(0.78, '#8a97a0');
+      skyGrad.addColorStop(1, '#d4dde0');
+    } else if (level.ambientType === 'PUREQI') {
+      // 清气乾坤：素白澄澈，淡金清气
+      skyGrad.addColorStop(0, '#b8ac90');
+      skyGrad.addColorStop(0.45, '#d0c4a4');
+      skyGrad.addColorStop(0.78, '#e8dcbc');
+      skyGrad.addColorStop(1, '#f8f0d8');
     } else {
       skyGrad.addColorStop(0, '#120d1c');
       skyGrad.addColorStop(0.4, '#2e192f');
@@ -1143,6 +1173,32 @@ export class CanvasRenderer {
       ctx.closePath();
       ctx.fill();
       ctx.restore();
+    } else if (level.ambientType === 'SHADOW') {
+      // 疏影横斜：黄昏残月淡挂，清浅水光一湾
+      const paleMoonX = this.width * 0.72 - cameraX * 0.05;
+      const paleGlow = ctx.createRadialGradient(paleMoonX, 70, 5, paleMoonX, 70, 50);
+      paleGlow.addColorStop(0, 'rgba(244, 238, 214, 0.75)');
+      paleGlow.addColorStop(1, 'rgba(220, 214, 180, 0)');
+      ctx.fillStyle = paleGlow;
+      ctx.beginPath();
+      ctx.arc(paleMoonX, 70, 50, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f0ead0';
+      ctx.beginPath();
+      ctx.arc(paleMoonX, 70, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#2a3628';
+      ctx.beginPath();
+      ctx.arc(paleMoonX + 7, 65, 13.5, 0, Math.PI * 2);
+      ctx.fill();
+      // 水湾清光（月下一湾浅水微光）
+      const bayY = laneMinY * 0.82;
+      const bay = ctx.createLinearGradient(0, bayY - 14, 0, bayY + 12);
+      bay.addColorStop(0, 'rgba(220, 228, 200, 0)');
+      bay.addColorStop(0.5, 'rgba(220, 228, 200, 0.14)');
+      bay.addColorStop(1, 'rgba(220, 228, 200, 0)');
+      ctx.fillStyle = bay;
+      ctx.fillRect(this.width * 0.2, bayY - 14, this.width * 0.55, 26);
     }
     ctx.restore();
 
@@ -1186,6 +1242,36 @@ export class CanvasRenderer {
           ctx.fillRect(gx, gy, 3, 4.4);
         }
       }
+      ctx.restore();
+    }
+
+    // 展卷入画：卷轴天地——界格线、卷边暗影与朱印（画中乾坤的纸面感）
+    if (level.ambientType === 'SCROLLIN') {
+      ctx.save();
+      // 卷轴界格（极淡的纵向界线，随相机缓移）
+      ctx.strokeStyle = 'rgba(120, 108, 88, 0.16)';
+      ctx.lineWidth = 1;
+      const gridGap = 170;
+      const gOff = -(cameraX * 0.35) % gridGap;
+      for (let gx = gOff; gx < this.width + gridGap; gx += gridGap) {
+        ctx.beginPath();
+        ctx.moveTo(gx, 0);
+        ctx.lineTo(gx + 8, laneMinY);
+        ctx.stroke();
+      }
+      // 卷边暗影（上下两道轴影，宣纸铺展感）
+      const topShade = ctx.createLinearGradient(0, 0, 0, 34);
+      topShade.addColorStop(0, 'rgba(60, 50, 38, 0.32)');
+      topShade.addColorStop(1, 'rgba(60, 50, 38, 0)');
+      ctx.fillStyle = topShade;
+      ctx.fillRect(0, 0, this.width, 34);
+      // 朱印（右上角一方朱砂印，微微透光）
+      const sealX = this.width * 0.86 - cameraX * 0.05;
+      ctx.fillStyle = 'rgba(168, 48, 36, 0.4)';
+      ctx.fillRect(sealX, 44, 26, 26);
+      ctx.fillStyle = 'rgba(240, 232, 214, 0.5)';
+      ctx.fillRect(sealX + 5, 50, 6, 6);
+      ctx.fillRect(sealX + 15, 58, 6, 6);
       ctx.restore();
     }
 
@@ -2644,6 +2730,181 @@ export class CanvasRenderer {
         ctx.globalAlpha = 1;
       }
       ctx.restore();
+    } else if (level.ambientType === 'SCROLLIN') {
+      // 展卷入画：淡墨晕染流云 + 梅瓣零星 + 题字微光
+      ctx.save();
+      if (!this.qualityLow) {
+        // 淡墨晕染（大团极淡的墨云缓移）
+        for (let i = 0; i < 4; i++) {
+          const seed = i * 211.3;
+          const mx = ((t * (6 + i * 3) + seed * 47) % (W + 400)) - 200;
+          const my = laneMinY * (0.2 + (seed % 40) / 130);
+          const mg = ctx.createRadialGradient(mx, my, 6, mx, my, 90);
+          mg.addColorStop(0, 'rgba(88, 80, 68, 0.1)');
+          mg.addColorStop(1, 'rgba(88, 80, 68, 0)');
+          ctx.fillStyle = mg;
+          ctx.beginPath();
+          ctx.arc(mx, my, 90, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // 题字微光（自右向左缓浮的淡金小字块）
+        for (let i = 0; i < 6; i++) {
+          const seed = i * 137.7;
+          const tx = ((seed * 61) % W);
+          const ty = laneMinY * (0.16 + (seed % 30) / 110);
+          const ta = 0.16 + 0.1 * (0.5 + 0.5 * Math.sin(t * 1.2 + seed));
+          ctx.fillStyle = `rgba(140, 96, 60, ${ta})`;
+          ctx.fillRect(tx, ty, 3.4, 5);
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'SHADOW') {
+      // 疏影横斜：梅枝剪影横斜 + 暗香流雾 + 落梅两点
+      ctx.save();
+      // 梅枝剪影（两道横斜的枝，缀梅点）
+      ctx.strokeStyle = 'rgba(22, 26, 20, 0.55)';
+      ctx.lineWidth = 2.6;
+      for (let i = 0; i < 2; i++) {
+        const seed = i * 269.3;
+        const side = i === 0 ? 1 : -1;
+        const bx = side > 0 ? -20 : W + 20;
+        const by = laneMinY * (0.3 + i * 0.14);
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.quadraticCurveTo(bx + side * 150, by - 40, bx + side * 290, by - 16);
+        ctx.stroke();
+        // 枝上梅点
+        ctx.fillStyle = 'rgba(214, 196, 206, 0.6)';
+        for (let p = 0; p < 5; p++) {
+          const px = bx + side * (60 + p * 52);
+          const py = by - 34 + Math.sin(seed + p) * 12;
+          ctx.beginPath();
+          ctx.arc(px, py, 2.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      if (!this.qualityLow) {
+        // 暗香流雾（贴地流动的香雾）
+        const fogY = laneMinY - 20;
+        const drift = ((t * 14 + 60) % (W + 360)) - 180;
+        const fg = ctx.createLinearGradient(drift - 180, 0, drift + 180, 0);
+        fg.addColorStop(0, 'rgba(214, 222, 200, 0)');
+        fg.addColorStop(0.5, 'rgba(214, 222, 200, 0.12)');
+        fg.addColorStop(1, 'rgba(214, 222, 200, 0)');
+        ctx.fillStyle = fg;
+        ctx.fillRect(drift - 180, fogY, 360, 18);
+        // 落梅两点
+        ctx.fillStyle = 'rgba(220, 204, 214, 0.55)';
+        for (let i = 0; i < 2; i++) {
+          const seed = i * 331.7;
+          const px = W * (0.4 + i * 0.3) + Math.sin(t * 0.7 + seed) * 60;
+          const py = laneMinY * 0.6 + ((seed * 13 + t * 30) % (laneMinY * 0.3));
+          ctx.beginPath();
+          ctx.arc(px, py, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'INKSTONE') {
+      // 砚池凝墨：墨滴落池涟漪 + 砚台磨纹 + 墨烟上升
+      ctx.save();
+      if (!this.qualityLow) {
+        // 墨滴落池（同心墨环自天而降般扩散）
+        for (let i = 0; i < 5; i++) {
+          const seed = i * 191.3;
+          const ph = (t * 0.4 + i * 0.2) % 1;
+          const cx = (seed * 71) % W;
+          const cy = laneMinY * (0.34 + (seed % 40) / 120);
+          const rr = 8 + ph * 90;
+          ctx.strokeStyle = `rgba(20, 14, 28, ${(1 - ph) * 0.3})`;
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, rr, rr * 0.34, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        // 墨烟上升（玄色烟絮）
+        for (let i = 0; i < 9; i++) {
+          const seed = i * 149.9;
+          const sx = ((seed * 53) % (W + 40)) - 20 + Math.sin(t * 0.6 + seed) * 24;
+          const sy = H - ((seed * 89 + t * 32) % (H + 40));
+          ctx.fillStyle = 'rgba(24, 16, 34, 0.34)';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 4 + (seed % 4), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'SNOWPLUM') {
+      // 雪夜梅影：雪片纷落 + 墨渍雪点 + 梅枝红萼两点
+      ctx.save();
+      if (!this.qualityLow) {
+        // 雪片（缓落，比 SNOW 更密的画中雪）
+        ctx.fillStyle = 'rgba(238, 244, 246, 0.8)';
+        for (let i = 0; i < 26; i++) {
+          const seed = i * 97.3;
+          const sx = ((seed * 67) % (W + 40)) - 20 + Math.sin(t * 0.8 + seed) * 18;
+          const sy = ((seed * 53 + t * 54) % (H + 50)) - 25;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.3 + (seed % 3) * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // 墨渍雪点（部分雪落即化墨——玄墨混雪的异象）
+        for (let i = 0; i < 6; i++) {
+          const seed = i * 233.9;
+          const mx = ((seed * 71) % (W + 40)) - 20 + Math.sin(t * 0.7 + seed) * 20;
+          const my = ((seed * 47 + t * 60) % (H + 50)) - 25;
+          ctx.fillStyle = 'rgba(14, 10, 18, 0.55)';
+          ctx.beginPath();
+          ctx.arc(mx, my, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // 红萼两点（雪中一抹梅红）
+        for (let i = 0; i < 2; i++) {
+          const seed = i * 347.3;
+          const px = W * (0.34 + i * 0.36) + Math.sin(t * 0.5 + seed) * 26;
+          const py = laneMinY * (0.44 + i * 0.1);
+          ctx.fillStyle = 'rgba(188, 62, 58, 0.6)';
+          ctx.beginPath();
+          ctx.arc(px, py, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'PUREQI') {
+      // 清气乾坤：清气流光升腾 + 素金花瓣 + 澄澈微尘
+      ctx.save();
+      if (!this.qualityLow) {
+        // 清气流光（自地而升的素白流线）
+        ctx.strokeStyle = 'rgba(240, 236, 220, 0.2)';
+        ctx.lineWidth = 1.4;
+        for (let i = 0; i < 8; i++) {
+          const seed = i * 167.9;
+          const qx = (seed * 53) % W;
+          ctx.beginPath();
+          for (let yy = laneMinY; yy > laneMinY * 0.2; yy -= 14) {
+            const sway = Math.sin(t * 1.2 + yy * 0.03 + seed) * 8;
+            if (yy === laneMinY) ctx.moveTo(qx + sway, yy);
+            else ctx.lineTo(qx + sway, yy);
+          }
+          ctx.stroke();
+        }
+        // 素金花瓣（极淡的梅瓣，清气所化）
+        for (let i = 0; i < 10; i++) {
+          const seed = i * 149.7;
+          const px = ((seed * 61) % (W + 60)) - 30 + Math.sin(t * 0.6 + seed) * 30;
+          const py = ((seed * 83 + t * 34) % (H + 40)) - 20;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(Math.sin(t * 0.9 + seed) * 0.8 + seed);
+          ctx.globalAlpha = 0.4;
+          ctx.fillStyle = '#f4ecd4';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 4.4, 1.8, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      ctx.restore();
     }
   }
 
@@ -2838,6 +3099,31 @@ export class CanvasRenderer {
       groundGrad.addColorStop(0, '#32465c');
       groundGrad.addColorStop(0.3, '#1e2e42');
       groundGrad.addColorStop(1, '#080e18');
+    } else if (level.ambientType === 'SCROLLIN') {
+      // 画中卷面：宣纸淡揭
+      groundGrad.addColorStop(0, '#b0a284');
+      groundGrad.addColorStop(0.3, '#8a7c62');
+      groundGrad.addColorStop(1, '#4a4030');
+    } else if (level.ambientType === 'SHADOW') {
+      // 疏影清浅：苔石浅溪
+      groundGrad.addColorStop(0, '#4a5e48');
+      groundGrad.addColorStop(0.3, '#304030');
+      groundGrad.addColorStop(1, '#101810');
+    } else if (level.ambientType === 'INKSTONE') {
+      // 砚池墨台：玄墨凝池
+      groundGrad.addColorStop(0, '#2c2436');
+      groundGrad.addColorStop(0.3, '#1c1626');
+      groundGrad.addColorStop(1, '#08060e');
+    } else if (level.ambientType === 'SNOWPLUM') {
+      // 雪夜画境：雪覆梅石
+      groundGrad.addColorStop(0, '#8a97a2');
+      groundGrad.addColorStop(0.3, '#5c6874');
+      groundGrad.addColorStop(1, '#20262e');
+    } else if (level.ambientType === 'PUREQI') {
+      // 清气画心：素白玉阶
+      groundGrad.addColorStop(0, '#c8bc9c');
+      groundGrad.addColorStop(0.3, '#a09478');
+      groundGrad.addColorStop(1, '#584e3c');
     } else {
       groundGrad.addColorStop(0, '#26262b');
       groundGrad.addColorStop(0.3, '#1c1c20');
