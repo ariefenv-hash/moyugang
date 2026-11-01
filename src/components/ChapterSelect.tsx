@@ -253,9 +253,15 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
           <span className="hidden" data-daily-level-id={DAILY_LEVEL_ID} aria-hidden="true" />
         </motion.div>
 
-        {/* ===== 十章册页章签（主线总纲导航） ===== */}
-        <div className="flex gap-2 overflow-x-auto pb-2.5 mb-8 -mx-1 px-1 [scrollbar-width:thin]">
-          {STORY_CHAPTERS.map((c) => {
+        {/* ===== 十章册页章签：启卷/藏卷两段式（十章全开后不再拥挤） ===== */}
+        {(() => {
+          const unlockedChs = STORY_CHAPTERS.filter(
+            (c) => c.levels?.[0] && c.levels[0].id <= progress.unlockedLevel
+          );
+          const lockedChs = STORY_CHAPTERS.filter(
+            (c) => !c.levels?.[0] || c.levels[0].id > progress.unlockedLevel
+          );
+          const renderTab = (c: (typeof STORY_CHAPTERS)[number]) => {
             const isActive = c.id === activeChapterId;
             const released = c.status === 'RELEASED';
             const unlocked = c.levels?.[0] ? c.levels[0].id <= progress.unlockedLevel : false;
@@ -278,8 +284,32 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
                 </span>
               </button>
             );
-          })}
-        </div>
+          };
+          return (
+            <div className="mb-8 space-y-1.5">
+              {/* 启卷：已解锁章（横滚） */}
+              <div className="flex items-stretch gap-0">
+                <span className="hidden sm:flex items-center pr-2.5 mr-1 border-r rule-ink text-[10px] font-serif tracking-[0.25em] text-cinnabar/85 shrink-0 [writing-mode:vertical-lr]">
+                  启卷
+                </span>
+                <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 [scrollbar-width:thin] flex-1">
+                  {unlockedChs.map(renderTab)}
+                </div>
+              </div>
+              {/* 藏卷：未解锁/未启章（第二行，小签更紧凑） */}
+              {lockedChs.length > 0 && (
+                <div className="flex items-stretch gap-0">
+                  <span className="hidden sm:flex items-center pr-2.5 mr-1 border-r rule-ink text-[10px] font-serif tracking-[0.25em] text-ink-light/70 shrink-0 [writing-mode:vertical-lr]">
+                    藏卷
+                  </span>
+                  <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:thin] flex-1 opacity-75">
+                    {lockedChs.map(renderTab)}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ===== 章头 ===== */}
         <div className="text-center mb-8 max-w-2xl mx-auto">
