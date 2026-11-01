@@ -671,6 +671,36 @@ export class CanvasRenderer {
       skyGrad.addColorStop(0.45, '#3c1e3a');
       skyGrad.addColorStop(0.78, '#6e3854');
       skyGrad.addColorStop(1, '#b46870');
+    } else if (level.ambientType === 'LANTERN') {
+      // 春宵灯市：上元夜空，灯火暖底
+      skyGrad.addColorStop(0, '#0a0c1e');
+      skyGrad.addColorStop(0.45, '#1a1e3a');
+      skyGrad.addColorStop(0.78, '#3a3050');
+      skyGrad.addColorStop(1, '#8a5840');
+    } else if (level.ambientType === 'QUJIANG') {
+      // 曲江春宴：春水杏红，天光明媚
+      skyGrad.addColorStop(0, '#1e2a30');
+      skyGrad.addColorStop(0.45, '#3e5a58');
+      skyGrad.addColorStop(0.78, '#7ea888');
+      skyGrad.addColorStop(1, '#f0c8a8');
+    } else if (level.ambientType === 'PAGODA') {
+      // 雁塔题名：塔影墨青，金榜题字
+      skyGrad.addColorStop(0, '#0c1210');
+      skyGrad.addColorStop(0.45, '#1e2c28');
+      skyGrad.addColorStop(0.78, '#3a4a3e');
+      skyGrad.addColorStop(1, '#8a7a48');
+    } else if (level.ambientType === 'WINE') {
+      // 胡旋酒肆：琥珀酒光，暖夜微醉
+      skyGrad.addColorStop(0, '#1e1008');
+      skyGrad.addColorStop(0.45, '#4a2810');
+      skyGrad.addColorStop(0.78, '#8a5220');
+      skyGrad.addColorStop(1, '#d89850');
+    } else if (level.ambientType === 'CALYX') {
+      // 花萼辉楼：金紫盛世，楼阁交辉
+      skyGrad.addColorStop(0, '#160a28');
+      skyGrad.addColorStop(0.45, '#3c1a50');
+      skyGrad.addColorStop(0.78, '#6e3060');
+      skyGrad.addColorStop(1, '#d88858');
     } else {
       skyGrad.addColorStop(0, '#120d1c');
       skyGrad.addColorStop(0.4, '#2e192f');
@@ -996,6 +1026,49 @@ export class CanvasRenderer {
       }
     }
     ctx.restore();
+
+    // 雁塔题名：远处慈恩塔剪影 + 塔铃微光（视差随相机缓移）
+    if (level.ambientType === 'PAGODA') {
+      ctx.save();
+      const px0 = ((560 - cameraX * 0.08) % (this.width + 500) + this.width + 500) % (this.width + 500) - 250;
+      const baseY = laneMinY;
+      const towerH = laneMinY * 0.62;
+      // 塔身（七层渐收的梯形叠涩）
+      ctx.fillStyle = 'rgba(10, 16, 14, 0.66)';
+      for (let lv = 0; lv < 7; lv++) {
+        const yBase = baseY - (towerH / 7) * lv;
+        const yTop = baseY - (towerH / 7) * (lv + 1);
+        const halfW = 34 - lv * 3.6;
+        ctx.beginPath();
+        ctx.moveTo(px0 - halfW, yBase);
+        ctx.lineTo(px0 - halfW + 2.5, yTop);
+        ctx.lineTo(px0 + halfW - 2.5, yTop);
+        ctx.lineTo(px0 + halfW, yBase);
+        ctx.closePath();
+        ctx.fill();
+        // 檐角出挑
+        ctx.fillRect(px0 - halfW - 6, yTop - 2, halfW * 2 + 12, 2.4);
+      }
+      // 塔刹
+      ctx.strokeStyle = 'rgba(10, 16, 14, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(px0, baseY - towerH);
+      ctx.lineTo(px0, baseY - towerH - 16);
+      ctx.stroke();
+      // 塔身题字金斑（题名壁的字光，明灭如金榜）
+      if (!this.qualityLow) {
+        for (let i = 0; i < 6; i++) {
+          const seed = i * 149.9;
+          const gx = px0 - 18 + (seed % 36);
+          const gy = baseY - 12 - (seed % Math.max(20, towerH - 30));
+          const gl = 0.22 + 0.2 * (0.5 + 0.5 * Math.sin(gameTime * 1.8 + seed));
+          ctx.fillStyle = `rgba(232, 200, 110, ${gl})`;
+          ctx.fillRect(gx, gy, 3, 4.4);
+        }
+      }
+      ctx.restore();
+    }
 
     // 绝响广陵：天际断弦（振动的琴弦横陈天际，纯 gameTime 函数，暂停自然凝滞）
     if (level.ambientType === 'STRING') {
@@ -2046,6 +2119,228 @@ export class CanvasRenderer {
         }
       }
       ctx.restore();
+    } else if (level.ambientType === 'LANTERN') {
+      // 春宵灯市：灯河光点 + 孔明灯升 + 灯影人潮尾迹
+      ctx.save();
+      // 灯河（地平线上两串灯火明灭）
+      for (let i = 0; i < 12; i++) {
+        const seed = i * 173.9;
+        const lx = ((seed * 67) % W);
+        const ly = laneMinY - 8 - (seed % 46);
+        const la = 0.4 + 0.32 * (0.5 + 0.5 * Math.sin(t * 2.4 + seed));
+        const warm = ctx.createRadialGradient(lx, ly, 0, lx, ly, 9);
+        warm.addColorStop(0, `rgba(255, 190, 100, ${la})`);
+        warm.addColorStop(1, 'rgba(255, 140, 60, 0)');
+        ctx.fillStyle = warm;
+        ctx.beginPath();
+        ctx.arc(lx, ly, 9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (!this.qualityLow) {
+        // 孔明灯（三两盏缓缓升起）
+        for (let i = 0; i < 4; i++) {
+          const seed = i * 251.7;
+          const kx = ((seed * 53) % W) + Math.sin(t * 0.4 + seed) * 18;
+          const ky = H - ((seed * 83 + t * 17) % (H + 60));
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = 'rgba(255, 170, 90, 0.75)';
+          ctx.beginPath();
+          ctx.moveTo(kx, ky + 5);
+          ctx.quadraticCurveTo(kx - 5.5, ky + 1, kx - 3.5, ky - 5);
+          ctx.lineTo(kx + 3.5, ky - 5);
+          ctx.quadraticCurveTo(kx + 5.5, ky + 1, kx, ky + 5);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        // 幻影人潮尾迹（横向流动的墨色拖尾）
+        ctx.strokeStyle = 'rgba(12, 10, 24, 0.34)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        for (let i = 0; i < 9; i++) {
+          const seed = i * 197.3;
+          const sx = ((seed * 47 + t * 40) % (W + 120)) - 60;
+          const sy = laneMinY * (0.66 + (seed % 24) / 100);
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx - 22, sy + 1);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'QUJIANG') {
+      // 曲江春宴：杏瓣飘岸 + 柳丝拂水 + 春水光斑
+      ctx.save();
+      if (!this.qualityLow) {
+        // 柳丝（顶部垂下的春柳）
+        ctx.strokeStyle = 'rgba(88, 132, 96, 0.4)';
+        ctx.lineWidth = 1.6;
+        for (let i = 0; i < 7; i++) {
+          const seed = i * 149.7;
+          const wx = (seed * 43) % W;
+          const len = 34 + (seed % 50);
+          ctx.beginPath();
+          ctx.moveTo(wx, -4);
+          ctx.quadraticCurveTo(
+            wx + Math.sin(t * 0.8 + seed) * 10, len * 0.5,
+            wx + Math.sin(t * 0.8 + seed) * 15, len
+          );
+          ctx.stroke();
+        }
+        // 春水光斑（地平线下闪烁的椭圆光点）
+        for (let i = 0; i < 9; i++) {
+          const seed = i * 181.3;
+          const gx = ((seed * 61) % W);
+          const gy = laneMinY + 14 + (seed % 78);
+          const ga = 0.14 + 0.12 * (0.5 + 0.5 * Math.sin(t * 2.1 + seed));
+          ctx.fillStyle = `rgba(255, 240, 210, ${ga})`;
+          ctx.beginPath();
+          ctx.ellipse(gx, gy, 14, 3, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      // 杏瓣飘岸（粉白花瓣密而柔）
+      if (!this.qualityLow) {
+        const cols = ['#f8d4d0', '#f0b0b4', '#fce8e0'];
+        for (let i = 0; i < 13; i++) {
+          const seed = i * 157.9;
+          const px = ((seed * 53) % (W + 60)) - 30 + Math.sin(t * 0.7 + seed) * 32;
+          const py = ((seed * 89 + t * 48) % (H + 40)) - 20;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(Math.sin(t * 1.1 + seed) * 0.9 + seed);
+          ctx.globalAlpha = 0.6;
+          ctx.fillStyle = cols[i % 3];
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 4.6, 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'PAGODA') {
+      // 雁塔题名：金榜题字光斑升浮 + 墨羽掠塔 + 檐铃微光
+      ctx.save();
+      if (!this.qualityLow) {
+        // 题字金斑（自塔身方向升起的小方块字光）
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 191.7;
+          const cx = W * 0.32 + ((seed * 53) % (W * 0.4));
+          const cy = laneMinY - ((seed * 79 + t * 26) % (laneMinY * 0.85));
+          ctx.globalAlpha = 0.3 + (seed % 5) * 0.07;
+          ctx.fillStyle = '#e8c86e';
+          ctx.fillRect(cx, cy, 2.6, 3.8);
+        }
+        ctx.globalAlpha = 1;
+        // 墨羽（鸦羽掠影横飞）
+        ctx.strokeStyle = 'rgba(14, 18, 16, 0.5)';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 4; i++) {
+          const seed = i * 233.9;
+          const bx = ((t * (20 + (seed % 12)) + seed * 71) % (W + 140)) - 70;
+          const by = laneMinY * (0.2 + (seed % 30) / 130);
+          ctx.beginPath();
+          ctx.moveTo(bx - 7, by);
+          ctx.quadraticCurveTo(bx, by - 4, bx + 7, by);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'WINE') {
+      // 胡旋酒肆：琥珀酒光涟漪 + 旋舞绸带 + 葡萄紫碎光
+      ctx.save();
+      // 酒光涟漪（地平线下扩散的琥珀环）
+      if (!this.qualityLow) {
+        for (let i = 0; i < 4; i++) {
+          const seed = i * 277.7;
+          const ph = (t * 0.3 + i * 0.25) % 1;
+          const cx = (seed * 67) % W;
+          const cy = laneMinY + 20 + (seed % 60);
+          const rr = 16 + ph * 110;
+          ctx.strokeStyle = `rgba(244, 190, 110, ${(1 - ph) * 0.16})`;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, rr, rr * 0.3, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        // 旋舞绸带（两道旋转的飘带曲线）
+        ctx.strokeStyle = 'rgba(214, 120, 90, 0.34)';
+        ctx.lineWidth = 2.4;
+        for (let i = 0; i < 2; i++) {
+          const seed = i * 149.3;
+          ctx.beginPath();
+          for (let x = 0; x <= W; x += 16) {
+            const wy = laneMinY * (0.4 + i * 0.2) + Math.sin(x * 0.02 + t * (2.2 + i * 0.5) + seed) * 16;
+            if (x === 0) ctx.moveTo(x, wy);
+            else ctx.lineTo(x, wy);
+          }
+          ctx.stroke();
+        }
+        // 葡萄紫碎光
+        for (let i = 0; i < 10; i++) {
+          const seed = i * 131.9;
+          const px = ((seed * 71) % (W + 40)) - 20 + Math.sin(t * 1.2 + seed) * 28;
+          const py = ((seed * 89 + t * 58) % (H + 40)) - 20;
+          ctx.fillStyle = 'rgba(168, 108, 190, 0.4)';
+          ctx.beginPath();
+          ctx.arc(px, py, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'CALYX') {
+      // 花萼辉楼：金紫光带交汇 + 楼灯次第亮 + 羽衣花瓣
+      ctx.save();
+      // 金紫光带（两道交汇的楼光）
+      const beamL = ctx.createLinearGradient(0, laneMinY * 0.2, W * 0.5, laneMinY);
+      beamL.addColorStop(0, 'rgba(244, 200, 120, 0)');
+      beamL.addColorStop(1, 'rgba(244, 200, 120, 0.1)');
+      ctx.fillStyle = beamL;
+      ctx.beginPath();
+      ctx.moveTo(0, laneMinY * 0.16);
+      ctx.lineTo(W * 0.52, laneMinY * 0.5);
+      ctx.lineTo(W * 0.52, laneMinY);
+      ctx.lineTo(0, laneMinY);
+      ctx.closePath();
+      ctx.fill();
+      const beamR = ctx.createLinearGradient(W, laneMinY * 0.2, W * 0.5, laneMinY);
+      beamR.addColorStop(0, 'rgba(180, 120, 220, 0)');
+      beamR.addColorStop(1, 'rgba(180, 120, 220, 0.1)');
+      ctx.fillStyle = beamR;
+      ctx.beginPath();
+      ctx.moveTo(W, laneMinY * 0.16);
+      ctx.lineTo(W * 0.52, laneMinY * 0.5);
+      ctx.lineTo(W * 0.52, laneMinY);
+      ctx.lineTo(W, laneMinY);
+      ctx.closePath();
+      ctx.fill();
+      if (!this.qualityLow) {
+        // 楼灯次第亮（横向一串金紫灯点呼吸）
+        for (let i = 0; i < 10; i++) {
+          const seed = i * 163.7;
+          const lx = (seed * 53) % W;
+          const ly = laneMinY - 6 - (seed % 40);
+          const la = 0.3 + 0.3 * (0.5 + 0.5 * Math.sin(t * 2 + seed));
+          ctx.fillStyle = i % 2 === 0 ? `rgba(255, 210, 120, ${la})` : `rgba(210, 150, 240, ${la})`;
+          ctx.beginPath();
+          ctx.arc(lx, ly, 2.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // 羽衣花瓣（金紫花瓣飘落）
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 149.9;
+          const px = ((seed * 61) % (W + 60)) - 30 + Math.sin(t * 0.85 + seed) * 36;
+          const py = ((seed * 97 + t * 50) % (H + 40)) - 20;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(t * 1.4 + seed);
+          ctx.globalAlpha = 0.55;
+          ctx.fillStyle = i % 2 === 0 ? '#f0d090' : '#c8a0e0';
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 5, 2.1, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      ctx.restore();
     }
   }
 
@@ -2190,6 +2485,31 @@ export class CanvasRenderer {
       groundGrad.addColorStop(0, '#5a3a4c');
       groundGrad.addColorStop(0.3, '#38243a');
       groundGrad.addColorStop(1, '#100a16');
+    } else if (level.ambientType === 'LANTERN') {
+      // 灯市石板：暖光石街
+      groundGrad.addColorStop(0, '#4a4054');
+      groundGrad.addColorStop(0.3, '#322a3e');
+      groundGrad.addColorStop(1, '#120e1a');
+    } else if (level.ambientType === 'QUJIANG') {
+      // 曲江春岸：青草杏岸
+      groundGrad.addColorStop(0, '#5a7858');
+      groundGrad.addColorStop(0.3, '#3a523c');
+      groundGrad.addColorStop(1, '#121c14');
+    } else if (level.ambientType === 'PAGODA') {
+      // 塔下砖庭：墨青砖金
+      groundGrad.addColorStop(0, '#44523e');
+      groundGrad.addColorStop(0.3, '#2c362a');
+      groundGrad.addColorStop(1, '#0e120c');
+    } else if (level.ambientType === 'WINE') {
+      // 酒肆暖砖：琥珀醉地
+      groundGrad.addColorStop(0, '#7a4c28');
+      groundGrad.addColorStop(0.3, '#502e18');
+      groundGrad.addColorStop(1, '#180c06');
+    } else if (level.ambientType === 'CALYX') {
+      // 辉楼金阶：金紫琉璃
+      groundGrad.addColorStop(0, '#6a4860');
+      groundGrad.addColorStop(0.3, '#442c44');
+      groundGrad.addColorStop(1, '#140c1c');
     } else {
       groundGrad.addColorStop(0, '#26262b');
       groundGrad.addColorStop(0.3, '#1c1c20');

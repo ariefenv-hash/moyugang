@@ -103,6 +103,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'chapter5_clear', name: '九歌天问', description: '完卷第五大章，大司命玄册焚尽，列星重亮文脉源头', icon: 'CROWN' },
   { id: 'chapter6_half', name: '豁然开朗', description: '通关第六大章第三折《豁然开朗》，破守隘墨魁，向光而行', icon: 'FEATHER' },
   { id: 'chapter6_clear', name: '武陵迷津', description: '完卷第六大章，守源人灯灭谜开，千年无人问津终有回响', icon: 'CROWN' },
+  { id: 'chapter7_half', name: '狂草归正', description: '通关第七大章第三折《雁塔题名》，破狂草墨魔颠张，塔下题名重归本名', icon: 'FEATHER' },
+  { id: 'chapter7_clear', name: '盛世残卷', description: '完卷第七大章，霓裳舞歇幻境退潮，长安第一次看到真正的星河', icon: 'CROWN' },
   { id: 'combo_dragon', name: '笔走龙蛇', description: '单场战斗连墨达到 20 连', icon: 'FLAME' },
   { id: 'combo_transcend', name: '翰墨通神', description: '单场战斗连墨达到 45 连', icon: 'STAR' },
   { id: 'slayer_40', name: '妙笔生花', description: '单场战斗击杀 40 名敌军', icon: 'SWORD' },

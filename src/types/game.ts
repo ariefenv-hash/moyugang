@@ -241,7 +241,12 @@ export interface LevelConfig {
     | 'PEACHDAWN'
     | 'GAPLIGHT'
     | 'SMOKEFIELD'
-    | 'EERYPEACH';
+    | 'EERYPEACH'
+    | 'LANTERN'
+    | 'QUJIANG'
+    | 'PAGODA'
+    | 'WINE'
+    | 'CALYX';
   initialInk: number;
   enemySpawns: {
     time: number;
