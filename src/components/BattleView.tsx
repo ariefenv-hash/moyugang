@@ -214,6 +214,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     river_waves: 0,
     heart_heal: 0,
     ultimate_landscape: 0,
+    ink_nova: 0,
+    dragon_sweep: 0,
   });
   const [skillCds, setSkillCds] = useState<{ [key: string]: number }>(skillCdsRef.current);
   const heroEnergyRef = useRef(60);
@@ -617,6 +619,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
         triggerSkillInkLotus();
       } else if (code === 'r' || code === 'i') {
         triggerSkillUltimate();
+      } else if (code === 'g') {
+        triggerSkillInkNova();
+      } else if (code === 'h') {
+        triggerSkillDragonSweep();
       } else if (code === 'c') {
         // 分屏书写时代：C 键转义为「清纸」——废弃写坏的笔画重写
         clearCharStrokes();
@@ -968,6 +974,12 @@ export const BattleView: React.FC<BattleViewProps> = ({
         break;
       case 'ultimate_landscape':
         triggerSkillUltimate(mult);
+        break;
+      case 'ink_nova':
+        triggerSkillInkNova(mult);
+        break;
+      case 'dragon_sweep':
+        triggerSkillDragonSweep(mult);
         break;
     }
   };
@@ -2082,6 +2094,132 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
   };
 
+  // Skill 8（字诀「墨」）: 万墨归一 — 全屏墨爆：天地泼墨，敌军尽染
+  const triggerSkillInkNova = (powerMult: number = 1) => {
+    const hero = heroRef.current;
+    if (hero.state === 'DEAD' || skillCdsRef.current.ink_nova > 0 || isPausedRef.current)
+      return;
+
+    sound.playUltimate();
+    triggerShake(12, 0.5);
+    triggerSealStamp(hero.x, hero.y - 50, '墨');
+    triggerHaptic([18, 40, 18]);
+    hero.state = 'SKILL_LOTUS';
+    hero.stateTime = 0;
+    applySkillCd('ink_nova', 14.0);
+
+    // 衔招 + 连墨伤害倍率（全屏快照）
+    const chainMult = takeChainBonus();
+    const novaDmg = powerMult * chainMult * getComboDmgMult();
+
+    setStageBanner('万墨归一 · 天地泼墨，万物尽染！');
+    safeTimeout(() => setStageBanner(null), 2800);
+
+    // 全屏敌军伤害 + 墨染击退
+    unitsRef.current.forEach((u) => {
+      if (u.isEnemy && u.hp > 0) {
+        applyDamage(u, hero.attack * 2.4 * novaDmg, true, hero.x, hero.y);
+        u.x += Math.sign(u.x - hero.x || 1) * 38;
+      }
+    });
+    applyDamage('ENEMY_BASE', hero.attack * 1.6 * novaDmg);
+
+    // 天地泼墨：全场随机墨渍贴花（上限内挤占）
+    for (let i = 0; i < 9; i++) {
+      spawnInkSplat(
+        hero.x + (Math.random() - 0.5) * 900,
+        hero.y + (Math.random() - 0.5) * 190,
+        Math.random() * 34 + 22
+      );
+    }
+
+    // 墨雨：自天而降的墨滴群
+    for (let i = 0; i < 46; i++) {
+      particlesRef.current.push({
+        id: `p_nova_${i}`,
+        x: hero.x + (Math.random() - 0.5) * 980,
+        y: hero.y + (Math.random() - 0.5) * 200,
+        altitudeZ: 140 + Math.random() * 200,
+        vx: (Math.random() - 0.5) * 80,
+        vy: (Math.random() - 0.5) * 60,
+        vz: -(120 + Math.random() * 160),
+        color: i % 4 === 0 ? '#7c3aed' : i % 4 === 1 ? '#18181b' : i % 4 === 2 ? '#3f3f46' : '#581c87',
+        size: Math.random() * 4.5 + 2,
+        alpha: 1,
+        life: 1.15,
+        maxLife: 1.15,
+        type: 'INK',
+      });
+    }
+
+    // 双色墨环：地面紫墨环 + 天穹玄环
+    rendererRef.current?.addFxRing(hero.x, hero.y, 'rgba(124, 58, 237, 0.85)', 20, 560, 0.6, 5.5, true);
+    rendererRef.current?.addFxRing(hero.x, hero.y - 60, 'rgba(24, 24, 27, 0.9)', 12, 380, 0.5, 3.6, false);
+  };
+
+  // Skill 9（字诀「龙」）: 唤墨龙 — 三墨龙品字扫场，龙吟震野
+  const triggerSkillDragonSweep = (powerMult: number = 1) => {
+    const hero = heroRef.current;
+    if (hero.state === 'DEAD' || skillCdsRef.current.dragon_sweep > 0 || isPausedRef.current)
+      return;
+
+    sound.playUltimate();
+    triggerShake(10, 0.45);
+    triggerSealStamp(hero.x, hero.y - 54, '龍');
+    triggerHaptic([24, 30, 24]);
+    hero.state = 'SKILL_ULTIMATE';
+    hero.stateTime = 0;
+    applySkillCd('dragon_sweep', 18.0);
+
+    const chainMult = takeChainBonus();
+    const sweepMult = powerMult * chainMult * getComboDmgMult();
+
+    setStageBanner('唤墨龙 · 龙吟九霄，墨浪滔天！');
+    safeTimeout(() => setStageBanner(null), 2800);
+
+    // 三墨龙品字阵：主龙居中，副龙上下翼从（伤害高于连击墨龙卷）
+    const dir = hero.facing;
+    const rows = [0, -46, 46];
+    rows.forEach((dy, i) => {
+      safeTimeout(() => {
+        const h = heroRef.current;
+        if (!h || h.state === 'DEAD') return;
+        const rowY = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, h.y + dy));
+        inkDragonsRef.current.push({
+          id: `dragon_sw_${Date.now()}_${i}`,
+          x: h.x + dir * (40 + i * 26),
+          y: rowY,
+          vx: dir * (560 + i * 40),
+          life: 2.6,
+          maxLife: 2.6,
+          hitIds: new Set(),
+          dmgMult: 2.6 * sweepMult,
+          knockback: 62,
+        });
+      }, i * 120);
+    });
+
+    // 龙吟起手：墨尘腾空
+    for (let i = 0; i < 26; i++) {
+      particlesRef.current.push({
+        id: `p_dk_${i}`,
+        x: hero.x + dir * 60 + (Math.random() - 0.5) * 120,
+        y: hero.y + (Math.random() - 0.5) * 80,
+        altitudeZ: Math.random() * 60,
+        vx: dir * (60 + Math.random() * 160),
+        vy: (Math.random() - 0.5) * 50,
+        vz: 80 + Math.random() * 150,
+        color: i % 3 === 0 ? '#09090b' : i % 3 === 1 ? '#27272a' : '#52525b',
+        size: Math.random() * 4 + 2,
+        alpha: 1,
+        life: 0.9,
+        maxLife: 0.9,
+        type: 'INK',
+      });
+    }
+    rendererRef.current?.addFxRing(hero.x, hero.y, 'rgba(9, 9, 11, 0.8)', 16, 300, 0.5, 4.5, true);
+  };
+
   // --- UNIFIED CALLIGRAPHY GESTURE & TOUCH HANDLERS (Screen-as-Canvas) ---
   // 指针路由策略（全平台统一，摇杆已移除）：
   //  · 所有指针 → 挥毫手势（点按/横竖提/画圆/折线/拖动/字诀书字）
@@ -2437,6 +2575,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     dbg.__inkGestureDebug.fxStats = () => ({
       particles: particlesRef.current.length,
       dragons: inkDragonsRef.current.length,
+      inkSplats: inkSplatsRef.current.length,
       bossOnField: unitsRef.current.some((u) => u.isBoss && u.hp > 0),
       bossEnraged: unitsRef.current.some((u) => u.isBoss && u.enraged),
     });
@@ -3235,8 +3374,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
           Math.abs(u.y - dragon.y) < 55
         ) {
           dragon.hitIds.add(u.id);
-          applyDamage(u, hero.attack * 2.2, true, dragon.x, dragon.y);
-          u.x += Math.sign(dragon.vx) * 45;
+          applyDamage(u, hero.attack * (dragon.dmgMult ?? 2.2), true, dragon.x, dragon.y);
+          u.x += Math.sign(dragon.vx) * (dragon.knockback ?? 45);
         }
       });
 
@@ -3934,13 +4073,14 @@ export const BattleView: React.FC<BattleViewProps> = ({
             </p>
             <p className="text-amber-200">「之」→ 断水斩 ·「山」→ 竹影墨盾 ·「火」→ 星河笔阵</p>
             <p className="text-amber-200">「水」→ 墨荷灵阵 ·「川」→ 三江引 ·「心」→ 墨心归元</p>
-            <p className="text-amber-200">「王」→ 临江仙（需绝意满）</p>
-            <p className="text-[10px] text-stone-400">笔顺随意、大小随意；笔数齐且写得正立即施放（无需久停）；「之」「山」支持连笔快写</p>
+            <p className="text-amber-200">「王」→ 临江仙（需绝意满）·「墨」→ 万墨归一（全屏墨爆）</p>
+            <p className="text-amber-200">「龙」→ 唤墨龙（三龙扫场）</p>
+            <p className="text-[10px] text-stone-400">笔顺随意、大小随意；笔数齐且写得正立即施放（无需久停）；「之」「山」「墨」「龙」支持连笔快写</p>
             <p className="text-[10px] text-stone-400">书写时角色站定不被笔尖牵引；写坏了按 C 清纸，或点浮签上的「退笔 / 重写」</p>
             <p className="text-[10px] text-stone-400">字写得越正评级越高：神品 ×1.35 · 妙品 ×1.15 · 能品 ×1.0</p>
           </div>
           <div className="pt-1 border-t border-stone-800 text-[10px] text-stone-400 space-y-1">
-            <p>* 电脑端键盘（WASD/J/Q/W/E/R/Space）全程原生支持！</p>
+            <p>* 电脑端键盘（WASD/J/Q/W/E/R/G/H/Space）全程原生支持！G＝万墨归一 · H＝唤墨龙</p>
             <p className="text-amber-300/80">
               ★ 连招体系：连墨越高伤害越高（伤×至多1.35）· 暴击延长连墨窗 · 断连保留四成墨势 ·
               普攻命中后 1.1 秒内接技能触发「衔招」增伤22% · 8秒内连写字诀叠「文思」每段+10%
@@ -4334,7 +4474,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
               </li>
             </ol>
             <p className="mt-2 pt-2 border-t rule-ink text-[10px] text-ink-light">
-              提示：ESC / P 暂停 · V 切武器（剑/伞）· 「字诀」逐笔写汉字施法（之山火水川心王）· 连墨越高伤害越高 · 普攻后快速接技能触发「衔招」· 连墨45召墨龙
+              提示：ESC / P 暂停 · V 切武器（剑/伞）· 「字诀」逐笔写汉字施法（之山火水川心王墨龙）· 连墨越高伤害越高 · 普攻后快速接技能触发「衔招」· 连墨45召墨龙
             </p>
           </div>
         </div>

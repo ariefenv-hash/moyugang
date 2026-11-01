@@ -416,7 +416,7 @@ export interface InkTreasure {
   maxLife: number;
 }
 
-/** 墨龙卷（高连击奖励：横扫战场的墨龙） */
+/** 墨龙卷（高连击奖励：横扫战场的墨龙；字诀「龙」三龙阵复用同结构） */
 export interface InkDragon {
   id: string;
   x: number;
@@ -426,6 +426,10 @@ export interface InkDragon {
   maxLife: number;
   /** 已命中单位 id，防重复伤害 */
   hitIds: Set<string>;
+  /** 伤害倍率（默认 2.2 = 连击墨龙卷；龙诀三龙阵 2.6×字诀威力） */
+  dmgMult?: number;
+  /** 击退距离（默认 45px） */
+  knockback?: number;
 }
 
 /** 地面墨渍贴花（击杀/重击飞溅留下的水墨痕迹，随时间淡去） */
