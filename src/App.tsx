@@ -16,6 +16,7 @@ import {
 import { BattleView } from './components/BattleView';
 import { ChapterSelect } from './components/ChapterSelect';
 import { PavilionUpgrades } from './components/PavilionUpgrades';
+import { PavilionArchive } from './components/PavilionArchive';
 import { VictoryDefeatModal } from './components/VictoryDefeatModal';
 import { LoreModal } from './components/LoreModal';
 import { AchievementsModal } from './components/AchievementsModal';
@@ -32,6 +33,7 @@ import {
   Play,
   RotateCcw,
   Award,
+  Library,
 } from 'lucide-react';
 
 const STORAGE_KEY = 'ink_and_steel_progress_v1';
@@ -334,6 +336,17 @@ export default function App() {
   };
 
   const endlessUnlocked = progress.completedLevels.includes(5);
+  /** 文心殿·藏卷：任一大章完卷即开殿 */
+  const archiveOpen = (() => {
+    try {
+      // 完卷判定：任一已启大章的终折 id（5 的倍数）已在通关列表
+      return [5, 10, 15, 20, 25, 30, 35, 40, 45, 50].some((id) =>
+        progress.completedLevels.includes(id)
+      );
+    } catch {
+      return false;
+    }
+  })();
 
   return (
     <div className="w-full h-full min-h-screen bg-ink-strong text-paper font-sans selection:bg-cinnabar selection:text-paper-soft">
@@ -376,6 +389,14 @@ export default function App() {
               >
                 赋诗研习
               </button>
+              {archiveOpen && (
+                <button
+                  onClick={() => setMode('ARCHIVE')}
+                  className="hover:text-ink-strong border-b border-transparent hover:border-cinnabar/70 pb-0.5 transition-colors whitespace-nowrap cursor-pointer"
+                >
+                  文心殿·藏卷
+                </button>
+              )}
               <button
                 onClick={() => setShowLore(true)}
                 className="hover:text-ink-strong border-b border-transparent hover:border-cinnabar/70 pb-0.5 transition-colors whitespace-nowrap cursor-pointer"
@@ -462,6 +483,16 @@ export default function App() {
                   <BookOpen className="w-4 h-4 text-daiqing" />
                   翰墨赋诗阁
                 </button>
+
+                {archiveOpen && (
+                  <button
+                    onClick={() => setMode('ARCHIVE')}
+                    className="btn-ink-quiet py-3 px-4 font-serif text-sm tracking-widest flex items-center gap-2 cursor-pointer"
+                  >
+                    <Library className="w-4 h-4 text-tenghuang" />
+                    文心殿·藏卷
+                  </button>
+                )}
 
                 <button
                   onClick={() => setShowLore(true)}
@@ -574,6 +605,10 @@ export default function App() {
           onUpdateProgress={setProgress}
           onBack={() => setMode(progress.completedLevels.length > 0 ? 'LEVEL_SELECT' : 'MENU')}
         />
+      )}
+
+      {mode === 'ARCHIVE' && (
+        <PavilionArchive progress={progress} onBack={() => setMode('MENU')} />
       )}
 
       {mode === 'BATTLE' && (

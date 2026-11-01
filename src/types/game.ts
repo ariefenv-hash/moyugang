@@ -1,4 +1,4 @@
-export type GameMode = 'MENU' | 'LEVEL_SELECT' | 'BATTLE' | 'UPGRADES' | 'LORE';
+export type GameMode = 'MENU' | 'LEVEL_SELECT' | 'BATTLE' | 'UPGRADES' | 'LORE' | 'ARCHIVE';
 
 export type ArmyCommand = 'DEFEND' | 'HOLD' | 'ATTACK' | 'FOLLOW_HERO';
 
