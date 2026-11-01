@@ -541,3 +541,106 @@ Stage Summary:
 - 新增：scripts/verify_story_ch5~ch10.py 六套验证脚本
 - 全部提交已推送 GitHub main（Actions 自动部署 Pages）
 - 后续方向（供下轮参考）：可玩性扩展（新字诀/新单位/无尽模式章节化）、UI 精美度、性能优化、战役外层（墨阁升级树扩展）
+
+---
+Task ID: 26
+Agent: 定时任务 Agent（每 2 小时轮次 · 第二轮）
+Task: 新字诀「墨」「龙」——万墨归一全屏墨爆 + 唤墨龙三龙扫场（九字诀时代）
+
+Work Log:
+- charRecognizer 七字诀扩为九字诀：「墨」(ink_nova 万墨归一)、「龙」(dragon_sweep 唤墨龙)
+  · 墨模板简化六笔（口框+贯穿中竖+底土）+ 三笔连笔变体；龙模板简化五笔（顶横+左撇+大竖弯钩+内撇+点）+ 三笔连笔变体
+  · 模板互异自检 scripts/verify_char_templates.mjs：整字统一姿态(平移/缩放/±7°旋转)+逐笔抖动模拟真实书写，九字 60/60 召回 0 误识（宁拒勿误判据）
+  · 调试记录：测试样本曾因「单位坐标未放大到像素」(pathLength<MIN_STROKE_PX) 与「逐笔独立变换导致字形散架」两处脚本 bug 全线 null/误识，修正后 9/9 全绿
+- 万墨归一（CD 14s/G 键）：全屏敌伤 2.4x+击退 38、基地 1.6x、天地泼墨九渍贴花、墨雨 46 粒、紫玄双色墨环、印章「墨」
+- 唤墨龙（CD 18s/H 键）：三墨龙品字阵（主龙居中副龙±46 翼从、伤害 2.6x、击退 62、120ms 间隔出场）、龙吟墨尘起手、印章「龍」；InkDragon 类型扩展 dmgMult/knockback 可选字段，碰撞管线 (?? 2.2)/(?? 45) 默认值兼容旧墨龙卷
+- 键盘 G/H 键位；手势指南/教学提示/LoreModal 文案同步九字诀；fxStats 补 inkSplats 观测
+- 验证：tsc 零错误；verify_char_templates.mjs 9/9；verify_new_chars.py 8/8（写墨施放 cd=13/墨渍 0->9/写龙施放/三龙齐飞/G/H 键位/零异常）；冒烟 23/24（第 11 项触摸点选已知偶发）；build 272 条预缓存
+
+Stage Summary:
+- 字诀体系进入九字时代：全屏法术（墨）与召唤系大技（龙）补齐远程 AOE 与战场清扫两个维度
+- 修改：charRecognizer.ts/BattleView.tsx/types/game.ts/LoreModal.tsx；新增 scripts/verify_char_templates.mjs、scripts/verify_new_chars.py
+- 提交：5db25ff
+
+---
+Task ID: 27
+Agent: 定时任务 Agent（每 2 小时轮次 · 第二轮）
+Task: 每日试炼·墨历问战——按日期播种的每日答卷系统
+
+Work Log:
+- 新增 data/dailyTrial.ts：mulberry32+FNV-1a 日期播种，同日答卷恒定、异日自动换卷
+  · 词境：从十章 50 折非首领折中择一（2026-11-01 今日=第十大章「神思」）
+  · 词缀×2：六条异象池不重复抽选（墨潮狂性 atk+18%/铁衣百炼 hp+22%/砚池干涸 ink-18%/急鼓催兵 波速+18%/文光护阁 基地+30%/墨涛拍岸 atk+hp 各+10%）
+  · 开局祝福×3：八祝福全池抽三，战斗开场静默生效（applyBlessing 加 silent 模式，汇总一条 banner「今日墨灵庇佑」）
+- LevelConfig 扩展 enemyAtkMult/enemyHpMult/dailyModifiers/dailyBlessings；spawnUnit 敌军路径乘词缀系数（非每日关卡恒为 1）
+- App 每日独立结算（不入主线解锁链）：首胜 260 灵玉+问战连捷每层+30；dailyDone/dailyStreak 持久化（昨日完成则连捷延续）
+- ChapterSelect 顶部每日通栏卡（墨历问战·日期·词境·词缀·开局赐福·连捷天数·接卷问战/今日已胜再战）
+- 验证：verify_daily_trial.mjs 数据层 10/10；verify_daily_trial_e2e.py 端到端 8/8（接卷问战/开局三祝福徽记×3/GUARDIAN 攻 26=24×1.1 血 715=650×1.1 词缀精确生效/零异常）
+
+Stage Summary:
+- 每日回访钩子落地：同日全玩家同一答卷，词境×词缀×祝福三轴组合 50 折×15 词缀对×56 祝福组≈数万种答卷
+- 修改：dailyTrial.ts(新)/types/game.ts/BattleView.tsx/App.tsx/ChapterSelect.tsx；新增 scripts/verify_daily_trial.mjs、verify_daily_trial_e2e.py
+- 提交：607e0b6
+
+---
+Task ID: 28
+Agent: 定时任务 Agent（每 2 小时轮次 · 第二轮）
+Task: 无尽试炼章节化——任一已通关大章皆可为其长夜选景
+
+Work Log:
+- gameData 新增 ENDLESS_VENUES 十章境（风雅集墨月/山河谣怒涛/漱玉词断弦/边塞引孤城/离骚赋问天/桃花源迷津/长安幻灯楼/赤壁赋江月/墨梅图清气/文心雕龙归宗），氛围两两互异（MOON/STORM/STRING/SIEGE/STARQ/EERYPEACH/CALYX/BOATQ/PUREQI/ONENESS）
+- getEndlessLevelForVenue：克隆基础无尽配置换景换名，数值/boss 结构完全继承；解锁链=各章终折通关（id 5..50）
+- ChapterSelect 无尽卡：十枚章签选景（选中亮白/未通关置灰「未启」），入夜坚守按所选章境开战；偏好持久化 localStorage(ink_steel_endless_venue)
+- 验证：verify_endless_venues.mjs 数据层 9/9；verify_endless_venues_e2e.py 端到端 7/7（桃花源章签选择/入夜坚守/题名迷津长夜/首波敌人/零异常）
+
+Stage Summary:
+- 无尽模式从固定月夜扩为十章十景：通关越多的章可作越多长夜舞台，重玩价值随进度增长
+- 修改：gameData.ts/ChapterSelect.tsx；新增 scripts/verify_endless_venues.mjs、verify_endless_venues_e2e.py
+- 提交：bba3a3b
+
+---
+Task ID: 29
+Agent: 定时任务 Agent（每 2 小时轮次 · 第二轮）
+Task: 文心殿·藏卷——通关心得回顾室（引子/卷首诗/尾声随时重温）
+
+Work Log:
+- 新增 PavilionArchive 组件：每大章完卷（终折通关）即入藏一卷，卷宗含 章前引子/卷首诗/通关尾声 三段（黛青/朱砂/藤黄三色界签分区），卷签展开/收起交互
+- 已藏计数与「十卷俱全」金印；未完卷章置灰「完卷后入藏」；殿外附藏（每日问战完卷日+连捷、无尽最佳波次）
+- 主菜单 nav + 行动按钮双入口（任一大章完卷即开殿）；GameMode 扩展 'ARCHIVE'
+- 验证：verify_pavilion_archive.py 7/7（未完卷无入口/完卷开殿/三段卷宗齐展/未入藏提示/计数/零异常）
+
+Stage Summary:
+- 十章叙事资产（10×引子+卷首诗+尾声≈6000 字）获得常驻回访入口，通关后不再「看完即焚」
+- 修改：PavilionArchive.tsx(新)/App.tsx/types/game.ts；新增 scripts/verify_pavilion_archive.py
+- 提交：4d925d5
+
+---
+Task ID: 30
+Agent: 定时任务 Agent（每 2 小时轮次 · 第二轮）
+Task: UI 精美度——章签启卷/藏卷两段式 + 章前引子真卷轴展开动画
+
+Work Log:
+- ChapterSelect 章签横滚条分两段：启卷（已解锁章横滚）/藏卷（未解锁章第二行紧凑小签，opacity-75），两侧竖排界签（朱砂/墨灰）；全解锁后藏卷段自动隐藏——十章全开后不再拥挤
+- StoryIntroModal 重构为真卷轴演出：天杆静止+卷身 height 0→auto 徐徐展开（0.85s 自定义贝塞尔）+地杆随卷身下缘垂落；深木色轴杆+圆头轴头+卷身两侧压边卷筒阴影；max-h calc(92vh-2.5rem) 内滚
+- 验证：verify_ui_polish.py 7/7（两段章签/全解锁隐藏/卷轴弹出/展开可读/启卷按钮关闭卸载/零异常）
+
+Stage Summary:
+- 章导航信息密度减半（一眼只见已启章），引子从「淡入弹窗」升级为「开卷演出」
+- 修改：ChapterSelect.tsx/StoryIntroModal.tsx；新增 scripts/verify_ui_polish.py
+- 提交：0f71952
+
+---
+Task ID: 31
+Agent: 定时任务 Agent（每 2 小时轮次 · 第二轮）
+Task: 性能——画质档位按设备内存/核数自动分档
+
+Work Log:
+- canvasRenderer 新增 detectLowEndDevice()：deviceMemory≤4GB（Chrome/Android 真实暴露，Safari/Firefox undefined 跳过）或 CPU 逻辑核≤4 → 建议行云模式
+- BattleView 初始画质档优先级：玩家显式选择（localStorage low/high）> 设备自动分档；手动切换仍持久化，自动档永不覆盖玩家偏好
+- 低配机自动行云后：氛围天气层/残影采样/剑气轨迹/粒子上限（130 vs 420）全线减载；6 秒低帧检测提示保留（高清档弱机可一键转行云）
+- 验证：verify_perf_tier.py 4/4（init_script 硬编码覆写 navigator.deviceMemory 持久生效；mem=2 自动行云/显式high优先/mem=8+8核高清/零异常）
+
+Stage Summary:
+- 性能分档从「玩家自救」升级为「开箱自适应」：低端安卓开箱即 30fps 流畅帧率
+- 修改：canvasRenderer.ts/BattleView.tsx；新增 scripts/verify_perf_tier.py
+- 提交：c7746db
