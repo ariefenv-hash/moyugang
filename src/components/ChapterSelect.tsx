@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { LevelConfig, PlayerProgress } from '../types/game';
-import { ENDLESS_LEVEL } from '../data/gameData';
+import { ENDLESS_LEVEL, ENDLESS_VENUES, getEndlessLevelForVenue, type EndlessVenue } from '../data/gameData';
 import {
   DAILY_LEVEL_ID,
   DAILY_REWARD_JADE,
@@ -61,6 +61,25 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
   onMarkStorySeen,
 }) => {
   const endlessUnlocked = progress.completedLevels.includes(5);
+  // 无尽章境：任一已通关大章皆可为其长夜选景（默认首章；偏好持久化 localStorage）
+  const unlockedVenues = useMemo(
+    () => ENDLESS_VENUES.filter((v) => progress.completedLevels.includes(v.unlockLevelId)),
+    [progress.completedLevels]
+  );
+  const [endlessVenueId, setEndlessVenueId] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem('ink_steel_endless_venue'));
+      if (saved && ENDLESS_VENUES.some((v) => v.chapterId === saved)) return saved;
+    } catch {}
+    return 1;
+  });
+  const endlessVenue: EndlessVenue =
+    unlockedVenues.find((v) => v.chapterId === endlessVenueId) ?? ENDLESS_VENUES[0];
+  const pickEndlessVenue = (v: EndlessVenue) => {
+    if (!progress.completedLevels.includes(v.unlockLevelId)) return;
+    setEndlessVenueId(v.chapterId);
+    try { localStorage.setItem('ink_steel_endless_venue', String(v.chapterId)); } catch {}
+  };
   // 每日试炼：任意一折通关即可开卷（同日答卷恒定，首胜独享灵玉）
   const dailyUnlocked = progress.completedLevels.length >= 1;
   const dailyInfo = useMemo(() => getDailyTrialInfo(), []);
@@ -426,21 +445,48 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
                     </div>
 
                     <h3 className={`text-lg font-serif font-bold tracking-wide ${endlessUnlocked ? 'text-paper' : 'text-ink-strong'}`}>
-                      {ENDLESS_LEVEL.title.split('·')[1]}
+                      {endlessUnlocked ? endlessVenue.name : ENDLESS_LEVEL.title.split('·')[1]}
                     </h3>
                     <p className={`text-xs font-serif mt-1 ${endlessUnlocked ? 'text-paper-dim' : 'text-ink-mid'}`}>
-                      {ENDLESS_LEVEL.subtitle}
+                      {endlessUnlocked ? `${endlessVenue.anthology} · ${ENDLESS_LEVEL.subtitle}` : ENDLESS_LEVEL.subtitle}
                     </p>
+
+                    {/* 章境选景：十枚章签（已通关亮选 / 未通关置灰） */}
+                    {endlessUnlocked && (
+                      <div className="flex flex-wrap gap-1.5 my-3">
+                        {ENDLESS_VENUES.map((v) => {
+                          const vUnlocked = progress.completedLevels.includes(v.unlockLevelId);
+                          const vActive = v.chapterId === endlessVenue.chapterId;
+                          return (
+                            <button
+                              key={v.chapterId}
+                              onClick={() => pickEndlessVenue(v)}
+                              disabled={!vUnlocked}
+                              title={vUnlocked ? `${v.anthology}·${v.name}（${v.verse}）` : '完卷此章后解锁'}
+                              className={`px-2 py-0.5 text-[10px] font-serif tracking-wider border rounded transition-colors cursor-pointer ${
+                                vActive
+                                  ? 'border-paper bg-paper/15 text-paper'
+                                  : vUnlocked
+                                    ? 'border-paper-dim/35 text-paper-dim hover:border-paper/70'
+                                    : 'border-paper-dim/15 text-paper-dim/40 cursor-not-allowed'
+                              }`}
+                            >
+                              {vUnlocked ? v.anthology : '未启'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     <div className={`my-4 pl-3 border-l-2 ${endlessUnlocked ? 'border-paper-dim/60' : 'border-cinnabar/60'}`}>
                       <p className={`text-sm font-brush-xing leading-relaxed ${endlessUnlocked ? 'text-paper-dim' : 'text-ink-mid'}`}>
-                        {ENDLESS_LEVEL.poeticVerse}
+                        {endlessUnlocked ? endlessVenue.verse : ENDLESS_LEVEL.poeticVerse}
                       </p>
                     </div>
 
                     <p className={`text-xs line-clamp-3 leading-relaxed mb-4 ${endlessUnlocked ? 'text-paper-dim' : 'text-ink-mid'}`}>
                       {endlessUnlocked
-                        ? ENDLESS_LEVEL.description
+                        ? getEndlessLevelForVenue(endlessVenue).description
                         : '通关第五折后，无尽长夜将为你敞开。墨潮永无止境，坚守到底！'}
                     </p>
                   </div>
@@ -456,7 +502,7 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
 
                     {endlessUnlocked ? (
                       <button
-                        onClick={() => onSelectLevel(ENDLESS_LEVEL)}
+                        onClick={() => onSelectLevel(getEndlessLevelForVenue(endlessVenue))}
                         className="w-full py-2.5 px-3 text-xs font-medium bg-paper text-ink-strong hover:bg-paper-soft font-serif tracking-widest flex items-center justify-center gap-1.5 transition-colors cursor-pointer active:scale-[0.98]"
                       >
                         <InfinityIcon className="w-3.5 h-3.5" />

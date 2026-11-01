@@ -286,3 +286,40 @@ export const ENDLESS_LEVEL: LevelConfig = {
     speed: 140,
   },
 };
+
+/** 无尽试炼章境：任一已通关大章皆可为其长夜选景（氛围取该章最具辨识度之词境） */
+export interface EndlessVenue {
+  chapterId: number;
+  anthology: string;
+  name: string;
+  ambientType: LevelConfig['ambientType'];
+  /** 解锁条件：该大章终折 id 已通关 */
+  unlockLevelId: number;
+  verse: string;
+}
+
+export const ENDLESS_VENUES: EndlessVenue[] = [
+  { chapterId: 1, anthology: '风雅集', name: '墨月长夜', ambientType: 'MOON', unlockLevelId: 5, verse: '举杯邀明月，对影成三人' },
+  { chapterId: 2, anthology: '山河谣', name: '怒涛长夜', ambientType: 'STORM', unlockLevelId: 10, verse: '乱石穿空，惊涛拍岸' },
+  { chapterId: 3, anthology: '漱玉词', name: '断弦长夜', ambientType: 'STRING', unlockLevelId: 15, verse: '此情无计可消除' },
+  { chapterId: 4, anthology: '边塞引', name: '孤城长夜', ambientType: 'SIEGE', unlockLevelId: 20, verse: '黑云压城城欲摧' },
+  { chapterId: 5, anthology: '离骚赋', name: '问天长夜', ambientType: 'STARQ', unlockLevelId: 25, verse: '路漫漫其修远兮' },
+  { chapterId: 6, anthology: '桃花源', name: '迷津长夜', ambientType: 'EERYPEACH', unlockLevelId: 30, verse: '后遂无问津者' },
+  { chapterId: 7, anthology: '长安幻', name: '灯楼长夜', ambientType: 'CALYX', unlockLevelId: 35, verse: '东风夜放花千树' },
+  { chapterId: 8, anthology: '赤壁赋', name: '江月长夜', ambientType: 'BOATQ', unlockLevelId: 40, verse: '惟江上之清风，与山间之明月' },
+  { chapterId: 9, anthology: '墨梅图', name: '清气长夜', ambientType: 'PUREQI', unlockLevelId: 45, verse: '只留清气满乾坤' },
+  { chapterId: 10, anthology: '文心雕龙', name: '归宗长夜', ambientType: 'ONENESS', unlockLevelId: 50, verse: '文之思也，其神远矣' },
+];
+
+/** 生成指定章境的无尽关卡（克隆基础无尽配置，换景换名；数值结构完全一致） */
+export function getEndlessLevelForVenue(venue: EndlessVenue): LevelConfig {
+  return {
+    ...ENDLESS_LEVEL,
+    chapter: `${venue.anthology}·无尽卷`,
+    title: `无尽试炼·${venue.name}`,
+    poeticVerse: venue.verse,
+    poeticAuthor: `—— ${venue.anthology}·无尽卷`,
+    description: `于「${venue.anthology}」词境中坚守万墨长夜。敌军波次无穷无尽且逐波变强，每五波将有玄墨霸主压阵。坚守越久，文心灵玉越丰！`,
+    ambientType: venue.ambientType,
+  };
+}
