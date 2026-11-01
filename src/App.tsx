@@ -104,6 +104,8 @@ function checkAchievements(
     if (progress.completedLevels.includes(30)) add('chapter6_clear');
     if (progress.completedLevels.includes(33)) add('chapter7_half');
     if (progress.completedLevels.includes(35)) add('chapter7_clear');
+    if (progress.completedLevels.includes(38)) add('chapter8_half');
+    if (progress.completedLevels.includes(40)) add('chapter8_clear');
     if (stats.baseHpPct >= 0.7) add('perfect_defense');
   }
   if (stats.maxCombo >= 20) add('combo_dragon');

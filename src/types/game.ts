@@ -246,7 +246,12 @@ export interface LevelConfig {
     | 'QUJIANG'
     | 'PAGODA'
     | 'WINE'
-    | 'CALYX';
+    | 'CALYX'
+    | 'CHIJI'
+    | 'MOONRISE'
+    | 'XIAO'
+    | 'REEF'
+    | 'BOATQ';
   initialInk: number;
   enemySpawns: {
     time: number;

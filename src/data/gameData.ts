@@ -105,6 +105,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'chapter6_clear', name: '武陵迷津', description: '完卷第六大章，守源人灯灭谜开，千年无人问津终有回响', icon: 'CROWN' },
   { id: 'chapter7_half', name: '狂草归正', description: '通关第七大章第三折《雁塔题名》，破狂草墨魔颠张，塔下题名重归本名', icon: 'FEATHER' },
   { id: 'chapter7_clear', name: '盛世残卷', description: '完卷第七大章，霓裳舞歇幻境退潮，长安第一次看到真正的星河', icon: 'CROWN' },
+  { id: 'chapter8_half', name: '潜蛟归壑', description: '通关第八大章第三折《洞箫泣月》，降服幽壑潜蛟，箫声复归如诉', icon: 'FEATHER' },
+  { id: 'chapter8_clear', name: '江月问舟', description: '完卷第八大章，无尽藏之笔正握归权，洗墨真相水落石出', icon: 'CROWN' },
   { id: 'combo_dragon', name: '笔走龙蛇', description: '单场战斗连墨达到 20 连', icon: 'FLAME' },
   { id: 'combo_transcend', name: '翰墨通神', description: '单场战斗连墨达到 45 连', icon: 'STAR' },
   { id: 'slayer_40', name: '妙笔生花', description: '单场战斗击杀 40 名敌军', icon: 'SWORD' },

@@ -701,6 +701,36 @@ export class CanvasRenderer {
       skyGrad.addColorStop(0.45, '#3c1a50');
       skyGrad.addColorStop(0.78, '#6e3060');
       skyGrad.addColorStop(1, '#d88858');
+    } else if (level.ambientType === 'CHIJI') {
+      // 壬戌秋江：秋水澄碧，白露横江
+      skyGrad.addColorStop(0, '#1a2626');
+      skyGrad.addColorStop(0.45, '#2e4442');
+      skyGrad.addColorStop(0.78, '#54705e');
+      skyGrad.addColorStop(1, '#a8b488');
+    } else if (level.ambientType === 'MOONRISE') {
+      // 月出东山：月悬东岭，清辉满江
+      skyGrad.addColorStop(0, '#0a1424');
+      skyGrad.addColorStop(0.45, '#16283e');
+      skyGrad.addColorStop(0.78, '#2a4454');
+      skyGrad.addColorStop(1, '#688a94');
+    } else if (level.ambientType === 'XIAO') {
+      // 洞箫泣月：箫声呜咽，江寒蛟潜
+      skyGrad.addColorStop(0, '#0a1014');
+      skyGrad.addColorStop(0.45, '#18242c');
+      skyGrad.addColorStop(0.78, '#2c3c44');
+      skyGrad.addColorStop(1, '#506068');
+    } else if (level.ambientType === 'REEF') {
+      // 渔樵江渚：芦花似雪，暮色苍苍
+      skyGrad.addColorStop(0, '#241f18');
+      skyGrad.addColorStop(0.45, '#464032');
+      skyGrad.addColorStop(0.78, '#786e52');
+      skyGrad.addColorStop(1, '#c4b890');
+    } else if (level.ambientType === 'BOATQ') {
+      // 扁舟问月：沧海月明，天地一粟
+      skyGrad.addColorStop(0, '#060c1a');
+      skyGrad.addColorStop(0.45, '#101e34');
+      skyGrad.addColorStop(0.78, '#1e3450');
+      skyGrad.addColorStop(1, '#4a6878');
     } else {
       skyGrad.addColorStop(0, '#120d1c');
       skyGrad.addColorStop(0.4, '#2e192f');
@@ -1024,6 +1054,95 @@ export class CanvasRenderer {
           ctx.fill();
         }
       }
+    } else if (level.ambientType === 'MOONRISE') {
+      // 月出东山：一轮满月悬于山脊，月径水路直铺江心
+      const moonX = this.width * 0.5 - cameraX * 0.04;
+      const moonY = laneMinY * 0.3;
+      const riseGlow = ctx.createRadialGradient(moonX, moonY, 14, moonX, moonY, 130);
+      riseGlow.addColorStop(0, 'rgba(240, 248, 255, 0.95)');
+      riseGlow.addColorStop(0.35, 'rgba(200, 220, 240, 0.4)');
+      riseGlow.addColorStop(1, 'rgba(150, 180, 210, 0)');
+      ctx.fillStyle = riseGlow;
+      ctx.beginPath();
+      ctx.arc(moonX, moonY, 130, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f4f8fb';
+      ctx.beginPath();
+      ctx.arc(moonX, moonY, 40, 0, Math.PI * 2);
+      ctx.fill();
+      // 月面暗斑
+      ctx.fillStyle = 'rgba(190, 205, 220, 0.5)';
+      ctx.beginPath();
+      ctx.arc(moonX - 12, moonY - 6, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(moonX + 10, moonY + 10, 5, 0, Math.PI * 2);
+      ctx.fill();
+      // 月径水路（自月轮直铺江心的碎光带）
+      if (!this.qualityLow) {
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 149.3;
+          const sy = laneMinY + 10 + (seed % 90);
+          const spread = (sy - laneMinY) * 0.55 + 8;
+          const sx = moonX + Math.sin(gameTime * 0.9 + seed) * spread * 0.4;
+          ctx.globalAlpha = 0.24 - (sy - laneMinY) / 460;
+          ctx.fillStyle = '#dce8f0';
+          ctx.beginPath();
+          ctx.ellipse(sx, sy, spread, 2.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    } else if (level.ambientType === 'XIAO') {
+      // 洞箫泣月：寒溪细月如钩，泪蚀月痕
+      const sickleX = this.width * 0.78 - cameraX * 0.05;
+      const sickleGlow = ctx.createRadialGradient(sickleX, 76, 4, sickleX, 76, 46);
+      sickleGlow.addColorStop(0, 'rgba(210, 226, 234, 0.7)');
+      sickleGlow.addColorStop(1, 'rgba(160, 190, 205, 0)');
+      ctx.fillStyle = sickleGlow;
+      ctx.beginPath();
+      ctx.arc(sickleX, 76, 46, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#dce8ee';
+      ctx.beginPath();
+      ctx.arc(sickleX, 76, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0a1014';
+      ctx.beginPath();
+      ctx.arc(sickleX + 8, 70, 15, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (level.ambientType === 'BOATQ') {
+      // 扁舟问月：沧海巨月半悬海面，倒影相接，天地皆一粟
+      const bigMoonX = this.width * 0.5 - cameraX * 0.03;
+      const bigMoonY = laneMinY - 30;
+      const bigGlow = ctx.createRadialGradient(bigMoonX, bigMoonY, 20, bigMoonX, bigMoonY, 190);
+      bigGlow.addColorStop(0, 'rgba(228, 240, 252, 0.9)');
+      bigGlow.addColorStop(0.3, 'rgba(180, 205, 232, 0.42)');
+      bigGlow.addColorStop(1, 'rgba(120, 160, 200, 0)');
+      ctx.fillStyle = bigGlow;
+      ctx.beginPath();
+      ctx.arc(bigMoonX, bigMoonY, 190, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#e8f1fa';
+      ctx.beginPath();
+      ctx.arc(bigMoonX, bigMoonY, 56, 0, Math.PI * 2);
+      ctx.fill();
+      // 倒握之笔的剪影（无尽藏之笔悬于月心，笔尖朝下——倒握之相）
+      ctx.save();
+      ctx.strokeStyle = 'rgba(20, 26, 40, 0.78)';
+      ctx.lineWidth = 3.4;
+      ctx.beginPath();
+      ctx.moveTo(bigMoonX, bigMoonY - 44);
+      ctx.lineTo(bigMoonX, bigMoonY + 30);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(20, 26, 40, 0.78)';
+      ctx.beginPath();
+      ctx.moveTo(bigMoonX - 3.4, bigMoonY + 30);
+      ctx.lineTo(bigMoonX + 3.4, bigMoonY + 30);
+      ctx.lineTo(bigMoonX, bigMoonY + 42);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
     ctx.restore();
 
@@ -2341,6 +2460,190 @@ export class CanvasRenderer {
         }
       }
       ctx.restore();
+    } else if (level.ambientType === 'CHIJI') {
+      // 壬戌秋江：白露横江雾带 + 清风水纹 + 一叶扁舟剪影
+      ctx.save();
+      // 白露横江（三道横江雾带，缓移）
+      for (let i = 0; i < 3; i++) {
+        const bandY = laneMinY - 44 - i * 30;
+        const drift = ((t * (8 + i * 5) + i * 260) % (W + 400)) - 200;
+        const g = ctx.createLinearGradient(drift - 200, 0, drift + 200, 0);
+        g.addColorStop(0, 'rgba(222, 232, 224, 0)');
+        g.addColorStop(0.5, `rgba(222, 232, 224, ${0.15 - i * 0.035})`);
+        g.addColorStop(1, 'rgba(222, 232, 224, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(drift - 200, bandY, 400, 24);
+      }
+      if (!this.qualityLow) {
+        // 清风水纹（细密水纹横掠）
+        ctx.strokeStyle = 'rgba(196, 216, 200, 0.16)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 16; i++) {
+          const seed = i * 131.7;
+          const wx = ((seed * 61 + t * 30) % (W + 120)) - 60;
+          const wy = laneMinY + 12 + (seed % 84);
+          ctx.moveTo(wx, wy);
+          ctx.quadraticCurveTo(wx + 22, wy - 2.6, wx + 46, wy);
+        }
+        ctx.stroke();
+        // 一叶扁舟剪影（远处缓行）
+        const boatX = ((t * 7 + 200) % (W + 300)) - 150;
+        const boatY = laneMinY - 4;
+        ctx.fillStyle = 'rgba(18, 24, 22, 0.6)';
+        ctx.beginPath();
+        ctx.moveTo(boatX - 18, boatY);
+        ctx.quadraticCurveTo(boatX, boatY + 7, boatX + 18, boatY);
+        ctx.quadraticCurveTo(boatX, boatY + 3, boatX - 18, boatY);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(18, 24, 22, 0.6)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(boatX + 4, boatY + 1);
+        ctx.lineTo(boatX + 10, boatY - 14);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'MOONRISE') {
+      // 月出东山：月光碎银 + 山脊薄雾 + 夜枭掠影
+      ctx.save();
+      if (!this.qualityLow) {
+        // 月光碎银（天顶缓落的银点）
+        for (let i = 0; i < 14; i++) {
+          const seed = i * 167.9;
+          const sx = ((seed * 53) % (W + 40)) - 20;
+          const sy = ((seed * 89 + t * 14) % (H + 40)) - 20;
+          ctx.globalAlpha = 0.18 + (seed % 5) * 0.05;
+          ctx.fillStyle = '#e8f0f8';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        // 山脊薄雾（中部横带）
+        const mistY = laneMinY * 0.62;
+        const drift = ((t * 10 + 120) % (W + 380)) - 190;
+        const g = ctx.createLinearGradient(drift - 190, 0, drift + 190, 0);
+        g.addColorStop(0, 'rgba(214, 228, 238, 0)');
+        g.addColorStop(0.5, 'rgba(214, 228, 238, 0.13)');
+        g.addColorStop(1, 'rgba(214, 228, 238, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(drift - 190, mistY, 380, 20);
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'XIAO') {
+      // 洞箫泣月：箫音波纹环 + 潜蛟水涌 + 寒露点滴
+      ctx.save();
+      // 箫音波纹（自远处扩散的同心弧）
+      if (!this.qualityLow) {
+        for (let i = 0; i < 4; i++) {
+          const ph = (t * 0.28 + i * 0.25) % 1;
+          const cx = W * 0.78;
+          const cy = laneMinY * 0.42;
+          const rr = 24 + ph * 170;
+          ctx.strokeStyle = `rgba(168, 196, 208, ${(1 - ph) * 0.14})`;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(cx, cy, rr, Math.PI * 0.9, Math.PI * 2.1);
+          ctx.stroke();
+        }
+        // 潜蛟水涌（地平线处的隆起水包，周期起伏）
+        ctx.strokeStyle = 'rgba(140, 176, 190, 0.22)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+          const seed = i * 211.3;
+          const wx = ((seed * 71) % W);
+          const swell = Math.sin(t * 1.1 + seed) * 7 + Math.sin(t * 2.3 + seed * 2) * 3;
+          ctx.beginPath();
+          ctx.moveTo(wx - 34, laneMinY);
+          ctx.quadraticCurveTo(wx, laneMinY - 14 - Math.max(0, swell), wx + 34, laneMinY);
+          ctx.stroke();
+        }
+        // 寒露点滴
+        ctx.strokeStyle = 'rgba(190, 210, 218, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 26; i++) {
+          const seed = i * 107.9;
+          const rx = ((seed * 67 + t * 90) % (W + 40)) - 20;
+          const ry = ((seed * 59 + t * 210) % (H + 60)) - 30;
+          ctx.moveTo(rx, ry);
+          ctx.lineTo(rx - 1, ry + 8);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'REEF') {
+      // 渔樵江渚：芦絮如雪 + 白鹭两点 + 渔火明灭
+      ctx.save();
+      if (!this.qualityLow) {
+        // 芦絮（白絮缓飞）
+        for (let i = 0; i < 15; i++) {
+          const seed = i * 151.7;
+          const fx = ((seed * 59) % (W + 60)) - 30 + Math.sin(t * 0.9 + seed) * 42;
+          const fy = ((seed * 97 + t * 40) % (H + 40)) - 20;
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = '#e2dcc8';
+          ctx.beginPath();
+          ctx.ellipse(fx, fy, 2.6, 1.1, Math.sin(t + seed), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        // 白鹭两点（掠过江渚）
+        ctx.strokeStyle = 'rgba(236, 238, 232, 0.7)';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 2; i++) {
+          const seed = i * 347.9;
+          const ex = ((t * (16 + i * 5) + seed * 89) % (W + 200)) - 100;
+          const ey = laneMinY * (0.3 + i * 0.12) + Math.sin(t * 1.2 + seed) * 8;
+          ctx.beginPath();
+          ctx.moveTo(ex - 8, ey);
+          ctx.quadraticCurveTo(ex, ey - 3.5, ex + 8, ey);
+          ctx.stroke();
+        }
+        // 渔火（两点暖光明灭）
+        for (let i = 0; i < 2; i++) {
+          const seed = i * 271.3;
+          const fx = W * (0.3 + i * 0.4);
+          const fy = laneMinY - 6 - (seed % 12);
+          const fa = 0.4 + 0.3 * (0.5 + 0.5 * Math.sin(t * 2.2 + seed));
+          ctx.fillStyle = `rgba(255, 178, 90, ${fa})`;
+          ctx.beginPath();
+          ctx.arc(fx, fy, 2.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'BOATQ') {
+      // 扁舟问月：江风拂线 + 星子倒江 + 月华尘埃
+      ctx.save();
+      if (!this.qualityLow) {
+        // 江风拂线（极淡的横向流线）
+        ctx.strokeStyle = 'rgba(196, 216, 232, 0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 149.7;
+          const wx = ((seed * 71 + t * 60) % (W + 140)) - 70;
+          const wy = laneMinY * (0.3 + (seed % 50) / 110);
+          ctx.moveTo(wx, wy);
+          ctx.lineTo(wx + 44 + (seed % 24), wy + 1.6);
+        }
+        ctx.stroke();
+        // 星子倒江（地平线下的微光点）
+        for (let i = 0; i < 16; i++) {
+          const seed = i * 173.9;
+          const sx = ((seed * 61) % W);
+          const sy = laneMinY + 10 + (seed % 80);
+          ctx.globalAlpha = 0.2 + (seed % 5) * 0.05;
+          ctx.fillStyle = '#dce8f4';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
     }
   }
 
@@ -2510,6 +2813,31 @@ export class CanvasRenderer {
       groundGrad.addColorStop(0, '#6a4860');
       groundGrad.addColorStop(0.3, '#442c44');
       groundGrad.addColorStop(1, '#140c1c');
+    } else if (level.ambientType === 'CHIJI') {
+      // 秋江矶头：澄碧湿矶
+      groundGrad.addColorStop(0, '#4e6454');
+      groundGrad.addColorStop(0.3, '#324438');
+      groundGrad.addColorStop(1, '#101812');
+    } else if (level.ambientType === 'MOONRISE') {
+      // 月下矶岸：银辉碎石
+      groundGrad.addColorStop(0, '#42586a');
+      groundGrad.addColorStop(0.3, '#2a3c4c');
+      groundGrad.addColorStop(1, '#0c141d');
+    } else if (level.ambientType === 'XIAO') {
+      // 寒江暗礁：青灰沉江
+      groundGrad.addColorStop(0, '#38484e');
+      groundGrad.addColorStop(0.3, '#243038');
+      groundGrad.addColorStop(1, '#0a0f13');
+    } else if (level.ambientType === 'REEF') {
+      // 芦荡沙洲：芦灰软沙
+      groundGrad.addColorStop(0, '#78705a');
+      groundGrad.addColorStop(0.3, '#4e4838');
+      groundGrad.addColorStop(1, '#18150e');
+    } else if (level.ambientType === 'BOATQ') {
+      // 沧海月台：玄蓝观月台
+      groundGrad.addColorStop(0, '#32465c');
+      groundGrad.addColorStop(0.3, '#1e2e42');
+      groundGrad.addColorStop(1, '#080e18');
     } else {
       groundGrad.addColorStop(0, '#26262b');
       groundGrad.addColorStop(0.3, '#1c1c20');
