@@ -231,7 +231,12 @@ export interface LevelConfig {
     | 'BEACON'
     | 'WITHER'
     | 'IRON'
-    | 'SIEGE';
+    | 'SIEGE'
+    | 'ORCHID'
+    | 'CLOUDMARCH'
+    | 'MORN'
+    | 'HOLLOW'
+    | 'STARQ';
   initialInk: number;
   enemySpawns: {
     time: number;

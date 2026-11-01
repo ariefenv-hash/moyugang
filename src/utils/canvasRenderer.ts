@@ -611,6 +611,36 @@ export class CanvasRenderer {
       skyGrad.addColorStop(0.5, '#10101a');
       skyGrad.addColorStop(0.82, '#241e28');
       skyGrad.addColorStop(1, '#4a2c22');
+    } else if (level.ambientType === 'ORCHID') {
+      // 沅芷澧兰：湘水烟波，紫青汀洲
+      skyGrad.addColorStop(0, '#1c1838');
+      skyGrad.addColorStop(0.5, '#343058');
+      skyGrad.addColorStop(0.82, '#565f7e');
+      skyGrad.addColorStop(1, '#8e98ae');
+    } else if (level.ambientType === 'CLOUDMARCH') {
+      // 云中霓旌：云海翻卷，玄白相间
+      skyGrad.addColorStop(0, '#241f38');
+      skyGrad.addColorStop(0.45, '#4a4268');
+      skyGrad.addColorStop(0.8, '#7a7292');
+      skyGrad.addColorStop(1, '#c0b8d0');
+    } else if (level.ambientType === 'MORN') {
+      // 扶桑浴日：金乌将升，赤金漫天
+      skyGrad.addColorStop(0, '#2a1408');
+      skyGrad.addColorStop(0.45, '#6e3410');
+      skyGrad.addColorStop(0.75, '#c4702a');
+      skyGrad.addColorStop(1, '#f8c878');
+    } else if (level.ambientType === 'HOLLOW') {
+      // 幽篁灵雨：山之阿兮，幽绿阴翳
+      skyGrad.addColorStop(0, '#0d1a12');
+      skyGrad.addColorStop(0.5, '#1c3022');
+      skyGrad.addColorStop(0.82, '#2e4634');
+      skyGrad.addColorStop(1, '#4a6350');
+    } else if (level.ambientType === 'STARQ') {
+      // 天问列星：遂古玄穹，星河垂野
+      skyGrad.addColorStop(0, '#241a4e');
+      skyGrad.addColorStop(0.45, '#2e2262');
+      skyGrad.addColorStop(0.8, '#40306e');
+      skyGrad.addColorStop(1, '#543c7a');
     } else {
       skyGrad.addColorStop(0, '#120d1c');
       skyGrad.addColorStop(0.4, '#2e192f');
@@ -816,6 +846,81 @@ export class CanvasRenderer {
       ctx.beginPath();
       ctx.ellipse(this.width * 0.42, laneMinY * 0.62, this.width * 0.5, 15, 0, 0, Math.PI * 2);
       ctx.fill();
+    } else if (level.ambientType === 'MORN') {
+      // 扶桑浴日：巨大金乌贴地平线升起，扶桑枝剪影横陈其上
+      const sunY = laneMinY - 40;
+      const mornSun = ctx.createRadialGradient(celestialX, sunY, 18, celestialX, sunY, 160);
+      mornSun.addColorStop(0, 'rgba(255, 240, 190, 0.96)');
+      mornSun.addColorStop(0.25, 'rgba(255, 190, 90, 0.5)');
+      mornSun.addColorStop(1, 'rgba(210, 110, 40, 0)');
+      ctx.fillStyle = mornSun;
+      ctx.beginPath();
+      ctx.arc(celestialX, sunY, 160, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffe2a0';
+      ctx.beginPath();
+      ctx.arc(celestialX, sunY, 36, 0, Math.PI * 2);
+      ctx.fill();
+      // 三足金乌暗纹（日轮内的玄色鸟影，被蚀的痕迹）
+      ctx.fillStyle = 'rgba(60, 30, 12, 0.32)';
+      ctx.beginPath();
+      ctx.ellipse(celestialX - 3, sunY + 2, 12, 8, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(celestialX + 8, sunY - 6, 4.5, 3, 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      // 扶桑枝剪影（九日栖木，枝桠自右上斜出）
+      ctx.strokeStyle = 'rgba(24, 12, 6, 0.55)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(celestialX + 150, sunY - 120);
+      ctx.quadraticCurveTo(celestialX + 70, sunY - 96, celestialX + 18, sunY - 52);
+      ctx.stroke();
+      ctx.lineWidth = 1.8;
+      for (let b = 0; b < 4; b++) {
+        const tB = 0.3 + b * 0.18;
+        const bX = celestialX + 150 - 132 * tB;
+        const bY = sunY - 120 + 68 * tB;
+        ctx.beginPath();
+        ctx.moveTo(bX, bY);
+        ctx.quadraticCurveTo(bX - 14, bY - 16, bX - 30, bY - 12);
+        ctx.stroke();
+      }
+    } else if (level.ambientType === 'STARQ') {
+      // 天问列星：北斗列阵悬于玄穹，星芒明灭如问
+      const stars: [number, number, number][] = [
+        [0.18, 0.16, 2.4], [0.3, 0.2, 2.1], [0.42, 0.17, 2.6],
+        [0.54, 0.22, 2.0], [0.66, 0.15, 2.5], [0.76, 0.24, 1.9], [0.87, 0.18, 2.3],
+      ];
+      for (let s = 0; s < stars.length; s++) {
+        const [fx, fy, rr] = stars[s];
+        const sX = this.width * fx - cameraX * 0.03;
+        const sY = laneMinY * fy + 20;
+        const tw = 0.55 + 0.45 * Math.sin(gameTime * 2.1 + s * 1.7);
+        const glow = ctx.createRadialGradient(sX, sY, 0, sX, sY, rr * 5);
+        glow.addColorStop(0, `rgba(235, 228, 255, ${0.8 * tw})`);
+        glow.addColorStop(1, 'rgba(160, 140, 220, 0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(sX, sY, rr * 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(245, 240, 255, ${0.6 + 0.4 * tw})`;
+        ctx.beginPath();
+        ctx.arc(sX, sY, rr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 北斗连线（玄墨蚀不断的天问之问）
+      ctx.strokeStyle = 'rgba(180, 168, 230, 0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let s = 0; s < stars.length; s++) {
+        const [fx, fy] = stars[s];
+        const sX = this.width * fx - cameraX * 0.03;
+        const sY = laneMinY * fy + 20;
+        if (s === 0) ctx.moveTo(sX, sY);
+        else ctx.lineTo(sX, sY);
+      }
+      ctx.stroke();
     }
     ctx.restore();
 
@@ -926,6 +1031,55 @@ export class CanvasRenderer {
       siegeGlow.addColorStop(1, 'rgba(150, 52, 30, 0.14)');
       ctx.fillStyle = siegeGlow;
       ctx.fillRect(0, laneMinY * 0.2, this.width, laneMinY * 0.8);
+      ctx.restore();
+    }
+
+    // 云中霓旌：云海横带翻卷 + 玄墨旌旗列阵（九歌·云中君异象）
+    if (level.ambientType === 'CLOUDMARCH') {
+      ctx.save();
+      // 三层云海横带（缓速对流，视差分层）
+      for (let cB = 0; cB < 3; cB++) {
+        const bandY = laneMinY * (0.24 + cB * 0.14);
+        const drift = ((gameTime * (12 + cB * 7) + cB * 320) % (this.width + 460)) - 230;
+        for (let p = 0; p < 4; p++) {
+          const pX = drift + p * 130;
+          const pY = bandY + Math.sin(gameTime * 0.5 + p + cB * 2) * 7;
+          const pR = 34 + ((p * 7 + cB * 11) % 22);
+          ctx.fillStyle = `rgba(${cB === 0 ? '214, 210, 226' : cB === 1 ? '168, 162, 186' : '128, 122, 150'}, ${0.2 - cB * 0.045})`;
+          ctx.beginPath();
+          ctx.ellipse(pX, pY, pR, pR * 0.36, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      // 玄墨旌旗列阵（旗杆直上，旗面翻卷，视差随相机）
+      for (let b = 0; b < 4; b++) {
+        const bx = ((b * 380 + 240 - cameraX * 0.12) % (this.width + 300) + this.width + 300) % (this.width + 300) - 150;
+        const topY = laneMinY * 0.3 + (b % 2) * 18;
+        const botY = laneMinY - 24;
+        ctx.strokeStyle = 'rgba(10, 8, 16, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(bx, botY);
+        ctx.lineTo(bx, topY);
+        ctx.stroke();
+        // 旗面（sin 波动裁出旌形）
+        ctx.fillStyle = 'rgba(16, 10, 24, 0.72)';
+        ctx.beginPath();
+        ctx.moveTo(bx, topY);
+        for (let yy = 0; yy <= 34; yy += 6) {
+          ctx.lineTo(bx + 44 - yy * 0.4 + Math.sin(gameTime * 3 + yy * 0.2 + b) * 4, topY + yy);
+        }
+        for (let yy = 34; yy >= 0; yy -= 6) {
+          ctx.lineTo(bx + 30 - yy * 0.4 + Math.sin(gameTime * 3 + yy * 0.2 + b) * 4, topY + yy);
+        }
+        ctx.closePath();
+        ctx.fill();
+        // 旗顶玄珠
+        ctx.fillStyle = 'rgba(200, 190, 220, 0.5)';
+        ctx.beginPath();
+        ctx.arc(bx, topY - 3, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
 
@@ -1465,6 +1619,156 @@ export class CanvasRenderer {
         }
       }
       ctx.restore();
+    } else if (level.ambientType === 'ORCHID') {
+      // 沅芷澧兰：兰瓣明灭飘坠 + 湘水波光横纹
+      ctx.save();
+      // 湘水波光（地平线上下的横向水纹，缓慢明灭）
+      if (!this.qualityLow) {
+        for (let i = 0; i < 7; i++) {
+          const seed = i * 191.7;
+          const wy = laneMinY + 12 + (seed % 90) - Math.sin(t * 0.7 + seed) * 5;
+          const wx = ((seed * 53 + t * 26) % (W + 160)) - 80;
+          ctx.strokeStyle = `rgba(190, 206, 214, ${0.1 + (seed % 5) * 0.022})`;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(wx, wy);
+          ctx.quadraticCurveTo(wx + 30, wy - 3.5, wx + 62, wy);
+          ctx.stroke();
+        }
+      }
+      // 兰瓣（紫青细长瓣，旋坠）
+      if (!this.qualityLow) {
+        const orchidCols = ['#a8b8d8', '#8a9ac8', '#c4cee4'];
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 149.3;
+          const px = ((seed * 47) % (W + 60)) - 30 + Math.sin(t * 0.75 + seed) * 34;
+          const py = ((seed * 89 + t * 58) % (H + 50)) - 25;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(Math.sin(t * 1.2 + seed) * 1.1 + seed);
+          ctx.globalAlpha = 0.62;
+          ctx.fillStyle = orchidCols[i % 3];
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 5.8, 1.9, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'MORN') {
+      // 扶桑浴日：金羽光屑自日轮向天飘散 + 晨雾横带
+      ctx.save();
+      // 晨雾横带（贴地缓移）
+      for (let i = 0; i < 2; i++) {
+        const bandY = laneMinY - 30 - i * 26;
+        const drift = ((t * (16 + i * 8) + i * 300) % (W + 320)) - 160;
+        const g = ctx.createLinearGradient(drift - 150, 0, drift + 150, 0);
+        g.addColorStop(0, 'rgba(255, 226, 170, 0)');
+        g.addColorStop(0.5, `rgba(255, 226, 170, ${0.12 - i * 0.04})`);
+        g.addColorStop(1, 'rgba(255, 226, 170, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(drift - 150, bandY, 300, 22);
+      }
+      if (!this.qualityLow) {
+        // 金羽光屑（自右下日轮方向升飘）
+        for (let i = 0; i < 13; i++) {
+          const seed = i * 167.9;
+          const fx2 = W * 0.72 + Math.sin(t * 0.6 + seed) * 90 - ((seed * 13) % 120);
+          const fy2 = laneMinY - ((seed * 53 + t * (26 + (seed % 20))) % (laneMinY * 0.85));
+          ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t * 1.8 + seed);
+          ctx.fillStyle = '#ffe2a0';
+          ctx.save();
+          ctx.translate(fx2, fy2);
+          ctx.rotate(Math.sin(t * 1.1 + seed) * 0.8);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 3.6, 1.3, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'HOLLOW') {
+      // 幽篁灵雨：灵雨冥冥 + 薜萝藤影垂摆 + 幽萤两点
+      ctx.save();
+      // 灵雨（密而缓的细雨）
+      if (!this.qualityLow) {
+        ctx.strokeStyle = 'rgba(168, 196, 178, 0.22)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 44; i++) {
+          const seed = i * 107.3;
+          const rx = ((seed * 67 + t * 110) % (W + 40)) - 20;
+          const ry = ((seed * 59 + t * 260) % (H + 70)) - 35;
+          ctx.moveTo(rx, ry);
+          ctx.lineTo(rx - 1.4, ry + 10);
+        }
+        ctx.stroke();
+      }
+      // 薜萝藤影（自天垂下的摆藤剪影）
+      if (!this.qualityLow) {
+        ctx.strokeStyle = 'rgba(14, 26, 18, 0.5)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 6; i++) {
+          const seed = i * 149.7;
+          const tx = (seed * 41) % W;
+          const topY = -6;
+          const len = 40 + (seed % 70);
+          ctx.beginPath();
+          ctx.moveTo(tx, topY);
+          ctx.quadraticCurveTo(
+            tx + Math.sin(t * 0.7 + seed) * 12, topY + len * 0.55,
+            tx + Math.sin(t * 0.7 + seed) * 18, topY + len
+          );
+          ctx.stroke();
+        }
+      }
+      // 幽萤两点（山鬼的引路灯）
+      for (let i = 0; i < 3; i++) {
+        const seed = i * 271.3;
+        const gx = W * (0.2 + i * 0.28) + Math.sin(t * 0.5 + seed) * 44;
+        const gy = laneMinY * (0.5 + (seed % 20) / 60) + Math.cos(t * 0.4 + seed) * 20;
+        const glow = 0.3 + 0.36 * (0.5 + 0.5 * Math.sin(t * 1.7 + seed * 3));
+        ctx.fillStyle = `rgba(190, 255, 190, ${glow})`;
+        ctx.beginPath();
+        ctx.arc(gx, gy, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    } else if (level.ambientType === 'STARQ') {
+      // 天问列星：星河横带 + 星屑缓坠 + 「问」字残光浮沉
+      ctx.save();
+      // 星河横带（银河斜挂）
+      const milky = ctx.createLinearGradient(0, laneMinY * 0.1, W, laneMinY * 0.55);
+      milky.addColorStop(0, 'rgba(140, 120, 200, 0)');
+      milky.addColorStop(0.5, 'rgba(150, 132, 210, 0.1)');
+      milky.addColorStop(1, 'rgba(140, 120, 200, 0)');
+      ctx.fillStyle = milky;
+      ctx.fillRect(0, laneMinY * 0.08, W, laneMinY * 0.5);
+      if (!this.qualityLow) {
+        // 星屑缓坠
+        for (let i = 0; i < 18; i++) {
+          const seed = i * 137.9;
+          const sx = ((seed * 53) % (W + 40)) - 20 + Math.sin(t * 0.3 + seed) * 14;
+          const sy = ((seed * 89 + t * 20) % (H + 40)) - 20;
+          ctx.globalAlpha = 0.2 + (seed % 6) * 0.05;
+          ctx.fillStyle = '#ded6f4';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.1 + (seed % 3) * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        // 「问」字残光（透明度呼吸的金色问字，自左向右缓浮）
+        ctx.font = '42px "STKaiti", "KaiTi", "WenKai", serif';
+        ctx.fillStyle = `rgba(226, 208, 140, ${0.1 + 0.06 * Math.sin(t * 0.9)})`;
+        for (let i = 0; i < 3; i++) {
+          const seed = i * 311.7;
+          const qx = ((t * 9 + seed * 47) % (W + 200)) - 100;
+          const qy = laneMinY * (0.34 + i * 0.14);
+          ctx.fillText('问', qx, qy);
+        }
+      }
+      ctx.restore();
     }
   }
 
@@ -1559,6 +1863,31 @@ export class CanvasRenderer {
       groundGrad.addColorStop(0, '#2e2620');
       groundGrad.addColorStop(0.3, '#1c1610');
       groundGrad.addColorStop(1, '#0a0705');
+    } else if (level.ambientType === 'ORCHID') {
+      // 湘水汀洲：紫青湿沙
+      groundGrad.addColorStop(0, '#4c4a66');
+      groundGrad.addColorStop(0.3, '#302e46');
+      groundGrad.addColorStop(1, '#12101c');
+    } else if (level.ambientType === 'CLOUDMARCH') {
+      // 云阶：玄白云台
+      groundGrad.addColorStop(0, '#6a6480');
+      groundGrad.addColorStop(0.3, '#46405e');
+      groundGrad.addColorStop(1, '#181528');
+    } else if (level.ambientType === 'MORN') {
+      // 扶桑渡口：赤金沙滩
+      groundGrad.addColorStop(0, '#9a6a32');
+      groundGrad.addColorStop(0.3, '#66441e');
+      groundGrad.addColorStop(1, '#221408');
+    } else if (level.ambientType === 'HOLLOW') {
+      // 幽篁苔径：墨绿湿苔
+      groundGrad.addColorStop(0, '#2a3e2e');
+      groundGrad.addColorStop(0.3, '#1a2a1e');
+      groundGrad.addColorStop(1, '#080f0a');
+    } else if (level.ambientType === 'STARQ') {
+      // 天问星台：玄紫星阶
+      groundGrad.addColorStop(0, '#322a4e');
+      groundGrad.addColorStop(0.3, '#201a34');
+      groundGrad.addColorStop(1, '#0a0714');
     } else {
       groundGrad.addColorStop(0, '#26262b');
       groundGrad.addColorStop(0.3, '#1c1c20');
