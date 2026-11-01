@@ -644,3 +644,64 @@ Stage Summary:
 - 性能分档从「玩家自救」升级为「开箱自适应」：低端安卓开箱即 30fps 流畅帧率
 - 修改：canvasRenderer.ts/BattleView.tsx；新增 scripts/verify_perf_tier.py
 - 提交：c7746db
+
+---
+Task ID: 32
+Agent: 定时任务 Agent（每 2 小时轮次 · 第三轮）
+Task: 性能——canvas 分层·静态氛围离屏缓存（第壹阶段）
+
+Work Log:
+- drawSkyAndParallax / drawPerspectiveGround 中两段五十境渐变色标 if/else 链（各 286/234 行）抽离为纯色标函数 paintSkyStops / paintGroundStops（逐字搬移零改动，tsc 通过）
+- 新增 ensureStaticGradCache：天空/地面均为纯垂直线性渐变（只随氛围与 laneMinY/视口高变化，与相机/时间无关），各采样为 1px 宽纵条缓存（线性渐变纵向采样逐像素无损），逐帧以两次 drawImage 横向拉伸铺绘——省去每帧 2 次 createLinearGradient 分配与 2 次全屏渐变填充重建
+- key = 氛围|地平线|视口高，氛围切换/窗口缩放自动重建；离屏构建失败静默回退直绘路径；动态层（视差山影/天体/氛围 overlay/天气）保持逐帧绘制不动
+- 验证：verify_story_ch5.py 33/33（C 组五氛围像素采样判据全过即色彩零回归）+ smoke 24/24 + perf_tier 4/4 + build 通过
+
+Stage Summary:
+- 战场静态背景进入「缓存铺绘」时代：渐变重建开销从每帧降至每氛围一次
+- 修改：canvasRenderer.ts
+
+---
+Task ID: 33
+Agent: 定时任务 Agent（每 2 小时轮次 · 第三轮）
+Task: UI——战斗 HUD 高分屏细描边（1px 线在 2x 屏发虚）
+
+Work Log:
+- BattleView handleResize 将真实 devicePixelRatio（不截断）写入 :root --dpr
+- index.css 新增 .hud-crisp [class~='border'] { border-width: max(0.5px, calc(1px / var(--dpr))) }：dpr=1 维持 1px；1.5→0.67px；2→0.5px=1 设备像素（工笔发丝线）；3+ 以 0.5px 兜底
+- 仅命中全边 border 类；border-b/t 等单边线与 border-2/4 粗描边不受影响；老旧内核不支持 calc 时整条声明回退 Tailwind 1px，无破坏性
+- BattleView 根容器挂 hud-crisp（战斗页全局生效：顶栏/状态面板/技能簇/字诀链）
+- 验证：ui_polish 7/7 + smoke 24/24（无样式回归）
+
+Stage Summary:
+- 高分屏 HUD 描边精确对齐设备像素网格，半像素发虚消除
+- 修改：BattleView.tsx/index.css
+
+---
+Task ID: 34
+Agent: 定时任务 Agent（每 2 小时轮次 · 第三轮）
+Task: 数据与平衡——灵玉回收线校准 + 十章难度曲线 JSON 沉淀
+
+Work Log:
+- 回收线漏洞修复：冷却轨战斗侧实际生效上限 Lv5（cdMult=max(0.6,1-Lv×8%)），此前墨阁 UI 无上限照常售卖 Lv6+（灵玉白花）。PavilionUpgrades 封顶：按钮转「已臻化境（上限五层）」+ upgradeHeroStat 防御性拒付双保险
+- 新增 scripts/export_difficulty_curve.mjs：从 STORY_CHAPTERS 实时提取十章 50 折（敌营血/城防/初始墨/赏格/首领战/压力指数/首领威胁指数）+ 灵玉经济回收线（收入侧单通 49,320/每日 260/无尽 18/波 vs 回收侧 11 轨 50×1.5^Lv 曲线里程碑），产出 docs/difficulty-curve.json
+- 量化结论：单通收入可支撑 11 轨均衡 Lv9.4；全轨 Lv10 需 62,332（缺口由每日/无尽补足）——回收线闭合
+- 验证：脚本实跑输出 10 章 50 折、敌营 1000→23000、终折 rewardJade 2000 与源码一致
+
+Stage Summary:
+- 调参从此有回归表可依（改 story.ts 后重跑导出脚本即刷新），回收线漏洞清零
+- 修改：PavilionUpgrades.tsx；新增 scripts/export_difficulty_curve.mjs/docs/difficulty-curve.json
+
+---
+Task ID: 35
+Agent: 定时任务 Agent（每 2 小时轮次 · 第三轮）
+Task: 测试——ch5 验证脚本适配十卷现状与两段式章签
+
+Work Log:
+- A8 断言更新：桃花源随第陆章实装已启（原「未启之卷」断言退役）
+- F4 断言更新：第五章通关后「启下一章」出现并递进第陆大章（原「终折无启下一章」为第五章为上界时代产物）
+- D 组重载方案改为重置进度直入（storySeen 含第五章使引子不弹），不再依赖两段式章签改版后的通关落点
+- 全绿实测：33/33 PASS、JS 异常 0；其余 ch6~ch9 脚本同型断言（「下一章未启」）留待下轮同法修缮（仅测试债，非产品缺陷）
+
+Stage Summary:
+- ch5 全链路脚本回归现役化；验证脚本与十章全开现实重新对齐
+- 修改：scripts/verify_story_ch5.py
