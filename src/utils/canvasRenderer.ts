@@ -524,12 +524,68 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
-  // Draw Sky & Parallax Layer
-  private drawSkyAndParallax(cameraX: number, level: LevelConfig, laneMinY: number, gameTime: number) {
-    const ctx = this.ctx;
+  /* ============ canvas 分层·静态氛围离屏缓存（第壹阶段） ============
+   * 天空/地面均为纯垂直线性渐变：色标只随氛围类型（五十境）变化，
+   * 几何只随 laneMinY 与视口高变化——与相机、时间、画质档均无关。
+   * 将其各采样为 1px 宽纵条（线性渐变沿 y 插值，纵向采样逐像素无损），
+   * 逐帧只需两次 1px 纹理横向拉伸（GPU 代价可忽略），省去：
+   * - 每帧 2 次 createLinearGradient 对象分配（GC 压力）
+   * - 每帧 2 次全屏渐变 fillRect 的渐变重建
+   * 缓存仅保留最近一份（战斗内氛围切换频率极低），key 变化即重建；
+   * 离屏构建失败时静默回退主画布直绘路径。 */
+  private staticGradCache: {
+    key: string;
+    sky: HTMLCanvasElement | null;
+    ground: HTMLCanvasElement | null;
+  } | null = null;
 
-    // Atmospheric Sky Gradient
-    const skyGrad = ctx.createLinearGradient(0, 0, 0, laneMinY);
+  /** 取静态渐变纵条缓存（sky/ground），key 不匹配则重建 */
+  private ensureStaticGradCache(level: LevelConfig, laneMinY: number) {
+    const key = `${level.ambientType}|${Math.round(laneMinY)}|${Math.round(this.height)}`;
+    if (this.staticGradCache && this.staticGradCache.key === key) return this.staticGradCache;
+    const entry: { key: string; sky: HTMLCanvasElement | null; ground: HTMLCanvasElement | null } = {
+      key,
+      sky: null,
+      ground: null,
+    };
+    try {
+      // 天空纵条：覆盖 [0, laneMinY+40]（含地平线下 40px 余量，与原 fillRect 完全一致）
+      const skyH = Math.max(1, Math.ceil(laneMinY + 40));
+      const sky = document.createElement('canvas');
+      sky.width = 1;
+      sky.height = skyH;
+      const sctx = sky.getContext('2d');
+      if (sctx) {
+        const g = sctx.createLinearGradient(0, 0, 0, laneMinY);
+        this.paintSkyStops(g, level);
+        sctx.fillStyle = g;
+        sctx.fillRect(0, 0, 1, skyH);
+        entry.sky = sky;
+      }
+      // 地面纵条：覆盖 [laneMinY, height]
+      const groundH = Math.max(1, Math.ceil(this.height - laneMinY));
+      const ground = document.createElement('canvas');
+      ground.width = 1;
+      ground.height = groundH;
+      const gctx = ground.getContext('2d');
+      if (gctx) {
+        const g = gctx.createLinearGradient(0, laneMinY, 0, this.height);
+        this.paintGroundStops(g, level);
+        gctx.fillStyle = g;
+        gctx.fillRect(0, 0, 1, groundH);
+        entry.ground = ground;
+      }
+    } catch {
+      // 极老内核/内存受限环境：放弃缓存，回退直绘
+      entry.sky = null;
+      entry.ground = null;
+    }
+    this.staticGradCache = entry;
+    return entry;
+  }
+
+  /** 天空渐变色标链（五十境全量）：抽离为纯色标函数，供主绘与离屏纵条共用 */
+  private paintSkyStops(skyGrad: CanvasGradient, level: LevelConfig) {
     if (level.ambientType === 'SNOW') {
       skyGrad.addColorStop(0, '#1c1f24');
       skyGrad.addColorStop(0.6, '#282e38');
@@ -816,8 +872,275 @@ export class CanvasRenderer {
       skyGrad.addColorStop(0.8, '#6b3d43');
       skyGrad.addColorStop(1, '#ebd0ab');
     }
-    ctx.fillStyle = skyGrad;
-    ctx.fillRect(0, 0, this.width, laneMinY + 40);
+  }
+
+  /** 地面渐变色标链（五十境全量）：同上共用 */
+  private paintGroundStops(groundGrad: CanvasGradient, level: LevelConfig) {
+    if (level.ambientType === 'SNOW') {
+      groundGrad.addColorStop(0, '#cbd5e1');
+      groundGrad.addColorStop(0.3, '#94a3b8');
+      groundGrad.addColorStop(1, '#334155');
+    } else if (level.ambientType === 'BAMBOO') {
+      groundGrad.addColorStop(0, '#334835');
+      groundGrad.addColorStop(0.3, '#213023');
+      groundGrad.addColorStop(1, '#111912');
+    } else if (level.ambientType === 'MIST') {
+      // 烟雨青灰石板
+      groundGrad.addColorStop(0, '#6b7678');
+      groundGrad.addColorStop(0.3, '#455154');
+      groundGrad.addColorStop(1, '#1c2426');
+    } else if (level.ambientType === 'AUTUMN') {
+      // 霜枫赤褐渡口
+      groundGrad.addColorStop(0, '#5e3220');
+      groundGrad.addColorStop(0.3, '#3d2015');
+      groundGrad.addColorStop(1, '#170c08');
+    } else if (level.ambientType === 'STORM') {
+      // 雷雨溃溡深蓝黑
+      groundGrad.addColorStop(0, '#2b3540');
+      groundGrad.addColorStop(0.3, '#1c242d');
+      groundGrad.addColorStop(1, '#0b0f14');
+    } else if (level.ambientType === 'VOID') {
+      // 墨渊紫黑
+      groundGrad.addColorStop(0, '#241331');
+      groundGrad.addColorStop(0.3, '#160b22');
+      groundGrad.addColorStop(1, '#0a0512');
+    } else if (level.ambientType === 'LOTUS') {
+      // 溪亭暮岸：玫褐暮色湿地
+      groundGrad.addColorStop(0, '#4a3040');
+      groundGrad.addColorStop(0.3, '#2c1e2c');
+      groundGrad.addColorStop(1, '#140d16');
+    } else if (level.ambientType === 'GOOSE') {
+      // 西楼月渡：月照青蓝石阶
+      groundGrad.addColorStop(0, '#333a52');
+      groundGrad.addColorStop(0.3, '#20263a');
+      groundGrad.addColorStop(1, '#0c0f1a');
+    } else if (level.ambientType === 'CHRYS') {
+      // 东篱菊圃：琥珀暗金
+      groundGrad.addColorStop(0, '#4e381a');
+      groundGrad.addColorStop(0.3, '#30220f');
+      groundGrad.addColorStop(1, '#140d06');
+    } else if (level.ambientType === 'GLOOM') {
+      // 梧桐暮雨：湿冷青灰
+      groundGrad.addColorStop(0, '#333f38');
+      groundGrad.addColorStop(0.3, '#1f2823');
+      groundGrad.addColorStop(1, '#0b100d');
+    } else if (level.ambientType === 'STRING') {
+      // 琴台绝响：寒墨玄青
+      groundGrad.addColorStop(0, '#1c242e');
+      groundGrad.addColorStop(0.3, '#10161d');
+      groundGrad.addColorStop(1, '#06090d');
+    } else if (level.ambientType === 'DESERT') {
+      // 大漠沙丘：金黄渐暗
+      groundGrad.addColorStop(0, '#a87838');
+      groundGrad.addColorStop(0.3, '#6e4e22');
+      groundGrad.addColorStop(1, '#241608');
+    } else if (level.ambientType === 'BEACON') {
+      // 烽燧焦土：赤褐灼痕
+      groundGrad.addColorStop(0, '#5c3418');
+      groundGrad.addColorStop(0.3, '#38200e');
+      groundGrad.addColorStop(1, '#140a05');
+    } else if (level.ambientType === 'WITHER') {
+      // 无春枯柳：灰绿枯土
+      groundGrad.addColorStop(0, '#565030');
+      groundGrad.addColorStop(0.3, '#34301c');
+      groundGrad.addColorStop(1, '#12100a');
+    } else if (level.ambientType === 'IRON') {
+      // 碑林冻土：铁灰霜夜
+      groundGrad.addColorStop(0, '#33404e');
+      groundGrad.addColorStop(0.3, '#202a36');
+      groundGrad.addColorStop(1, '#0a0e14');
+    } else if (level.ambientType === 'SIEGE') {
+      // 攻城战场：焦黑染血
+      groundGrad.addColorStop(0, '#2e2620');
+      groundGrad.addColorStop(0.3, '#1c1610');
+      groundGrad.addColorStop(1, '#0a0705');
+    } else if (level.ambientType === 'ORCHID') {
+      // 湘水汀洲：紫青湿沙
+      groundGrad.addColorStop(0, '#4c4a66');
+      groundGrad.addColorStop(0.3, '#302e46');
+      groundGrad.addColorStop(1, '#12101c');
+    } else if (level.ambientType === 'CLOUDMARCH') {
+      // 云阶：玄白云台
+      groundGrad.addColorStop(0, '#6a6480');
+      groundGrad.addColorStop(0.3, '#46405e');
+      groundGrad.addColorStop(1, '#181528');
+    } else if (level.ambientType === 'MORN') {
+      // 扶桑渡口：赤金沙滩
+      groundGrad.addColorStop(0, '#9a6a32');
+      groundGrad.addColorStop(0.3, '#66441e');
+      groundGrad.addColorStop(1, '#221408');
+    } else if (level.ambientType === 'HOLLOW') {
+      // 幽篁苔径：墨绿湿苔
+      groundGrad.addColorStop(0, '#2a3e2e');
+      groundGrad.addColorStop(0.3, '#1a2a1e');
+      groundGrad.addColorStop(1, '#080f0a');
+    } else if (level.ambientType === 'STARQ') {
+      // 天问星台：玄紫星阶
+      groundGrad.addColorStop(0, '#322a4e');
+      groundGrad.addColorStop(0.3, '#201a34');
+      groundGrad.addColorStop(1, '#0a0714');
+    } else if (level.ambientType === 'RIVULET') {
+      // 溪畔青滩：湿石苔痕
+      groundGrad.addColorStop(0, '#3e5648');
+      groundGrad.addColorStop(0.3, '#263a30');
+      groundGrad.addColorStop(1, '#0c1410');
+    } else if (level.ambientType === 'PEACHDAWN') {
+      // 桃林沃土：花壤绯褐
+      groundGrad.addColorStop(0, '#6a4048');
+      groundGrad.addColorStop(0.3, '#442634');
+      groundGrad.addColorStop(1, '#160a10');
+    } else if (level.ambientType === 'GAPLIGHT') {
+      // 洞前石阶：金尘石阶
+      groundGrad.addColorStop(0, '#6a5a3a');
+      groundGrad.addColorStop(0.3, '#463a24');
+      groundGrad.addColorStop(1, '#16100a');
+    } else if (level.ambientType === 'SMOKEFIELD') {
+      // 阆陌暖田：熟金麦壤
+      groundGrad.addColorStop(0, '#8a6838');
+      groundGrad.addColorStop(0.3, '#5c4424');
+      groundGrad.addColorStop(1, '#1e1408');
+    } else if (level.ambientType === 'EERYPEACH') {
+      // 迷津花壤：桃墨相浸
+      groundGrad.addColorStop(0, '#5a3a4c');
+      groundGrad.addColorStop(0.3, '#38243a');
+      groundGrad.addColorStop(1, '#100a16');
+    } else if (level.ambientType === 'LANTERN') {
+      // 灯市石板：暖光石街
+      groundGrad.addColorStop(0, '#4a4054');
+      groundGrad.addColorStop(0.3, '#322a3e');
+      groundGrad.addColorStop(1, '#120e1a');
+    } else if (level.ambientType === 'QUJIANG') {
+      // 曲江春岸：青草杏岸
+      groundGrad.addColorStop(0, '#5a7858');
+      groundGrad.addColorStop(0.3, '#3a523c');
+      groundGrad.addColorStop(1, '#121c14');
+    } else if (level.ambientType === 'PAGODA') {
+      // 塔下砖庭：墨青砖金
+      groundGrad.addColorStop(0, '#44523e');
+      groundGrad.addColorStop(0.3, '#2c362a');
+      groundGrad.addColorStop(1, '#0e120c');
+    } else if (level.ambientType === 'WINE') {
+      // 酒肆暖砖：琥珀醉地
+      groundGrad.addColorStop(0, '#7a4c28');
+      groundGrad.addColorStop(0.3, '#502e18');
+      groundGrad.addColorStop(1, '#180c06');
+    } else if (level.ambientType === 'CALYX') {
+      // 辉楼金阶：金紫琉璃
+      groundGrad.addColorStop(0, '#6a4860');
+      groundGrad.addColorStop(0.3, '#442c44');
+      groundGrad.addColorStop(1, '#140c1c');
+    } else if (level.ambientType === 'CHIJI') {
+      // 秋江矶头：澄碧湿矶
+      groundGrad.addColorStop(0, '#4e6454');
+      groundGrad.addColorStop(0.3, '#324438');
+      groundGrad.addColorStop(1, '#101812');
+    } else if (level.ambientType === 'MOONRISE') {
+      // 月下矶岸：银辉碎石
+      groundGrad.addColorStop(0, '#42586a');
+      groundGrad.addColorStop(0.3, '#2a3c4c');
+      groundGrad.addColorStop(1, '#0c141d');
+    } else if (level.ambientType === 'XIAO') {
+      // 寒江暗礁：青灰沉江
+      groundGrad.addColorStop(0, '#38484e');
+      groundGrad.addColorStop(0.3, '#243038');
+      groundGrad.addColorStop(1, '#0a0f13');
+    } else if (level.ambientType === 'REEF') {
+      // 芦荡沙洲：芦灰软沙
+      groundGrad.addColorStop(0, '#78705a');
+      groundGrad.addColorStop(0.3, '#4e4838');
+      groundGrad.addColorStop(1, '#18150e');
+    } else if (level.ambientType === 'BOATQ') {
+      // 沧海月台：玄蓝观月台
+      groundGrad.addColorStop(0, '#32465c');
+      groundGrad.addColorStop(0.3, '#1e2e42');
+      groundGrad.addColorStop(1, '#080e18');
+    } else if (level.ambientType === 'SCROLLIN') {
+      // 画中卷面：宣纸淡揭
+      groundGrad.addColorStop(0, '#b0a284');
+      groundGrad.addColorStop(0.3, '#8a7c62');
+      groundGrad.addColorStop(1, '#4a4030');
+    } else if (level.ambientType === 'SHADOW') {
+      // 疏影清浅：苔石浅溪
+      groundGrad.addColorStop(0, '#4a5e48');
+      groundGrad.addColorStop(0.3, '#304030');
+      groundGrad.addColorStop(1, '#101810');
+    } else if (level.ambientType === 'INKSTONE') {
+      // 砚池墨台：玄墨凝池
+      groundGrad.addColorStop(0, '#2c2436');
+      groundGrad.addColorStop(0.3, '#1c1626');
+      groundGrad.addColorStop(1, '#08060e');
+    } else if (level.ambientType === 'SNOWPLUM') {
+      // 雪夜画境：雪覆梅石
+      groundGrad.addColorStop(0, '#8a97a2');
+      groundGrad.addColorStop(0.3, '#5c6874');
+      groundGrad.addColorStop(1, '#20262e');
+    } else if (level.ambientType === 'PUREQI') {
+      // 清气画心：素白玉阶
+      groundGrad.addColorStop(0, '#c8bc9c');
+      groundGrad.addColorStop(0.3, '#a09478');
+      groundGrad.addColorStop(1, '#584e3c');
+    } else if (level.ambientType === 'DAO') {
+      // 原道玄壤：玄黄相侵
+      groundGrad.addColorStop(0, '#6e5c30');
+      groundGrad.addColorStop(0.3, '#483c20');
+      groundGrad.addColorStop(1, '#181408');
+    } else if (level.ambientType === 'SAGE') {
+      // 圣殿金阶：炳耀金砖
+      groundGrad.addColorStop(0, '#8a6c34');
+      groundGrad.addColorStop(0.3, '#5c4824');
+      groundGrad.addColorStop(1, '#1e1608');
+    } else if (level.ambientType === 'CANON') {
+      // 经阁书澜：墨青书石
+      groundGrad.addColorStop(0, '#3a4e50');
+      groundGrad.addColorStop(0.3, '#263638');
+      groundGrad.addColorStop(1, '#0c1214');
+    } else if (level.ambientType === 'MUSE') {
+      // 神思焰境：绯墨焦土
+      groundGrad.addColorStop(0, '#5c3440');
+      groundGrad.addColorStop(0.3, '#3c2028');
+      groundGrad.addColorStop(1, '#120a0c');
+    } else if (level.ambientType === 'ONENESS') {
+      // 归宗圣坛：玄金文台
+      groundGrad.addColorStop(0, '#5c4656');
+      groundGrad.addColorStop(0.3, '#3c2c3e');
+      groundGrad.addColorStop(1, '#120c14');
+    } else {
+      groundGrad.addColorStop(0, '#26262b');
+      groundGrad.addColorStop(0.3, '#1c1c20');
+      groundGrad.addColorStop(1, '#0e0e11');
+    }
+
+  }
+
+
+  // Draw Sky & Parallax Layer
+  private drawSkyAndParallax(cameraX: number, level: LevelConfig, laneMinY: number, gameTime: number) {
+    const ctx = this.ctx;
+
+    // Atmospheric Sky Gradient
+    // —— canvas 分层·静态氛围离屏缓存（第壹阶段）：天空为纯垂直渐变，与相机/时间无关。
+    //    采样为 1px 宽纵条缓存，逐帧 drawImage 横向拉伸铺绘：线性渐变沿 y 插值，
+    //    纵向采样逐像素无损；省去每帧 createLinearGradient 分配与全屏渐变填充重建。
+    //    氛围切换/视口缩放时 key 变化自动重建；离屏构建失败回退本直绘路径。
+    const skyCache = this.ensureStaticGradCache(level, laneMinY);
+    if (skyCache.sky) {
+      ctx.drawImage(
+        skyCache.sky,
+        0,
+        0,
+        1,
+        skyCache.sky.height,
+        0,
+        0,
+        this.width,
+        laneMinY + 40
+      );
+    } else {
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, laneMinY);
+      this.paintSkyStops(skyGrad, level);
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, this.width, laneMinY + 40);
+    }
 
     // Background Image Art（等比 cover 绘制：窄屏/宽屏均不拉伸变形，底部对齐地平线，横向平铺视差）
     // 裁掉原画右侧题字栏（防字样钤印随平铺重复），奇偶块水平镜像令接缝天衣无缝；
@@ -3206,244 +3529,27 @@ export class CanvasRenderer {
   ) {
     const ctx = this.ctx;
 
-    // Perspective depth gradient across the walkable lane
-    const groundGrad = ctx.createLinearGradient(0, laneMinY, 0, this.height);
-    if (level.ambientType === 'SNOW') {
-      groundGrad.addColorStop(0, '#cbd5e1');
-      groundGrad.addColorStop(0.3, '#94a3b8');
-      groundGrad.addColorStop(1, '#334155');
-    } else if (level.ambientType === 'BAMBOO') {
-      groundGrad.addColorStop(0, '#334835');
-      groundGrad.addColorStop(0.3, '#213023');
-      groundGrad.addColorStop(1, '#111912');
-    } else if (level.ambientType === 'MIST') {
-      // 烟雨青灰石板
-      groundGrad.addColorStop(0, '#6b7678');
-      groundGrad.addColorStop(0.3, '#455154');
-      groundGrad.addColorStop(1, '#1c2426');
-    } else if (level.ambientType === 'AUTUMN') {
-      // 霜枫赤褐渡口
-      groundGrad.addColorStop(0, '#5e3220');
-      groundGrad.addColorStop(0.3, '#3d2015');
-      groundGrad.addColorStop(1, '#170c08');
-    } else if (level.ambientType === 'STORM') {
-      // 雷雨溃溡深蓝黑
-      groundGrad.addColorStop(0, '#2b3540');
-      groundGrad.addColorStop(0.3, '#1c242d');
-      groundGrad.addColorStop(1, '#0b0f14');
-    } else if (level.ambientType === 'VOID') {
-      // 墨渊紫黑
-      groundGrad.addColorStop(0, '#241331');
-      groundGrad.addColorStop(0.3, '#160b22');
-      groundGrad.addColorStop(1, '#0a0512');
-    } else if (level.ambientType === 'LOTUS') {
-      // 溪亭暮岸：玫褐暮色湿地
-      groundGrad.addColorStop(0, '#4a3040');
-      groundGrad.addColorStop(0.3, '#2c1e2c');
-      groundGrad.addColorStop(1, '#140d16');
-    } else if (level.ambientType === 'GOOSE') {
-      // 西楼月渡：月照青蓝石阶
-      groundGrad.addColorStop(0, '#333a52');
-      groundGrad.addColorStop(0.3, '#20263a');
-      groundGrad.addColorStop(1, '#0c0f1a');
-    } else if (level.ambientType === 'CHRYS') {
-      // 东篱菊圃：琥珀暗金
-      groundGrad.addColorStop(0, '#4e381a');
-      groundGrad.addColorStop(0.3, '#30220f');
-      groundGrad.addColorStop(1, '#140d06');
-    } else if (level.ambientType === 'GLOOM') {
-      // 梧桐暮雨：湿冷青灰
-      groundGrad.addColorStop(0, '#333f38');
-      groundGrad.addColorStop(0.3, '#1f2823');
-      groundGrad.addColorStop(1, '#0b100d');
-    } else if (level.ambientType === 'STRING') {
-      // 琴台绝响：寒墨玄青
-      groundGrad.addColorStop(0, '#1c242e');
-      groundGrad.addColorStop(0.3, '#10161d');
-      groundGrad.addColorStop(1, '#06090d');
-    } else if (level.ambientType === 'DESERT') {
-      // 大漠沙丘：金黄渐暗
-      groundGrad.addColorStop(0, '#a87838');
-      groundGrad.addColorStop(0.3, '#6e4e22');
-      groundGrad.addColorStop(1, '#241608');
-    } else if (level.ambientType === 'BEACON') {
-      // 烽燧焦土：赤褐灼痕
-      groundGrad.addColorStop(0, '#5c3418');
-      groundGrad.addColorStop(0.3, '#38200e');
-      groundGrad.addColorStop(1, '#140a05');
-    } else if (level.ambientType === 'WITHER') {
-      // 无春枯柳：灰绿枯土
-      groundGrad.addColorStop(0, '#565030');
-      groundGrad.addColorStop(0.3, '#34301c');
-      groundGrad.addColorStop(1, '#12100a');
-    } else if (level.ambientType === 'IRON') {
-      // 碑林冻土：铁灰霜夜
-      groundGrad.addColorStop(0, '#33404e');
-      groundGrad.addColorStop(0.3, '#202a36');
-      groundGrad.addColorStop(1, '#0a0e14');
-    } else if (level.ambientType === 'SIEGE') {
-      // 攻城战场：焦黑染血
-      groundGrad.addColorStop(0, '#2e2620');
-      groundGrad.addColorStop(0.3, '#1c1610');
-      groundGrad.addColorStop(1, '#0a0705');
-    } else if (level.ambientType === 'ORCHID') {
-      // 湘水汀洲：紫青湿沙
-      groundGrad.addColorStop(0, '#4c4a66');
-      groundGrad.addColorStop(0.3, '#302e46');
-      groundGrad.addColorStop(1, '#12101c');
-    } else if (level.ambientType === 'CLOUDMARCH') {
-      // 云阶：玄白云台
-      groundGrad.addColorStop(0, '#6a6480');
-      groundGrad.addColorStop(0.3, '#46405e');
-      groundGrad.addColorStop(1, '#181528');
-    } else if (level.ambientType === 'MORN') {
-      // 扶桑渡口：赤金沙滩
-      groundGrad.addColorStop(0, '#9a6a32');
-      groundGrad.addColorStop(0.3, '#66441e');
-      groundGrad.addColorStop(1, '#221408');
-    } else if (level.ambientType === 'HOLLOW') {
-      // 幽篁苔径：墨绿湿苔
-      groundGrad.addColorStop(0, '#2a3e2e');
-      groundGrad.addColorStop(0.3, '#1a2a1e');
-      groundGrad.addColorStop(1, '#080f0a');
-    } else if (level.ambientType === 'STARQ') {
-      // 天问星台：玄紫星阶
-      groundGrad.addColorStop(0, '#322a4e');
-      groundGrad.addColorStop(0.3, '#201a34');
-      groundGrad.addColorStop(1, '#0a0714');
-    } else if (level.ambientType === 'RIVULET') {
-      // 溪畔青滩：湿石苔痕
-      groundGrad.addColorStop(0, '#3e5648');
-      groundGrad.addColorStop(0.3, '#263a30');
-      groundGrad.addColorStop(1, '#0c1410');
-    } else if (level.ambientType === 'PEACHDAWN') {
-      // 桃林沃土：花壤绯褐
-      groundGrad.addColorStop(0, '#6a4048');
-      groundGrad.addColorStop(0.3, '#442634');
-      groundGrad.addColorStop(1, '#160a10');
-    } else if (level.ambientType === 'GAPLIGHT') {
-      // 洞前石阶：金尘石阶
-      groundGrad.addColorStop(0, '#6a5a3a');
-      groundGrad.addColorStop(0.3, '#463a24');
-      groundGrad.addColorStop(1, '#16100a');
-    } else if (level.ambientType === 'SMOKEFIELD') {
-      // 阆陌暖田：熟金麦壤
-      groundGrad.addColorStop(0, '#8a6838');
-      groundGrad.addColorStop(0.3, '#5c4424');
-      groundGrad.addColorStop(1, '#1e1408');
-    } else if (level.ambientType === 'EERYPEACH') {
-      // 迷津花壤：桃墨相浸
-      groundGrad.addColorStop(0, '#5a3a4c');
-      groundGrad.addColorStop(0.3, '#38243a');
-      groundGrad.addColorStop(1, '#100a16');
-    } else if (level.ambientType === 'LANTERN') {
-      // 灯市石板：暖光石街
-      groundGrad.addColorStop(0, '#4a4054');
-      groundGrad.addColorStop(0.3, '#322a3e');
-      groundGrad.addColorStop(1, '#120e1a');
-    } else if (level.ambientType === 'QUJIANG') {
-      // 曲江春岸：青草杏岸
-      groundGrad.addColorStop(0, '#5a7858');
-      groundGrad.addColorStop(0.3, '#3a523c');
-      groundGrad.addColorStop(1, '#121c14');
-    } else if (level.ambientType === 'PAGODA') {
-      // 塔下砖庭：墨青砖金
-      groundGrad.addColorStop(0, '#44523e');
-      groundGrad.addColorStop(0.3, '#2c362a');
-      groundGrad.addColorStop(1, '#0e120c');
-    } else if (level.ambientType === 'WINE') {
-      // 酒肆暖砖：琥珀醉地
-      groundGrad.addColorStop(0, '#7a4c28');
-      groundGrad.addColorStop(0.3, '#502e18');
-      groundGrad.addColorStop(1, '#180c06');
-    } else if (level.ambientType === 'CALYX') {
-      // 辉楼金阶：金紫琉璃
-      groundGrad.addColorStop(0, '#6a4860');
-      groundGrad.addColorStop(0.3, '#442c44');
-      groundGrad.addColorStop(1, '#140c1c');
-    } else if (level.ambientType === 'CHIJI') {
-      // 秋江矶头：澄碧湿矶
-      groundGrad.addColorStop(0, '#4e6454');
-      groundGrad.addColorStop(0.3, '#324438');
-      groundGrad.addColorStop(1, '#101812');
-    } else if (level.ambientType === 'MOONRISE') {
-      // 月下矶岸：银辉碎石
-      groundGrad.addColorStop(0, '#42586a');
-      groundGrad.addColorStop(0.3, '#2a3c4c');
-      groundGrad.addColorStop(1, '#0c141d');
-    } else if (level.ambientType === 'XIAO') {
-      // 寒江暗礁：青灰沉江
-      groundGrad.addColorStop(0, '#38484e');
-      groundGrad.addColorStop(0.3, '#243038');
-      groundGrad.addColorStop(1, '#0a0f13');
-    } else if (level.ambientType === 'REEF') {
-      // 芦荡沙洲：芦灰软沙
-      groundGrad.addColorStop(0, '#78705a');
-      groundGrad.addColorStop(0.3, '#4e4838');
-      groundGrad.addColorStop(1, '#18150e');
-    } else if (level.ambientType === 'BOATQ') {
-      // 沧海月台：玄蓝观月台
-      groundGrad.addColorStop(0, '#32465c');
-      groundGrad.addColorStop(0.3, '#1e2e42');
-      groundGrad.addColorStop(1, '#080e18');
-    } else if (level.ambientType === 'SCROLLIN') {
-      // 画中卷面：宣纸淡揭
-      groundGrad.addColorStop(0, '#b0a284');
-      groundGrad.addColorStop(0.3, '#8a7c62');
-      groundGrad.addColorStop(1, '#4a4030');
-    } else if (level.ambientType === 'SHADOW') {
-      // 疏影清浅：苔石浅溪
-      groundGrad.addColorStop(0, '#4a5e48');
-      groundGrad.addColorStop(0.3, '#304030');
-      groundGrad.addColorStop(1, '#101810');
-    } else if (level.ambientType === 'INKSTONE') {
-      // 砚池墨台：玄墨凝池
-      groundGrad.addColorStop(0, '#2c2436');
-      groundGrad.addColorStop(0.3, '#1c1626');
-      groundGrad.addColorStop(1, '#08060e');
-    } else if (level.ambientType === 'SNOWPLUM') {
-      // 雪夜画境：雪覆梅石
-      groundGrad.addColorStop(0, '#8a97a2');
-      groundGrad.addColorStop(0.3, '#5c6874');
-      groundGrad.addColorStop(1, '#20262e');
-    } else if (level.ambientType === 'PUREQI') {
-      // 清气画心：素白玉阶
-      groundGrad.addColorStop(0, '#c8bc9c');
-      groundGrad.addColorStop(0.3, '#a09478');
-      groundGrad.addColorStop(1, '#584e3c');
-    } else if (level.ambientType === 'DAO') {
-      // 原道玄壤：玄黄相侵
-      groundGrad.addColorStop(0, '#6e5c30');
-      groundGrad.addColorStop(0.3, '#483c20');
-      groundGrad.addColorStop(1, '#181408');
-    } else if (level.ambientType === 'SAGE') {
-      // 圣殿金阶：炳耀金砖
-      groundGrad.addColorStop(0, '#8a6c34');
-      groundGrad.addColorStop(0.3, '#5c4824');
-      groundGrad.addColorStop(1, '#1e1608');
-    } else if (level.ambientType === 'CANON') {
-      // 经阁书澜：墨青书石
-      groundGrad.addColorStop(0, '#3a4e50');
-      groundGrad.addColorStop(0.3, '#263638');
-      groundGrad.addColorStop(1, '#0c1214');
-    } else if (level.ambientType === 'MUSE') {
-      // 神思焰境：绯墨焦土
-      groundGrad.addColorStop(0, '#5c3440');
-      groundGrad.addColorStop(0.3, '#3c2028');
-      groundGrad.addColorStop(1, '#120a0c');
-    } else if (level.ambientType === 'ONENESS') {
-      // 归宗圣坛：玄金文台
-      groundGrad.addColorStop(0, '#5c4656');
-      groundGrad.addColorStop(0.3, '#3c2c3e');
-      groundGrad.addColorStop(1, '#120c14');
+    // —— canvas 分层·静态氛围离屏缓存（第壹阶段）：地面为纯垂直渐变（与相机/时间无关），
+    //    优先取 1px 纵条横向拉伸铺绘；缓存未命中（首帧/氛围切换/视口缩放）时直绘。
+    const groundCache = this.ensureStaticGradCache(level, laneMinY);
+    if (groundCache.ground) {
+      ctx.drawImage(
+        groundCache.ground,
+        0,
+        0,
+        1,
+        groundCache.ground.height,
+        0,
+        laneMinY,
+        this.width,
+        this.height - laneMinY
+      );
     } else {
-      groundGrad.addColorStop(0, '#26262b');
-      groundGrad.addColorStop(0.3, '#1c1c20');
-      groundGrad.addColorStop(1, '#0e0e11');
+      const groundGrad = ctx.createLinearGradient(0, laneMinY, 0, this.height);
+      this.paintGroundStops(groundGrad, level);
+      ctx.fillStyle = groundGrad;
+      ctx.fillRect(0, laneMinY, this.width, this.height - laneMinY);
     }
-
-    ctx.fillStyle = groundGrad;
-    ctx.fillRect(0, laneMinY, this.width, this.height - laneMinY);
 
     // Traditional Calligraphy Ink Horizon Line
     ctx.save();
