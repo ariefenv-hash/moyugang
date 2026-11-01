@@ -141,6 +141,8 @@ interface BattleViewProps {
   onExit: () => void;
   onRestart: () => void;
   onTutorialDone: () => void;
+  /** 每日试炼：开局墨灵祝福（战斗开场静默生效，一条汇总 banner） */
+  initialBlessings?: BlessingDef[];
 }
 
 export const BattleView: React.FC<BattleViewProps> = ({
@@ -151,6 +153,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
   onExit,
   onRestart,
   onTutorialDone,
+  initialBlessings,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   /** 活动指针隔离：只处理起笔那根指针，第二指/掌缘不毁点集 */
@@ -748,6 +751,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
       const bossBase = isBoss && levelRef.current.boss ? levelRef.current.boss : null;
       // 祝福加成：仅友军享受剑气纵横（攻击）/墨甲如山（生命）乘数
       const blMult = blessingMultsRef.current;
+      // 每日试炼词缀：敌军攻/血系数（非每日关卡恒为 1）
+      const lvEnemyHp = isEnemy ? levelRef.current.enemyHpMult ?? 1 : 1;
+      const lvEnemyAtk = isEnemy ? levelRef.current.enemyAtkMult ?? 1 : 1;
       const newUnit: UnitInstance = {
         id: `unit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         type,
@@ -757,14 +763,14 @@ export const BattleView: React.FC<BattleViewProps> = ({
         altitudeZ: 0,
         vz: 0,
         hp: bossBase
-          ? Math.round(bossBase.hp * statScale)
-          : Math.round(config.maxHp * (1 + upgradeBonus) * statScale * (!isEnemy ? blMult.hp : 1)),
+          ? Math.round(bossBase.hp * statScale * lvEnemyHp)
+          : Math.round(config.maxHp * (1 + upgradeBonus) * statScale * lvEnemyHp * (!isEnemy ? blMult.hp : 1)),
         maxHp: bossBase
-          ? Math.round(bossBase.hp * statScale)
-          : Math.round(config.maxHp * (1 + upgradeBonus) * statScale * (!isEnemy ? blMult.hp : 1)),
+          ? Math.round(bossBase.hp * statScale * lvEnemyHp)
+          : Math.round(config.maxHp * (1 + upgradeBonus) * statScale * lvEnemyHp * (!isEnemy ? blMult.hp : 1)),
         attack: bossBase
-          ? Math.round(bossBase.attack * statScale)
-          : Math.round(config.attack * (1 + upgradeBonus) * statScale * (!isEnemy ? blMult.attack : 1)),
+          ? Math.round(bossBase.attack * statScale * lvEnemyAtk)
+          : Math.round(config.attack * (1 + upgradeBonus) * statScale * lvEnemyAtk * (!isEnemy ? blMult.attack : 1)),
         attackRange: config.attackRange,
         attackCooldown: 0,
         speed: bossBase ? bossBase.speed : config.speed,
@@ -1357,7 +1363,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     sound.playPluck(659.25, 0.5);
   };
 
-  const applyBlessing = (b: BlessingDef) => {
+  const applyBlessing = (b: BlessingDef, silent: boolean = false) => {
     activeBlessingsRef.current[b.id] = (activeBlessingsRef.current[b.id] || 0) + 1;
     const M = blessingMultsRef.current;
     const hero = heroRef.current;
@@ -1409,12 +1415,27 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
 
     setOwnedBlessings({ ...activeBlessingsRef.current });
+    if (silent) return; // 每日试炼开局赐福：静默生效，由汇总 banner 统一交代
     triggerSealStamp(hero.x, hero.y - 66, '祝');
     sound.playVictory();
     triggerShake(6, 0.3);
     setStageBanner(`墨灵祝福 · ${b.name}（${b.description}）`);
     safeTimeout(() => setStageBanner(null), 3000);
   };
+
+  // 每日试炼：开局墨灵祝福静默生效（blessingMults 系数即时生效，
+  // 后续招募/波次友军全部继承加成；汇总一条 banner 统一交代）
+  const initialBlessingsAppliedRef = useRef(false);
+  useEffect(() => {
+    if (initialBlessingsAppliedRef.current) return;
+    initialBlessingsAppliedRef.current = true;
+    if (!initialBlessings || initialBlessings.length === 0) return;
+    const names = initialBlessings.map((b) => b.name).join(' · ');
+    initialBlessings.forEach((b) => applyBlessing(b, true));
+    setStageBanner(`今日墨灵庇佑 · ${names}`);
+    safeTimeout(() => setStageBanner(null), 4200);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Hero Attack Action (3-hit Combo or Aerial Plunge)
   const triggerHeroAttack = (targetWorldX?: number, targetWorldY?: number) => {
@@ -2610,6 +2631,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
         isEnemy: u.isEnemy,
         type: u.type as string,
         hp: Math.round(u.hp),
+        maxHp: Math.round(u.maxHp),
+        attack: u.attack,
         shieldHp: Math.round(u.shieldHp),
         state: u.state as string,
       }));

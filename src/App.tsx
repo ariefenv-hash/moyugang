@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { GameMode, LevelConfig, PlayerProgress, BattleResultStats, AchievementDef } from './types/game';
-import { CHAPTER_LEVELS, ENDLESS_LEVEL, ACHIEVEMENTS } from './data/gameData';
+import { CHAPTER_LEVELS, ENDLESS_LEVEL, ACHIEVEMENTS, BLESSINGS } from './data/gameData';
+import {
+  DAILY_LEVEL_ID,
+  DAILY_REWARD_JADE,
+  todayKey,
+} from './data/dailyTrial';
 import {
   MAX_STORY_LEVEL_ID,
   getChapterByLevelId,
@@ -166,6 +171,34 @@ export default function App() {
     const level = currentLevel;
     const isFirstClear = !progress.completedLevels.includes(level.id);
 
+    // ===== 每日试炼：独立结算（不入主线解锁链，首胜独享灵玉赏格） =====
+    if (level.id === DAILY_LEVEL_ID) {
+      const today = todayKey();
+      const firstWinToday = progress.dailyDone !== today;
+      const yesterday = todayKey(new Date(Date.now() - 86400000));
+      const nextStreak = firstWinToday
+        ? progress.dailyDone === yesterday
+          ? (progress.dailyStreak ?? 0) + 1
+          : 1
+        : (progress.dailyStreak ?? 0);
+      const bonusJade = firstWinToday ? DAILY_REWARD_JADE + (nextStreak - 1) * 30 : 0;
+
+      setProgress((prev) => ({
+        ...prev,
+        jadeSparks: prev.jadeSparks + bonusJade,
+        dailyDone: firstWinToday ? today : prev.dailyDone,
+        dailyStreak: nextStreak,
+        totalKills: prev.totalKills + stats.kills,
+      }));
+      setBattleResult({
+        status: 'VICTORY',
+        stats: bonusJade > 0 ? { ...stats, jadeEarned: stats.jadeEarned + bonusJade } : stats,
+        newAchievements: [],
+        isEndless: false,
+      });
+      return;
+    }
+
     // 先本地合并出"本战之后"的进度快照：成就判定必须包含本折通关，
     // 否则首次通关终折时章成就（漱玉绝响等）会因读到过期 state 而漏发
     const nextUnlocked = Math.max(
@@ -268,6 +301,7 @@ export default function App() {
   /** 终折通关时展示所属大章的尾声卷宗 */
   const victoryEpilogue = (() => {
     if (!battleResult || battleResult.status !== 'VICTORY' || currentLevel.endless) return undefined;
+    if (currentLevel.id === DAILY_LEVEL_ID) return undefined;
     const chapter = getChapterByLevelId(currentLevel.id);
     if (!chapter || chapter.status !== 'RELEASED') return undefined;
     const levels = chapter.levels ?? [];
@@ -277,7 +311,7 @@ export default function App() {
 
   /** 下一折按钮文案：跨章时提示「启下一章」 */
   const nextLevelLabel = (() => {
-    if (currentLevel.endless) return '下一折';
+    if (currentLevel.endless || currentLevel.id === DAILY_LEVEL_ID) return '下一折';
     const curCh = getChapterByLevelId(currentLevel.id);
     const nextLevel = CHAPTER_LEVELS.find((l) => l.id === currentLevel.id + 1);
     if (!curCh || !nextLevel) return '下一折';
@@ -554,6 +588,13 @@ export default function App() {
           onTutorialDone={() =>
             setProgress((prev) => ({ ...prev, tutorialDone: true }))
           }
+          initialBlessings={
+            currentLevel.dailyBlessings?.length
+              ? (currentLevel.dailyBlessings
+                  .map((id) => BLESSINGS.find((b) => b.id === id))
+                  .filter((b): b is NonNullable<typeof b> => !!b))
+              : undefined
+          }
         />
       )}
 
@@ -574,7 +615,11 @@ export default function App() {
           endlessBest={progress.endlessBest}
           newAchievements={battleResult.newAchievements}
           onNextLevel={
-            !currentLevel.endless && currentLevel.id < MAX_STORY_LEVEL_ID ? handleNextLevel : undefined
+            !currentLevel.endless &&
+            currentLevel.id !== DAILY_LEVEL_ID &&
+            currentLevel.id < MAX_STORY_LEVEL_ID
+              ? handleNextLevel
+              : undefined
           }
           nextLevelLabel={nextLevelLabel}
           onRetry={() => handleStartBattle(currentLevel)}

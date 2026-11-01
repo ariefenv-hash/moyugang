@@ -288,6 +288,14 @@ export interface LevelConfig {
   unlockedUnit?: UnitType;
   /** 无尽试炼模式：波次无限，敌軍逐波变强，坚守越久奖励越丰 */
   endless?: boolean;
+  /** 每日试炼：敌军攻击系数（默认 1） */
+  enemyAtkMult?: number;
+  /** 每日试炼：敌军气血系数（默认 1） */
+  enemyHpMult?: number;
+  /** 每日试炼：异象词缀摘要（展示用） */
+  dailyModifiers?: { id: string; name: string; description: string }[];
+  /** 每日试炼：开局墨灵祝福 id 列表（战斗开场自动赐福） */
+  dailyBlessings?: string[];
 }
 
 /* ============================================================
@@ -369,6 +377,10 @@ export interface PlayerProgress {
   tutorialDone: boolean;
   /** 累计击杀数（成就统计用） */
   totalKills: number;
+  /** 每日试炼：最后完成首胜的墨历日（YYYY-MM-DD） */
+  dailyDone?: string;
+  /** 每日试炼：问战连捷天数（昨日完成则延续，否则重置） */
+  dailyStreak?: number;
 }
 
 /** 成就定义 */

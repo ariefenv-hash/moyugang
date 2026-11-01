@@ -3,6 +3,12 @@ import { motion } from 'motion/react';
 import { LevelConfig, PlayerProgress } from '../types/game';
 import { ENDLESS_LEVEL } from '../data/gameData';
 import {
+  DAILY_LEVEL_ID,
+  DAILY_REWARD_JADE,
+  getDailyTrialInfo,
+  getDailyTrialLevel,
+} from '../data/dailyTrial';
+import {
   STORY_CHAPTERS,
   CN_NUMS,
   MAX_STORY_LEVEL_ID,
@@ -20,6 +26,7 @@ import {
   Infinity as InfinityIcon,
   ScrollText,
   Hourglass,
+  CalendarHeart,
 } from 'lucide-react';
 
 interface ChapterSelectProps {
@@ -54,6 +61,12 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
   onMarkStorySeen,
 }) => {
   const endlessUnlocked = progress.completedLevels.includes(5);
+  // 每日试炼：任意一折通关即可开卷（同日答卷恒定，首胜独享灵玉）
+  const dailyUnlocked = progress.completedLevels.length >= 1;
+  const dailyInfo = useMemo(() => getDailyTrialInfo(), []);
+  const dailyLevel = useMemo(() => getDailyTrialLevel(), []);
+  const dailyDoneToday = progress.dailyDone === dailyInfo.dateStr;
+  const dailyStreak = progress.dailyStreak ?? 0;
 
   // 默认落在「当前进度」所在的大章
   const defaultChapterId = useMemo(() => {
@@ -139,6 +152,88 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
 
       {/* Main Content */}
       <main className="relative z-10 flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 flex flex-col">
+        {/* ===== 每日试炼通栏：墨历问战（同日答卷恒定，首胜独享灵玉） ===== */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className={`relative mb-8 p-5 border transition-colors duration-200 overflow-hidden ${
+            dailyUnlocked
+              ? 'panel-paper border-cinnabar/45 shadow-[0_10px_30px_-14px_rgba(150,40,30,0.4)]'
+              : 'panel-paper opacity-60'
+          }`}
+        >
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex items-center gap-3 shrink-0 md:w-56">
+              <span className="seal w-10 h-10 flex items-center justify-center shrink-0" aria-hidden="true">
+                <CalendarHeart className="w-5 h-5" />
+              </span>
+              <div>
+                <p className="text-[10px] font-serif tracking-widest text-cinnabar">墨历问战 · {dailyInfo.dateStr}</p>
+                <h3 className="text-lg font-serif font-black tracking-wider text-ink-strong">每日试炼</h3>
+              </div>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              {dailyUnlocked ? (
+                <>
+                  <p className="text-xs text-ink-mid font-serif leading-relaxed">
+                    今日词境「{dailyInfo.sourceTitle}」
+                    <span className="mx-1.5 text-cinnabar/60">·</span>
+                    词缀
+                    {dailyInfo.modifiers.map((m) => (
+                      <span key={m.id} className="inline-flex items-baseline mr-2 ml-1">
+                        <span className="font-bold text-ink-strong">{m.name}</span>
+                        <span className="text-ink-light">（{m.description}）</span>
+                      </span>
+                    ))}
+                  </p>
+                  <p className="text-[11px] text-ink-mid font-serif mt-1 truncate">
+                    开局赐福：{dailyInfo.blessings.map((b) => b.name).join(' · ')}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-ink-mid font-serif leading-relaxed">
+                  通关任意一折后，墨历问战将为你展开——每日一份新答卷，词境、词缀、开局祝福皆随墨历翻页。
+                </p>
+              )}
+            </div>
+
+            <div className="shrink-0 flex items-center gap-3 md:flex-col md:items-end md:gap-1.5">
+              {dailyUnlocked && (
+                <>
+                  {dailyStreak > 0 && (
+                    <span className="text-[10px] font-serif text-cinnabar whitespace-nowrap">
+                      问战连捷 <span className="font-mono font-bold">{dailyStreak}</span> 天
+                    </span>
+                  )}
+                  <span className="text-[10px] text-ink-light whitespace-nowrap">
+                    首胜 +<span className="font-mono">{DAILY_REWARD_JADE}</span> 灵玉
+                  </span>
+                </>
+              )}
+              {dailyUnlocked ? (
+                <button
+                  onClick={() => onSelectLevel(dailyLevel)}
+                  className={`btn-ink py-2.5 px-5 text-xs font-serif tracking-widest flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    dailyDoneToday ? 'opacity-75' : ''
+                  }`}
+                >
+                  <Swords className="w-3.5 h-3.5" />
+                  {dailyDoneToday ? '今日已胜 · 再战' : '接卷问战'}
+                </button>
+              ) : (
+                <div className="py-2.5 px-5 text-xs text-center text-ink-light panel-paper-deep font-serif tracking-widest">
+                  <Lock className="w-3 h-3 inline mr-1 -mt-0.5" />
+                  先破一折
+                </div>
+              )}
+            </div>
+          </div>
+          {/* 关卡数据隐藏载体：接卷问战即开战（id={DAILY_LEVEL_ID} 与主线/无尽互不干扰） */}
+          <span className="hidden" data-daily-level-id={DAILY_LEVEL_ID} aria-hidden="true" />
+        </motion.div>
+
         {/* ===== 十章册页章签（主线总纲导航） ===== */}
         <div className="flex gap-2 overflow-x-auto pb-2.5 mb-8 -mx-1 px-1 [scrollbar-width:thin]">
           {STORY_CHAPTERS.map((c) => {
