@@ -294,3 +294,21 @@ body,
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* ===== 战斗 HUD 高分屏细描边（Task 32） =====
+   1px CSS 描边在非整数 DPR（1.25/1.5/2.625 缩放屏）会落在半设备像素上，
+   抗锯齿后发虚；整数 2x 屏则显得粗重。BattleView 已将真实 DPR 写入
+   :root --dpr，此处按 1px/dpr 折算发丝线宽度，使描边精确对齐设备像素网格：
+   - dpr=1 → 1px（维持原状）
+   - dpr=1.5 → 0.67px ≈ 1 设备像素
+   - dpr=2 → 0.5px = 1 设备像素（工笔发丝线）
+   - dpr≥3 → 0.5px 下限 ≈ 1.5 设备像素
+   仅命中显式携带 border 全边类的元素；border-b/border-t 等单边线与
+   border-2/border-4 粗描边不受影响。calc 内联在 border-width 中，老旧内核
+   不支持时整条声明回退 Tailwind 的 1px，无破坏性。 */
+:root {
+  --dpr: 1;
+}
+.hud-crisp [class~='border'] {
+  border-width: max(0.5px, calc(1px / var(--dpr)));
+}

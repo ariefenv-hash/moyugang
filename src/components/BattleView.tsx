@@ -673,6 +673,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
       const parent = canvas.parentElement;
       if (!parent) return;
       const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+      // HUD 细描边用真实 DPR（不截断）：CSS 侧按 1px/dpr 折算发丝线宽度，
+      // 使 1px 描边在高分屏精确对齐设备像素网格（消除半像素发虚）
+      const rawDpr = window.devicePixelRatio || 1;
+      document.documentElement.style.setProperty('--dpr', String(Math.round(rawDpr * 100) / 100));
       const logicalW = parent.clientWidth;
       const logicalH = parent.clientHeight;
       if (logicalW <= 0 || logicalH <= 0) return; // 布局未就绪时跳过，防脏尺寸入侵
@@ -3764,7 +3768,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
   return (
     <div
-      className="relative w-full h-screen bg-stone-950 select-none overflow-hidden font-sans"
+      className="hud-crisp relative w-full h-screen bg-stone-950 select-none overflow-hidden font-sans"
       style={{ height: '100dvh' }}
     >
       {/* Top Bar Header */}
