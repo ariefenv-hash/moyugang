@@ -292,9 +292,9 @@ export interface LevelConfig {
   enemyAtkMult?: number;
   /** 每日试炼：敌军气血系数（默认 1） */
   enemyHpMult?: number;
-  /** 每日试炼：异象词缀摘要（展示用） */
+  /** 每日试炼：异象词缀摘要（展示用；卷面试炼通用字段，周试炼同构复用） */
   dailyModifiers?: { id: string; name: string; description: string }[];
-  /** 每日试炼：开局墨灵祝福 id 列表（战斗开场自动赐福） */
+  /** 每日试炼：开局墨灵祝福 id 列表（战斗开场自动赐福；卷面试炼通用字段，周试炼同构复用） */
   dailyBlessings?: string[];
 }
 
@@ -381,6 +381,8 @@ export interface PlayerProgress {
   dailyDone?: string;
   /** 每日试炼：问战连捷天数（昨日完成则延续，否则重置） */
   dailyStreak?: number;
+  /** 周试炼：最后完成首胜的周键（本周一日期 YYYY-MM-DD，周一零点换卷） */
+  weeklyDone?: string;
 }
 
 /** 成就定义 */

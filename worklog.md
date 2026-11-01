@@ -736,3 +736,21 @@ Work Log:
 Stage Summary:
 - 无尽长夜新增十波一演出的鎏金里程碑节奏感，与每五波玄墨霸主压阵形成「小庆/大战」交替演出层
 - 修改：src/components/BattleView.tsx · scripts/verify_wave_milestone.py（新增）· worklog.md
+
+---
+Task ID: 38
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查模式第二轮）
+Task: 周试炼·周魁问锋——按周更替的首领折高难卷（与每日试炼互补）
+
+Work Log:
+- 待办池认领（巡查第二轮「周试炼（按周更替的固定高难卷，与每日互补）」项；为避免与并行实例撞车，跳过池首蚀文咒师大项，认领第三项）
+- 新增 src/data/weeklyTrial.ts：周键播种（本周一日期串，周日归前一周周一，ISO 周一为一周之始）；周魁词境专取十章首领折（与每日专取普通折形成互补），三条专属凶险周词缀（墨煞蚀锋/千钧铁幕/砚海冰封/烽火连宵/孤城万仞/山雨欲来，全负向高难语义）+ 两道开局祝福；WEEKLY_LEVEL_ID=997（避开主线 1-50/每日 998/无尽 999），首胜赏格 420 灵玉
+- 复用卷面试炼管线：dailyBlessings/dailyModifiers 通用字段、mulberry32/dateSeed/DailyTrialConfig 自 dailyTrial 导出共用——BattleView 零改动（词缀烘焙/开局祝福/系数管线全数自动生效）
+- App.tsx：handleVictory 新增周试炼独立结算分支（不入主线解锁链，本周首胜 weeklyDone 记周键）；types/game.ts PlayerProgress 增 weeklyDone? 可选字段（旧档 spread 自然迁移）
+- ChapterSelect.tsx：每日通栏之下新增周试炼通栏（鎏金 tenghuang 色系 + Crown 印章，与每日朱砂色系区分）；解锁门槛「破过首领折」（第一章终折，高于每日的任意一折）；锁定文案「先破一魁」/ 解锁后「应召问锋」/ 首胜后「本周已魁 · 再战」；data-weekly-level-id 隐藏载体供无头验证
+- 新增 scripts/verify_weekly_trial.mjs（17 项：同周恒定/跨周变化/首领折词境合法性/专属词缀池/烘焙系数/周键周一·周日·周六语义）与 scripts/verify_weekly_trial_e2e.py（15 项：锁定态/解锁态/应召开战/HUD 题名/两祝福静默生效/SWORD 系数断言 26×1.344≈35·240×1.12≈269/零 JS 异常）
+- 全量回归：周试炼数据层 17/17 · 端到端 15/15 · 每日数据层 10/10 · 每日端到端 8/8 · smoke 24/24；tsc 零错误 · vite build 通过（PWA 272 entries）
+
+Stage Summary:
+- 卷面试炼体系补全「日/周」双频节奏：每日轻快普折问战，周试炼首领折重锋问战；同一套词缀-祝福-烘焙管线零新增战斗侧代码
+- 修改：src/data/weeklyTrial.ts（新增）· src/data/dailyTrial.ts（导出共用工具，行为无变化）· src/types/game.ts（weeklyDone 字段）· src/App.tsx（周试炼结算分支）· src/components/ChapterSelect.tsx（周试炼通栏）· scripts/verify_weekly_trial.mjs（新增）· scripts/verify_weekly_trial_e2e.py（新增）· worklog.md

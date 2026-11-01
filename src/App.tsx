@@ -8,6 +8,11 @@ import {
   todayKey,
 } from './data/dailyTrial';
 import {
+  WEEKLY_LEVEL_ID,
+  WEEKLY_REWARD_JADE,
+  weekKey,
+} from './data/weeklyTrial';
+import {
   MAX_STORY_LEVEL_ID,
   getChapterByLevelId,
   getChapterFoldPosition,
@@ -190,6 +195,27 @@ export default function App() {
         jadeSparks: prev.jadeSparks + bonusJade,
         dailyDone: firstWinToday ? today : prev.dailyDone,
         dailyStreak: nextStreak,
+        totalKills: prev.totalKills + stats.kills,
+      }));
+      setBattleResult({
+        status: 'VICTORY',
+        stats: bonusJade > 0 ? { ...stats, jadeEarned: stats.jadeEarned + bonusJade } : stats,
+        newAchievements: [],
+        isEndless: false,
+      });
+      return;
+    }
+
+    // ===== 周试炼：独立结算（不入主线解锁链，本周首胜独享灵玉赏格） =====
+    if (level.id === WEEKLY_LEVEL_ID) {
+      const wk = weekKey();
+      const firstWinWeek = progress.weeklyDone !== wk;
+      const bonusJade = firstWinWeek ? WEEKLY_REWARD_JADE : 0;
+
+      setProgress((prev) => ({
+        ...prev,
+        jadeSparks: prev.jadeSparks + bonusJade,
+        weeklyDone: firstWinWeek ? wk : prev.weeklyDone,
         totalKills: prev.totalKills + stats.kills,
       }));
       setBattleResult({

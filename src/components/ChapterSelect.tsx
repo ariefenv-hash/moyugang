@@ -9,6 +9,12 @@ import {
   getDailyTrialLevel,
 } from '../data/dailyTrial';
 import {
+  WEEKLY_LEVEL_ID,
+  WEEKLY_REWARD_JADE,
+  getWeeklyTrialInfo,
+  getWeeklyTrialLevel,
+} from '../data/weeklyTrial';
+import {
   STORY_CHAPTERS,
   CN_NUMS,
   MAX_STORY_LEVEL_ID,
@@ -27,6 +33,7 @@ import {
   ScrollText,
   Hourglass,
   CalendarHeart,
+  Crown,
 } from 'lucide-react';
 
 interface ChapterSelectProps {
@@ -86,6 +93,12 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
   const dailyLevel = useMemo(() => getDailyTrialLevel(), []);
   const dailyDoneToday = progress.dailyDone === dailyInfo.dateStr;
   const dailyStreak = progress.dailyStreak ?? 0;
+
+  // 周试炼：破过首领折（第一章终折）后开卷（同周答卷恒定，本周首胜独享灵玉）
+  const weeklyUnlocked = progress.completedLevels.includes(5);
+  const weeklyInfo = useMemo(() => getWeeklyTrialInfo(), []);
+  const weeklyLevel = useMemo(() => getWeeklyTrialLevel(), []);
+  const weeklyDoneThisWeek = progress.weeklyDone === weeklyInfo.weekStr;
 
   // 默认落在「当前进度」所在的大章
   const defaultChapterId = useMemo(() => {
@@ -251,6 +264,81 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
           </div>
           {/* 关卡数据隐藏载体：接卷问战即开战（id={DAILY_LEVEL_ID} 与主线/无尽互不干扰） */}
           <span className="hidden" data-daily-level-id={DAILY_LEVEL_ID} aria-hidden="true" />
+        </motion.div>
+
+        {/* ===== 周试炼通栏：周魁问锋（同周答卷恒定，本周首胜独享灵玉） ===== */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.08 }}
+          className={`relative mb-8 p-5 border transition-colors duration-200 overflow-hidden ${
+            weeklyUnlocked
+              ? 'panel-paper border-tenghuang/50 shadow-[0_10px_30px_-14px_rgba(180,130,30,0.45)]'
+              : 'panel-paper opacity-60'
+          }`}
+        >
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex items-center gap-3 shrink-0 md:w-56">
+              <span className="seal w-10 h-10 flex items-center justify-center shrink-0" aria-hidden="true">
+                <Crown className="w-5 h-5" />
+              </span>
+              <div>
+                <p className="text-[10px] font-serif tracking-widest text-tenghuang">周魁问锋 · {weeklyInfo.weekStr} 起一周</p>
+                <h3 className="text-lg font-serif font-black tracking-wider text-ink-strong">周试炼</h3>
+              </div>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              {weeklyUnlocked ? (
+                <>
+                  <p className="text-xs text-ink-mid font-serif leading-relaxed">
+                    本周周魁词境「{weeklyInfo.sourceTitle}」
+                    <span className="mx-1.5 text-tenghuang/70">·</span>
+                    词缀
+                    {weeklyInfo.modifiers.map((m) => (
+                      <span key={m.id} className="inline-flex items-baseline mr-2 ml-1">
+                        <span className="font-bold text-ink-strong">{m.name}</span>
+                        <span className="text-ink-light">（{m.description}）</span>
+                      </span>
+                    ))}
+                  </p>
+                  <p className="text-[11px] text-ink-mid font-serif mt-1 truncate">
+                    开局赐福：{weeklyInfo.blessings.map((b) => b.name).join(' · ')}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-ink-mid font-serif leading-relaxed">
+                  通关第一章终折首领后，周魁问锋为你张榜——每周一份首领折高难答卷，词境、词缀皆随周历换卷，重锋者得重赏。
+                </p>
+              )}
+            </div>
+
+            <div className="shrink-0 flex items-center gap-3 md:flex-col md:items-end md:gap-1.5">
+              {weeklyUnlocked && (
+                <span className="text-[10px] text-ink-light whitespace-nowrap">
+                  本周首胜 +<span className="font-mono">{WEEKLY_REWARD_JADE}</span> 灵玉
+                </span>
+              )}
+              {weeklyUnlocked ? (
+                <button
+                  onClick={() => onSelectLevel(weeklyLevel)}
+                  className={`btn-ink py-2.5 px-5 text-xs font-serif tracking-widest flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    weeklyDoneThisWeek ? 'opacity-75' : ''
+                  }`}
+                >
+                  <Swords className="w-3.5 h-3.5" />
+                  {weeklyDoneThisWeek ? '本周已魁 · 再战' : '应召问锋'}
+                </button>
+              ) : (
+                <div className="py-2.5 px-5 text-xs text-center text-ink-light panel-paper-deep font-serif tracking-widest">
+                  <Lock className="w-3 h-3 inline mr-1 -mt-0.5" />
+                  先破一魁
+                </div>
+              )}
+            </div>
+          </div>
+          {/* 关卡数据隐藏载体：应召问锋即开战（id={WEEKLY_LEVEL_ID} 与主线/每日/无尽互不干扰） */}
+          <span className="hidden" data-weekly-level-id={WEEKLY_LEVEL_ID} aria-hidden="true" />
         </motion.div>
 
         {/* ===== 十章册页章签：启卷/藏卷两段式（十章全开后不再拥挤） ===== */}

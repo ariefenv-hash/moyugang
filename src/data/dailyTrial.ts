@@ -25,8 +25,8 @@ export function todayKey(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
-/** mulberry32：小型可复现 PRNG */
-function mulberry32(seed: number) {
+/** mulberry32：小型可复现 PRNG（周试炼共用） */
+export function mulberry32(seed: number) {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -37,8 +37,8 @@ function mulberry32(seed: number) {
   };
 }
 
-/** 日期串 → 种子（FNV-1a） */
-function dateSeed(dateStr: string): number {
+/** 日期串 → 种子（FNV-1a，周试炼共用） */
+export function dateSeed(dateStr: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < dateStr.length; i++) {
     h ^= dateStr.charCodeAt(i);
@@ -56,7 +56,7 @@ export interface DailyModifier {
   apply: (cfg: DailyTrialConfig) => void;
 }
 
-interface DailyTrialConfig {
+export interface DailyTrialConfig {
   enemyAtkMult: number;
   enemyHpMult: number;
   initialInkMult: number;
