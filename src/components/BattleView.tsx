@@ -91,6 +91,16 @@ const TIER_INK: Record<ComboTier, InkTint> = {
   TRANSCEND: { core: 'rgba(58, 42, 8, 0.95)', halo: 'rgba(251, 191, 36, 0.52)' }, // 翰墨通神·鎏金
 };
 const inkTintFor = (tier: ComboTier): InkTint => TIER_INK[tier] ?? TIER_INK.NONE;
+/** 无尽试炼·波次里程碑词库：每十波一演出（鈐金卷轴横幅 + 金砂粒子），词随波轮换 */
+const WAVE_MILESTONES: Record<number, { title: string; verse: string }> = {
+  10: { title: '十波 · 初澜既平', verse: '墨浪初歇，笔底微凉' },
+  20: { title: '廿波 · 墨海听涛', verse: '长夜未央，涛声入砚' },
+  30: { title: '卅波 · 长夜将阑', verse: '灯花挑尽，晓色在望' },
+  40: { title: '卌波 · 星垂平野', verse: '星河低垂，阔野无声' },
+  50: { title: '伍拾波 · 月涌江流', verse: '月涌大江，笔锋不眠' },
+};
+/** 六十波起通用词（卷极·问天） */
+const WAVE_MILESTONE_LATE = { title: '卷极 · 问天', verse: '长夜无尽，问天不止' };
 
 /** 字迹化灵：字诀成字后墨稿化作该字属性的灵韵飞散（色/流向/粒子形态） */
 const CHAR_GHOST_FX: Record<
@@ -324,6 +334,14 @@ export const BattleView: React.FC<BattleViewProps> = ({
   // Stage announcement / verse banner
   const [stageBanner, setStageBanner] = useState<string | null>(level.poeticVerse);
   const [bossAnnounced, setBossAnnounced] = useState(false);
+  // ===== 无尽试炼·波次里程碑（每十波鈐金卷轴演出，seq 序号防陈旧清除） =====
+  const [waveMilestone, setWaveMilestone] = useState<{
+    wave: number;
+    title: string;
+    verse: string;
+    seq: number;
+  } | null>(null);
+  const waveMilestoneSeqRef = useRef(0);
 
   // ===== 开战卷首语：本折剧情引言，8s 后自散（配合 stageBanner 诗签共同演出） =====
   const [storyHead, setStoryHead] = useState<string | null>(level.storyIntro ?? null);
@@ -822,6 +840,39 @@ export const BattleView: React.FC<BattleViewProps> = ({
         navigator.vibrate(pattern);
       }
     } catch {}
+  };
+
+  // ===== 波次里程碑演出：鈐金卷轴横幅 + 金砂粒子（低配机裁剪粒子，横幅保留） =====
+  const fireWaveMilestone = (waveNo: number) => {
+    const info = WAVE_MILESTONES[waveNo] ?? WAVE_MILESTONE_LATE;
+    const seq = ++waveMilestoneSeqRef.current;
+    setWaveMilestone({ wave: waveNo, title: info.title, verse: info.verse, seq });
+    safeTimeout(
+      () => setWaveMilestone((prev) => (prev?.seq === seq ? null : prev)),
+      3000
+    );
+    sound.playPluck(1046.5, 0.6);
+    triggerHaptic([18, 60, 18]);
+    if (!qualityLowRef.current) {
+      const hero = heroRef.current;
+      for (let i = 0; i < 26; i++) {
+        particlesRef.current.push({
+          id: `p_milestone_${seq}_${i}`,
+          x: hero.x + (Math.random() - 0.5) * 90,
+          y: hero.y - 20 - Math.random() * 60,
+          altitudeZ: 30 + Math.random() * 70,
+          vx: (Math.random() - 0.5) * 160,
+          vy: -60 - Math.random() * 90,
+          vz: 40 + Math.random() * 80,
+          color: i % 4 === 0 ? '#fde68a' : '#fbbf24',
+          size: Math.random() * 2.4 + 1.2,
+          alpha: 1,
+          life: 0.9,
+          maxLife: 0.9,
+          type: 'STAR',
+        });
+      }
+    }
   };
 
   // 墨龙卷：连墨达「翰墨通神」（45）时自动召唤，横扫战场（内置冷却防频繁）
@@ -3259,6 +3310,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
           sound.playUltimate();
         }
 
+        // 每 10 波里程碑演出（鈐金卷轴 + 金砂）：与玄墨霸主同波叠加，卷轴位霸主横幅下方
+        if (waveNo % 10 === 0) fireWaveMilestone(waveNo);
+
         endlessWaveRef.current += 1;
       }
     }
@@ -4207,6 +4261,24 @@ export const BattleView: React.FC<BattleViewProps> = ({
             <p className="text-xs text-rose-300 font-mono tracking-widest">警告 · 敌阵宿敌降临</p>
             <p className="text-base md:text-lg font-serif font-bold text-rose-100 tracking-wider">
               {level.boss.name} · {level.boss.title}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 无尽试炼·波次里程碑横幅（鈐金卷轴，每十波一演出） */}
+      {waveMilestone && (
+        <div className="absolute top-[8.5rem] left-1/2 -translate-x-1/2 z-30 pointer-events-none text-center animate-fade-in max-w-xs sm:max-w-sm w-full px-4">
+          <div className="relative px-6 py-3 bg-stone-950/90 border border-amber-700/60 rounded-xl backdrop-blur-md shadow-2xl">
+            <span className="absolute -top-px left-4 right-4 h-px bg-gradient-to-r from-transparent via-amber-400/80 to-transparent" />
+            <p className="text-[10px] text-amber-500/90 font-serif tracking-[0.3em] mb-0.5">
+              无尽长卷 · 第 {waveMilestone.wave} 波
+            </p>
+            <p className="text-base md:text-lg font-serif font-bold tracking-widest text-amber-200">
+              {waveMilestone.title}
+            </p>
+            <p className="mt-0.5 text-[11px] text-stone-400 font-serif tracking-wider">
+              {waveMilestone.verse}
             </p>
           </div>
         </div>

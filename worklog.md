@@ -720,3 +720,19 @@ Work Log:
 Stage Summary:
 - 十章全链路验证脚本 100% 现役化，遗留备忘之测试债清零；后续任何章内改动均有可跑的全量章回归
 - 修改：scripts/verify_story_ch2.py / ch3 / ch6 / ch7 / ch8 / ch9 / ch10（纯测试脚本，无产品代码改动）
+
+---
+Task ID: 37
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查模式首轮实装）
+Task: 无尽试炼·波次里程碑横幅——每十波一演出（鎏金卷轴 + 金砂粒子）
+
+Work Log:
+- 待办池认领（14:00 轮 UI 遗留项「无尽波次里程碑横幅 10/20/30 波演出」）：endless 波次刷出 tick（BattleView endless 分支）处按 waveNo % 10 === 0 触发 fireWaveMilestone
+- 演出三层：①鎏金卷轴横幅（天杆金线/石底琥珀字，位霸主横幅下方 top-[8.5rem]，防同波 boss 横幅叠撞）②金砂 STAR 粒子 26 颗自剑仙位置迸发（#fbbf24/#fde68a，qualityLow 行云模式自动裁剪粒子保横幅）③ playPluck C6 音 + 触感 [18,60,18]
+- 词库：十波「初澜既平」/廿波「墨海听涛」/卅波「长夜将阑」/卌波「星垂平野」/伍拾波「月涌江流」，六十波起通用「卷极·问天」；seq 序号防陈旧清除（沿 flashGestureBadge 同法），safeTimeout 登记防卸载泄漏
+- 新增 scripts/verify_wave_milestone.py（8 项）：MutationObserver 持久探针捕获 3s 瞬时横幅 + 负向检查（前 30s 无误触）+ 波数/词文断言 + 零 JS 异常；机器人自动选福（品级标记定位）+ 坦克优先征兵 + 主动作战撑至十波
+- 全量回归：里程碑 8/8 · smoke 24/24 · 无尽章境 7/7 · UI 精美度 7/7 · 性能分档 4/4；tsc 零错误 · vite build 通过（PWA 272 entries）
+
+Stage Summary:
+- 无尽长夜新增十波一演出的鎏金里程碑节奏感，与每五波玄墨霸主压阵形成「小庆/大战」交替演出层
+- 修改：src/components/BattleView.tsx · scripts/verify_wave_milestone.py（新增）· worklog.md
