@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """第六章《桃花源·武陵迷津》全链路无头实测 v1
 覆盖：
-  A 组 章签导航与剧情文本（章签/默认落章/卷首诗/引子自动弹出/五折卡/首领战×2/离骚赋已启/长安幻未启）
-  B 组 开战卷首语（沅芷澧兰）
+  A 组 章签导航与剧情文本（章签/默认落章/卷首诗/引子自动弹出/五折卡/首领战×2/离骚赋已启/长安幻已启）
+  B 组 开战卷首语（缘溪行）
   C 组 五折新氛围像素采样 + 两两互异
-  D 组 折三 Boss「玄墨河伯·吞舟」（banner / 在阵）
-  F 组 终折全流程（大司命·沉璧 / 尾声 / 九歌天问成就 / 无启下一章）
+  D 组 折三 Boss「守隘墨魈·舍船」（banner / 在阵）
+  F 组 终折全流程（守源人·忘言 / 尾声 / 武陵迷津成就 / 启下一章递进第柒章）
   G 组 移动端 390px 选章
 全程 0 真实 JS 异常。
 """
@@ -130,7 +130,8 @@ async def main():
         await page.get_by_text('长安幻').first.click()
         await page.wait_for_timeout(500)
         body = await page.evaluate("() => document.body.innerText")
-        ok('A8 长安幻仍为未启之卷（敬请期待）', '敬请期待' in body)
+        # 十章全卷已实装：长安幻不再是未启之卷（原断言随第柒章实装退役）
+        ok('A8 长安幻已启（第柒大章可入）', '第柒大章' in body)
         await page.get_by_text('桃花源').first.click()
         await page.wait_for_timeout(500)
 
@@ -199,12 +200,19 @@ async def main():
         ok('F2 结算含第六章尾声「灯灭/花萼楼」', '灯灭' in vbody and '花萼楼' in vbody)
         ok('F3 新成就「武陵迷津」首次通关即解锁', '千年无人问津终有回响' in vbody)
         nxt = await page.get_by_role('button', name='启下一章').count()
-        log('F4 终折无「启下一章」按钮（当前上界内最后大章）', nxt == 0)
+        # 十章全卷已实装：第六章通关后递进第七章（原断言「无启下一章」随第柒章实装退役）
+        log('F4 通关后「启下一章」按钮出现（递进第柒大章）', nxt >= 1)
         await page.screenshot(path=f'{OUT}/verify_ch6_victory.png')
 
-        # ============ D 组：折三 Boss 玄墨河伯（重新载入 → 第三折） ============
-        await page.evaluate("() => { location.reload(); }")
-        await page.wait_for_timeout(1500)
+        # ============ D 组：折三 Boss 守隘墨魈（重置进度直入 → 第三折） ============
+        # 原 reload 方案依赖通关后的章页落点，两段式章签改版后不确定；
+        # 改为重置进度（storySeen 含第六章，引子不弹）后重新进入，确定性落章
+        await page.evaluate(
+            """([key, val]) => localStorage.setItem(key, val)""",
+            [STORAGE, make_progress(30, list(range(1, 30)), [1, 2, 3, 4, 5, 6])],
+        )
+        await page.goto(URL, wait_until='networkidle')
+        await page.wait_for_timeout(1400)
         await page.get_by_text('启卷入战').click()
         await page.wait_for_timeout(900)
         try:

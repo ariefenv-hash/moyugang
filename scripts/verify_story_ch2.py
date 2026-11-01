@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """第二章《山河谣·蚀文惊变》剧情大升级全链路验证：
-十章总纲章签 / 章前引子卷轴 / 未启之卷预告 / 新氛围(烟雨·雷雨·蚀月) / 卷首语 / 跨章解锁与存档迁移"""
+十章总纲章签 / 章前引子卷轴 / 跨章章签导航 / 新氛围(烟雨·雷雨·蚀月) / 卷首语 / 跨章解锁与存档迁移"""
 import asyncio, json
 from playwright.async_api import async_playwright
 
@@ -100,7 +100,7 @@ async def main():
             ok(f'A6 第二章折卡「{t}」', t in body)
         ok('A6b 新玩家第二章锁定', '尚未感悟' in body)
 
-        # A7 未启之卷预告（第三章已启 → 现未启之卷为第四章边塞引；漱玉词应展示五折已启内容）
+        # A7 章签导航（十章全卷已实装：边塞引不再是未启之卷，原「敬请期待」断言退役）
         await page.get_by_role('button', name='漱玉词').first.click()
         await page.wait_for_timeout(700)
         body = await page.evaluate("() => document.body.innerText")
@@ -108,7 +108,7 @@ async def main():
         await page.get_by_role('button', name='边塞引').first.click()
         await page.wait_for_timeout(700)
         body = await page.evaluate("() => document.body.innerText")
-        ok('A7b 未启之卷预告（边塞引/敬请期待）', ('孤城万仞' in body and '敬请期待' in body))
+        ok('A7b 边塞引已启（第肆大章可入）', ('孤城万仞' in body and '第肆大章' in body))
         await page.get_by_role('button', name='风雅集').first.click()
         await page.wait_for_timeout(400)
         await page.screenshot(path=f'{OUT}/verify10_upcoming.png')

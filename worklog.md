@@ -705,3 +705,18 @@ Work Log:
 Stage Summary:
 - ch5 全链路脚本回归现役化；验证脚本与十章全开现实重新对齐
 - 修改：scripts/verify_story_ch5.py
+
+---
+Task ID: 36
+Agent: 定时任务 Agent（每 2 小时轮次 · 第四轮）
+Task: 测试债清偿——ch2/ch3/ch6~ch10 七套章回验证脚本按 Task 35 同法现役化
+
+Work Log:
+- ch6~ch9：A8「下一章仍为未启之卷（敬请期待）」→「下一章已启（可入）」；F4「终折无启下一章」→「通关后启下一章出现（递进下一大章）」；D 组 reload → 重置进度直入（storySeen 含本章，引子不弹，确定性落章）
+- ch3：同型三处（A7/F4/D 组）一并修缮；ch2：A7b「未启之卷预告（敬请期待）」→「边塞引已启（第肆大章可入）」——十章全开后「敬请期待」文案已不复存在；ch10：F4 保留「无启下一章」（真末章），D 组 reload 同法确定性化
+- 附带修正各脚本头部 docstring 与 D 组注释沿袭 ch5 模板的陈旧命名（Boss 名/折名/成就名，如 ch6 头部仍写「玄墨河伯」实为「守隘墨魈·舍船」）
+- 全量无头回归：ch2 40/40 · ch3 36/36 · ch6~ch10 各 33/33，全程 JS 异常 0；tsc --noEmit 零错误、vite build 通过（PWA 272 entries）
+
+Stage Summary:
+- 十章全链路验证脚本 100% 现役化，遗留备忘之测试债清零；后续任何章内改动均有可跑的全量章回归
+- 修改：scripts/verify_story_ch2.py / ch3 / ch6 / ch7 / ch8 / ch9 / ch10（纯测试脚本，无产品代码改动）

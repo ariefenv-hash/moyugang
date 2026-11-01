@@ -135,7 +135,8 @@ async def main():
         await page.get_by_text('边塞引').first.click()
         await page.wait_for_timeout(500)
         body = await page.evaluate("() => document.body.innerText")
-        ok('A7 边塞引仍为未启之卷（敬请期待）', '敬请期待' in body)
+        # 十章全卷已实装：边塞引不再是未启之卷（原断言随第肆章实装退役）
+        ok('A7 边塞引已启（第肆大章可入）', '第肆大章' in body)
         await page.get_by_text('漱玉词').first.click()
         await page.wait_for_timeout(500)
 
@@ -237,12 +238,19 @@ async def main():
         ok('F2 结算含第三章尾声「无声之曲…广陵散遗谱七页合一」', '无声之曲' in vbody and '广陵散遗谱七页合一' in vbody)
         ok('F3 新成就「漱玉绝响」首次通关即解锁', '漱玉绝响' in vbody)
         nxt = await page.get_by_role('button', name='启下一章').count()
-        log('F4 终折无「启下一章」按钮（当前上界内最后大章）', nxt == 0)
+        # 十章全卷已实装：第三章通关后递进第四章（原断言「无启下一章」随第肆章实装退役）
+        log('F4 通关后「启下一章」按钮出现（递进第肆大章）', nxt >= 1)
         await page.screenshot(path=f'{OUT}/verify_ch3_victory.png')
 
-        # ============ D 组：折三 Boss 焦尾琴魅（重新载入 → 第三折） ============
-        await page.evaluate("() => { location.reload(); }")
-        await page.wait_for_timeout(1500)
+        # ============ D 组：折三 Boss 焦尾琴魅（重置进度直入 → 第三折） ============
+        # 原 reload 方案依赖通关后的章页落点，两段式章签改版后不确定；
+        # 改为重置进度（storySeen 含第三章，引子不弹）后重新进入，确定性落章
+        await page.evaluate(
+            """([key, val]) => localStorage.setItem(key, val)""",
+            [STORAGE, make_progress(15, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 2, 3])],
+        )
+        await page.goto(URL, wait_until='networkidle')
+        await page.wait_for_timeout(1400)
         await page.get_by_text('启卷入战').click()
         await page.wait_for_timeout(900)
         try:
