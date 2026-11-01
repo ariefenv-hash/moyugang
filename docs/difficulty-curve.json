@@ -1,0 +1,1241 @@
+{
+  "meta": {
+    "doc": "墨韵战纪·十章难度曲线回归表",
+    "source": "src/data/story.ts → STORY_CHAPTERS",
+    "generatedBy": "scripts/export_difficulty_curve.mjs",
+    "note": "调参后重跑 bun scripts/export_difficulty_curve.mjs 刷新本表",
+    "chapterCount": 10,
+    "foldCount": 50
+  },
+  "difficultyCurve": {
+    "chapters": [
+      {
+        "chapterId": 1,
+        "key": "fengya",
+        "anthology": "风雅集",
+        "name": "翰墨千秋",
+        "foldCount": 5,
+        "folds": [
+          {
+            "foldId": 1,
+            "fold": "风雅集·第一折",
+            "title": "踏雪寻梅",
+            "ambient": "SNOW",
+            "playerBaseHp": 1200,
+            "enemyBaseHp": 1000,
+            "initialInk": 180,
+            "rewardJade": 120,
+            "enemyWaveInterval": 14,
+            "boss": null,
+            "pressureIndex": 5.6,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 2,
+            "fold": "风雅集·第二折",
+            "title": "竹林清幽",
+            "ambient": "BAMBOO",
+            "playerBaseHp": 1400,
+            "enemyBaseHp": 1300,
+            "initialInk": 220,
+            "rewardJade": 180,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 5.9,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 3,
+            "fold": "风雅集·第三折",
+            "title": "月下独酌",
+            "ambient": "MOON",
+            "playerBaseHp": 1600,
+            "enemyBaseHp": 1600,
+            "initialInk": 250,
+            "rewardJade": 240,
+            "enemyWaveInterval": 16,
+            "boss": null,
+            "pressureIndex": 6.4,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 4,
+            "fold": "风雅集·第四折",
+            "title": "流水落花",
+            "ambient": "PETAL",
+            "playerBaseHp": 1800,
+            "enemyBaseHp": 1900,
+            "initialInk": 300,
+            "rewardJade": 320,
+            "enemyWaveInterval": 16,
+            "boss": {
+              "name": "落花客·残红",
+              "title": "敌方先锋剑客",
+              "hp": 1200,
+              "attack": 55
+            },
+            "pressureIndex": 6.3,
+            "bossThreatIndex": 0.7
+          },
+          {
+            "foldId": 5,
+            "fold": "风雅集·第五折",
+            "title": "临江仙·破晓之决",
+            "ambient": "DAWN",
+            "playerBaseHp": 2200,
+            "enemyBaseHp": 2600,
+            "initialInk": 350,
+            "rewardJade": 500,
+            "enemyWaveInterval": 18,
+            "boss": {
+              "name": "玄墨尊主·千渊",
+              "title": "大章终局霸主",
+              "hp": 2800,
+              "attack": 85
+            },
+            "pressureIndex": 7.4,
+            "bossThreatIndex": 1.3
+          }
+        ],
+        "aggregate": {
+          "enemyBaseHpRange": [
+            1000,
+            2600
+          ],
+          "initialInkRange": [
+            180,
+            350
+          ],
+          "chapterRewardJade": 1360,
+          "pressureIndexRange": [
+            5.6,
+            7.4
+          ],
+          "bosses": [
+            {
+              "fold": "风雅集·第四折",
+              "name": "落花客·残红",
+              "title": "敌方先锋剑客",
+              "hp": 1200,
+              "attack": 55
+            },
+            {
+              "fold": "风雅集·第五折",
+              "name": "玄墨尊主·千渊",
+              "title": "大章终局霸主",
+              "hp": 2800,
+              "attack": 85
+            }
+          ]
+        }
+      },
+      {
+        "chapterId": 2,
+        "key": "shanhe",
+        "anthology": "山河谣",
+        "name": "蚀文惊变",
+        "foldCount": 5,
+        "folds": [
+          {
+            "foldId": 6,
+            "fold": "山河谣·第一折",
+            "title": "烟雨断桥",
+            "ambient": "MIST",
+            "playerBaseHp": 2400,
+            "enemyBaseHp": 2900,
+            "initialInk": 340,
+            "rewardJade": 340,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 8.5,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 7,
+            "fold": "山河谣·第二折",
+            "title": "枫林晚渡",
+            "ambient": "AUTUMN",
+            "playerBaseHp": 2600,
+            "enemyBaseHp": 3200,
+            "initialInk": 360,
+            "rewardJade": 400,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 8.9,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 8,
+            "fold": "山河谣·第三折",
+            "title": "雷峰夕照",
+            "ambient": "STORM",
+            "playerBaseHp": 2800,
+            "enemyBaseHp": 3500,
+            "initialInk": 380,
+            "rewardJade": 460,
+            "enemyWaveInterval": 15,
+            "boss": {
+              "name": "烬羽书生·焚卷",
+              "title": "洗墨麾下狂生",
+              "hp": 3400,
+              "attack": 95
+            },
+            "pressureIndex": 9.2,
+            "bossThreatIndex": 1.2
+          },
+          {
+            "foldId": 9,
+            "fold": "山河谣·第四折",
+            "title": "寒潭鹤影",
+            "ambient": "MOON",
+            "playerBaseHp": 3000,
+            "enemyBaseHp": 3800,
+            "initialInk": 400,
+            "rewardJade": 520,
+            "enemyWaveInterval": 16,
+            "boss": null,
+            "pressureIndex": 9.5,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 10,
+            "fold": "山河谣·第五折",
+            "title": "文枢归一",
+            "ambient": "VOID",
+            "playerBaseHp": 3400,
+            "enemyBaseHp": 4400,
+            "initialInk": 440,
+            "rewardJade": 800,
+            "enemyWaveInterval": 17,
+            "boss": {
+              "name": "蚀文君·洗墨",
+              "title": "洗墨之乱主使",
+              "hp": 4200,
+              "attack": 110
+            },
+            "pressureIndex": 10,
+            "bossThreatIndex": 1.2
+          }
+        ],
+        "aggregate": {
+          "enemyBaseHpRange": [
+            2900,
+            4400
+          ],
+          "initialInkRange": [
+            340,
+            440
+          ],
+          "chapterRewardJade": 2520,
+          "pressureIndexRange": [
+            8.5,
+            10
+          ],
+          "bosses": [
+            {
+              "fold": "山河谣·第三折",
+              "name": "烬羽书生·焚卷",
+              "title": "洗墨麾下狂生",
+              "hp": 3400,
+              "attack": 95
+            },
+            {
+              "fold": "山河谣·第五折",
+              "name": "蚀文君·洗墨",
+              "title": "洗墨之乱主使",
+              "hp": 4200,
+              "attack": 110
+            }
+          ]
+        }
+      },
+      {
+        "chapterId": 3,
+        "key": "shuyu",
+        "anthology": "漱玉词",
+        "name": "断弦遗音",
+        "foldCount": 5,
+        "folds": [
+          {
+            "foldId": 11,
+            "fold": "漱玉词·第一折",
+            "title": "溪亭暮弦",
+            "ambient": "LOTUS",
+            "playerBaseHp": 3600,
+            "enemyBaseHp": 4800,
+            "initialInk": 460,
+            "rewardJade": 560,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 10.4,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 12,
+            "fold": "漱玉词·第二折",
+            "title": "雁字西楼",
+            "ambient": "GOOSE",
+            "playerBaseHp": 3800,
+            "enemyBaseHp": 5200,
+            "initialInk": 480,
+            "rewardJade": 620,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 10.8,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 13,
+            "fold": "漱玉词·第三折",
+            "title": "黄花瘦影",
+            "ambient": "CHRYS",
+            "playerBaseHp": 4000,
+            "enemyBaseHp": 5600,
+            "initialInk": 500,
+            "rewardJade": 680,
+            "enemyWaveInterval": 15,
+            "boss": {
+              "name": "焦尾琴魅·断章",
+              "title": "洗墨麾下琴魂",
+              "hp": 4600,
+              "attack": 105
+            },
+            "pressureIndex": 11.2,
+            "bossThreatIndex": 1.2
+          },
+          {
+            "foldId": 14,
+            "fold": "漱玉词·第四折",
+            "title": "声声慢雨",
+            "ambient": "GLOOM",
+            "playerBaseHp": 4200,
+            "enemyBaseHp": 6000,
+            "initialInk": 520,
+            "rewardJade": 740,
+            "enemyWaveInterval": 16,
+            "boss": null,
+            "pressureIndex": 11.5,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 15,
+            "fold": "漱玉词·第五折",
+            "title": "绝响广陵",
+            "ambient": "STRING",
+            "playerBaseHp": 4600,
+            "enemyBaseHp": 6600,
+            "initialInk": 560,
+            "rewardJade": 900,
+            "enemyWaveInterval": 17,
+            "boss": {
+              "name": "断弦夫人·绝响",
+              "title": "无声之曲抚琴人",
+              "hp": 5400,
+              "attack": 120
+            },
+            "pressureIndex": 11.8,
+            "bossThreatIndex": 1.2
+          }
+        ],
+        "aggregate": {
+          "enemyBaseHpRange": [
+            4800,
+            6600
+          ],
+          "initialInkRange": [
+            460,
+            560
+          ],
+          "chapterRewardJade": 3500,
+          "pressureIndexRange": [
+            10.4,
+            11.8
+          ],
+          "bosses": [
+            {
+              "fold": "漱玉词·第三折",
+              "name": "焦尾琴魅·断章",
+              "title": "洗墨麾下琴魂",
+              "hp": 4600,
+              "attack": 105
+            },
+            {
+              "fold": "漱玉词·第五折",
+              "name": "断弦夫人·绝响",
+              "title": "无声之曲抚琴人",
+              "hp": 5400,
+              "attack": 120
+            }
+          ]
+        }
+      },
+      {
+        "chapterId": 4,
+        "key": "biansai",
+        "anthology": "边塞引",
+        "name": "孤城万仞",
+        "foldCount": 5,
+        "folds": [
+          {
+            "foldId": 16,
+            "fold": "边塞引·第一折",
+            "title": "大漠孤烟",
+            "ambient": "DESERT",
+            "playerBaseHp": 4800,
+            "enemyBaseHp": 7000,
+            "initialInk": 580,
+            "rewardJade": 780,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 12.1,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 17,
+            "fold": "边塞引·第二折",
+            "title": "烽火家书",
+            "ambient": "BEACON",
+            "playerBaseHp": 5000,
+            "enemyBaseHp": 7400,
+            "initialInk": 600,
+            "rewardJade": 840,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 12.3,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 18,
+            "fold": "边塞引·第三折",
+            "title": "羌笛怨柳",
+            "ambient": "WITHER",
+            "playerBaseHp": 5200,
+            "enemyBaseHp": 7800,
+            "initialInk": 620,
+            "rewardJade": 900,
+            "enemyWaveInterval": 15,
+            "boss": {
+              "name": "羌笛客·怨柳",
+              "title": "洗墨麾下笛仙",
+              "hp": 5800,
+              "attack": 115
+            },
+            "pressureIndex": 12.6,
+            "bossThreatIndex": 1.1
+          },
+          {
+            "foldId": 19,
+            "fold": "边塞引·第四折",
+            "title": "铁衣寒光",
+            "ambient": "IRON",
+            "playerBaseHp": 5400,
+            "enemyBaseHp": 8200,
+            "initialInk": 640,
+            "rewardJade": 960,
+            "enemyWaveInterval": 16,
+            "boss": null,
+            "pressureIndex": 12.8,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 20,
+            "fold": "边塞引·第五折",
+            "title": "黑云压城",
+            "ambient": "SIEGE",
+            "playerBaseHp": 5800,
+            "enemyBaseHp": 9000,
+            "initialInk": 680,
+            "rewardJade": 1100,
+            "enemyWaveInterval": 17,
+            "boss": {
+              "name": "黑云都督·摧城",
+              "title": "玄墨北庭统帅",
+              "hp": 6400,
+              "attack": 130
+            },
+            "pressureIndex": 13.2,
+            "bossThreatIndex": 1.1
+          }
+        ],
+        "aggregate": {
+          "enemyBaseHpRange": [
+            7000,
+            9000
+          ],
+          "initialInkRange": [
+            580,
+            680
+          ],
+          "chapterRewardJade": 4580,
+          "pressureIndexRange": [
+            12.1,
+            13.2
+          ],
+          "bosses": [
+            {
+              "fold": "边塞引·第三折",
+              "name": "羌笛客·怨柳",
+              "title": "洗墨麾下笛仙",
+              "hp": 5800,
+              "attack": 115
+            },
+            {
+              "fold": "边塞引·第五折",
+              "name": "黑云都督·摧城",
+              "title": "玄墨北庭统帅",
+              "hp": 6400,
+              "attack": 130
+            }
+          ]
+        }
+      },
+      {
+        "chapterId": 5,
+        "key": "lisa0",
+        "anthology": "离骚赋",
+        "name": "九歌天问",
+        "foldCount": 5,
+        "folds": [
+          {
+            "foldId": 21,
+            "fold": "离骚赋·第一折",
+            "title": "沅芷澧兰",
+            "ambient": "ORCHID",
+            "playerBaseHp": 6000,
+            "enemyBaseHp": 8600,
+            "initialInk": 700,
+            "rewardJade": 860,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 12.3,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 22,
+            "fold": "离骚赋·第二折",
+            "title": "云中霓旌",
+            "ambient": "CLOUDMARCH",
+            "playerBaseHp": 6200,
+            "enemyBaseHp": 9000,
+            "initialInk": 720,
+            "rewardJade": 920,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 12.5,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 23,
+            "fold": "离骚赋·第三折",
+            "title": "扶桑金乌",
+            "ambient": "MORN",
+            "playerBaseHp": 6400,
+            "enemyBaseHp": 9400,
+            "initialInk": 740,
+            "rewardJade": 980,
+            "enemyWaveInterval": 15,
+            "boss": {
+              "name": "玄墨河伯·吞舟",
+              "title": "九河蚀浪之神",
+              "hp": 6200,
+              "attack": 122
+            },
+            "pressureIndex": 12.7,
+            "bossThreatIndex": 1
+          },
+          {
+            "foldId": 24,
+            "fold": "离骚赋·第四折",
+            "title": "幽篁灵雨",
+            "ambient": "HOLLOW",
+            "playerBaseHp": 6600,
+            "enemyBaseHp": 9800,
+            "initialInk": 760,
+            "rewardJade": 1040,
+            "enemyWaveInterval": 16,
+            "boss": null,
+            "pressureIndex": 12.9,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 25,
+            "fold": "离骚赋·第五折",
+            "title": "天问列星",
+            "ambient": "STARQ",
+            "playerBaseHp": 7000,
+            "enemyBaseHp": 10600,
+            "initialInk": 820,
+            "rewardJade": 1200,
+            "enemyWaveInterval": 17,
+            "boss": {
+              "name": "大司命·沉璧",
+              "title": "执掌玄册之神",
+              "hp": 7400,
+              "attack": 140
+            },
+            "pressureIndex": 12.9,
+            "bossThreatIndex": 1.1
+          }
+        ],
+        "aggregate": {
+          "enemyBaseHpRange": [
+            8600,
+            10600
+          ],
+          "initialInkRange": [
+            700,
+            820
+          ],
+          "chapterRewardJade": 5000,
+          "pressureIndexRange": [
+            12.3,
+            12.9
+          ],
+          "bosses": [
+            {
+              "fold": "离骚赋·第三折",
+              "name": "玄墨河伯·吞舟",
+              "title": "九河蚀浪之神",
+              "hp": 6200,
+              "attack": 122
+            },
+            {
+              "fold": "离骚赋·第五折",
+              "name": "大司命·沉璧",
+              "title": "执掌玄册之神",
+              "hp": 7400,
+              "attack": 140
+            }
+          ]
+        }
+      },
+      {
+        "chapterId": 6,
+        "key": "taohua",
+        "anthology": "桃花源",
+        "name": "武陵迷津",
+        "foldCount": 5,
+        "folds": [
+          {
+            "foldId": 26,
+            "fold": "桃花源·第一折",
+            "title": "缘溪行",
+            "ambient": "RIVULET",
+            "playerBaseHp": 7200,
+            "enemyBaseHp": 11000,
+            "initialInk": 840,
+            "rewardJade": 1000,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 13.1,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 27,
+            "fold": "桃花源·第二折",
+            "title": "夹岸桃霞",
+            "ambient": "PEACHDAWN",
+            "playerBaseHp": 7400,
+            "enemyBaseHp": 11400,
+            "initialInk": 860,
+            "rewardJade": 1060,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 13.3,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 28,
+            "fold": "桃花源·第三折",
+            "title": "豁然开朗",
+            "ambient": "GAPLIGHT",
+            "playerBaseHp": 7600,
+            "enemyBaseHp": 11800,
+            "initialInk": 880,
+            "rewardJade": 1120,
+            "enemyWaveInterval": 15,
+            "boss": {
+              "name": "守隘墨魈·舍船",
+              "title": "洞口千年守隘",
+              "hp": 6800,
+              "attack": 126
+            },
+            "pressureIndex": 13.4,
+            "bossThreatIndex": 0.9
+          },
+          {
+            "foldId": 29,
+            "fold": "桃花源·第四折",
+            "title": "阡陌炊烟",
+            "ambient": "SMOKEFIELD",
+            "playerBaseHp": 7800,
+            "enemyBaseHp": 12200,
+            "initialInk": 900,
+            "rewardJade": 1180,
+            "enemyWaveInterval": 16,
+            "boss": null,
+            "pressureIndex": 13.6,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 30,
+            "fold": "桃花源·第五折",
+            "title": "千年迷津",
+            "ambient": "EERYPEACH",
+            "playerBaseHp": 8200,
+            "enemyBaseHp": 13000,
+            "initialInk": 960,
+            "rewardJade": 1300,
+            "enemyWaveInterval": 17,
+            "boss": {
+              "name": "守源人·忘言",
+              "title": "桃源深处执灯人",
+              "hp": 8000,
+              "attack": 148
+            },
+            "pressureIndex": 13.5,
+            "bossThreatIndex": 1
+          }
+        ],
+        "aggregate": {
+          "enemyBaseHpRange": [
+            11000,
+            13000
+          ],
+          "initialInkRange": [
+            840,
+            960
+          ],
+          "chapterRewardJade": 5660,
+          "pressureIndexRange": [
+            13.1,
+            13.6
+          ],
+          "bosses": [
+            {
+              "fold": "桃花源·第三折",
+              "name": "守隘墨魈·舍船",
+              "title": "洞口千年守隘",
+              "hp": 6800,
+              "attack": 126
+            },
+            {
+              "fold": "桃花源·第五折",
+              "name": "守源人·忘言",
+              "title": "桃源深处执灯人",
+              "hp": 8000,
+              "attack": 148
+            }
+          ]
+        }
+      },
+      {
+        "chapterId": 7,
+        "key": "changan",
+        "anthology": "长安幻",
+        "name": "盛世残卷",
+        "foldCount": 5,
+        "folds": [
+          {
+            "foldId": 31,
+            "fold": "长安幻·第一折",
+            "title": "春宵灯市",
+            "ambient": "LANTERN",
+            "playerBaseHp": 8400,
+            "enemyBaseHp": 13400,
+            "initialInk": 980,
+            "rewardJade": 1060,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 13.7,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 32,
+            "fold": "长安幻·第二折",
+            "title": "曲江春宴",
+            "ambient": "QUJIANG",
+            "playerBaseHp": 8600,
+            "enemyBaseHp": 13800,
+            "initialInk": 1000,
+            "rewardJade": 1120,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 13.8,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 33,
+            "fold": "长安幻·第三折",
+            "title": "雁塔题名",
+            "ambient": "PAGODA",
+            "playerBaseHp": 8800,
+            "enemyBaseHp": 14200,
+            "initialInk": 1020,
+            "rewardJade": 1180,
+            "enemyWaveInterval": 15,
+            "boss": {
+              "name": "狂草墨魔·颠张",
+              "title": "醉后狂草所化",
+              "hp": 7600,
+              "attack": 132
+            },
+            "pressureIndex": 13.9,
+            "bossThreatIndex": 0.9
+          },
+          {
+            "foldId": 34,
+            "fold": "长安幻·第四折",
+            "title": "胡旋酒肆",
+            "ambient": "WINE",
+            "playerBaseHp": 9000,
+            "enemyBaseHp": 14600,
+            "initialInk": 1040,
+            "rewardJade": 1240,
+            "enemyWaveInterval": 16,
+            "boss": null,
+            "pressureIndex": 14,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 35,
+            "fold": "长安幻·第五折",
+            "title": "花萼辉楼",
+            "ambient": "CALYX",
+            "playerBaseHp": 9400,
+            "enemyBaseHp": 15400,
+            "initialInk": 1100,
+            "rewardJade": 1400,
+            "enemyWaveInterval": 17,
+            "boss": {
+              "name": "幻墨贵妃·霓裳",
+              "title": "盛世幻境之心",
+              "hp": 8800,
+              "attack": 156
+            },
+            "pressureIndex": 14,
+            "bossThreatIndex": 0.9
+          }
+        ],
+        "aggregate": {
+          "enemyBaseHpRange": [
+            13400,
+            15400
+          ],
+          "initialInkRange": [
+            980,
+            1100
+          ],
+          "chapterRewardJade": 6000,
+          "pressureIndexRange": [
+            13.7,
+            14
+          ],
+          "bosses": [
+            {
+              "fold": "长安幻·第三折",
+              "name": "狂草墨魔·颠张",
+              "title": "醉后狂草所化",
+              "hp": 7600,
+              "attack": 132
+            },
+            {
+              "fold": "长安幻·第五折",
+              "name": "幻墨贵妃·霓裳",
+              "title": "盛世幻境之心",
+              "hp": 8800,
+              "attack": 156
+            }
+          ]
+        }
+      },
+      {
+        "chapterId": 8,
+        "key": "chibi",
+        "anthology": "赤壁赋",
+        "name": "江月问舟",
+        "foldCount": 5,
+        "folds": [
+          {
+            "foldId": 36,
+            "fold": "赤壁赋·第一折",
+            "title": "壬戌秋江",
+            "ambient": "CHIJI",
+            "playerBaseHp": 9600,
+            "enemyBaseHp": 15800,
+            "initialInk": 1120,
+            "rewardJade": 1140,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 14.1,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 37,
+            "fold": "赤壁赋·第二折",
+            "title": "月出东山",
+            "ambient": "MOONRISE",
+            "playerBaseHp": 9800,
+            "enemyBaseHp": 16200,
+            "initialInk": 1140,
+            "rewardJade": 1200,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 14.2,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 38,
+            "fold": "赤壁赋·第三折",
+            "title": "洞箫泣月",
+            "ambient": "XIAO",
+            "playerBaseHp": 10000,
+            "enemyBaseHp": 16600,
+            "initialInk": 1160,
+            "rewardJade": 1260,
+            "enemyWaveInterval": 15,
+            "boss": {
+              "name": "幽壑潜蛟·泣露",
+              "title": "江渊蚀心之蛟",
+              "hp": 8400,
+              "attack": 140
+            },
+            "pressureIndex": 14.3,
+            "bossThreatIndex": 0.8
+          },
+          {
+            "foldId": 39,
+            "fold": "赤壁赋·第四折",
+            "title": "渔樵江渚",
+            "ambient": "REEF",
+            "playerBaseHp": 10200,
+            "enemyBaseHp": 17000,
+            "initialInk": 1180,
+            "rewardJade": 1320,
+            "enemyWaveInterval": 16,
+            "boss": null,
+            "pressureIndex": 14.4,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 40,
+            "fold": "赤壁赋·第五折",
+            "title": "扁舟问月",
+            "ambient": "BOATQ",
+            "playerBaseHp": 10600,
+            "enemyBaseHp": 17800,
+            "initialInk": 1240,
+            "rewardJade": 1500,
+            "enemyWaveInterval": 17,
+            "boss": {
+              "name": "沧月君·盈虚",
+              "title": "倒握无尽藏之笔",
+              "hp": 9600,
+              "attack": 164
+            },
+            "pressureIndex": 14.4,
+            "bossThreatIndex": 0.9
+          }
+        ],
+        "aggregate": {
+          "enemyBaseHpRange": [
+            15800,
+            17800
+          ],
+          "initialInkRange": [
+            1120,
+            1240
+          ],
+          "chapterRewardJade": 6420,
+          "pressureIndexRange": [
+            14.1,
+            14.4
+          ],
+          "bosses": [
+            {
+              "fold": "赤壁赋·第三折",
+              "name": "幽壑潜蛟·泣露",
+              "title": "江渊蚀心之蛟",
+              "hp": 8400,
+              "attack": 140
+            },
+            {
+              "fold": "赤壁赋·第五折",
+              "name": "沧月君·盈虚",
+              "title": "倒握无尽藏之笔",
+              "hp": 9600,
+              "attack": 164
+            }
+          ]
+        }
+      },
+      {
+        "chapterId": 9,
+        "key": "momei",
+        "anthology": "墨梅图",
+        "name": "淡墨痕迹",
+        "foldCount": 5,
+        "folds": [
+          {
+            "foldId": 41,
+            "fold": "墨梅图·第一折",
+            "title": "展卷入画",
+            "ambient": "SCROLLIN",
+            "playerBaseHp": 10800,
+            "enemyBaseHp": 18200,
+            "initialInk": 1260,
+            "rewardJade": 1200,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 14.4,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 42,
+            "fold": "墨梅图·第二折",
+            "title": "疏影横斜",
+            "ambient": "SHADOW",
+            "playerBaseHp": 11000,
+            "enemyBaseHp": 18600,
+            "initialInk": 1280,
+            "rewardJade": 1260,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 14.5,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 43,
+            "fold": "墨梅图·第三折",
+            "title": "砚池凝墨",
+            "ambient": "INKSTONE",
+            "playerBaseHp": 11200,
+            "enemyBaseHp": 19000,
+            "initialInk": 1300,
+            "rewardJade": 1320,
+            "enemyWaveInterval": 15,
+            "boss": {
+              "name": "守画人·洗砚",
+              "title": "砚池所化墨灵",
+              "hp": 9200,
+              "attack": 148
+            },
+            "pressureIndex": 14.6,
+            "bossThreatIndex": 0.8
+          },
+          {
+            "foldId": 44,
+            "fold": "墨梅图·第四折",
+            "title": "雪夜梅影",
+            "ambient": "SNOWPLUM",
+            "playerBaseHp": 11400,
+            "enemyBaseHp": 19400,
+            "initialInk": 1320,
+            "rewardJade": 1380,
+            "enemyWaveInterval": 16,
+            "boss": null,
+            "pressureIndex": 14.7,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 45,
+            "fold": "墨梅图·第五折",
+            "title": "清气乾坤",
+            "ambient": "PUREQI",
+            "playerBaseHp": 11800,
+            "enemyBaseHp": 20200,
+            "initialInk": 1380,
+            "rewardJade": 1600,
+            "enemyWaveInterval": 17,
+            "boss": {
+              "name": "文心守护者·砚冰",
+              "title": "画心最后守卫",
+              "hp": 10400,
+              "attack": 172
+            },
+            "pressureIndex": 14.6,
+            "bossThreatIndex": 0.9
+          }
+        ],
+        "aggregate": {
+          "enemyBaseHpRange": [
+            18200,
+            20200
+          ],
+          "initialInkRange": [
+            1260,
+            1380
+          ],
+          "chapterRewardJade": 6760,
+          "pressureIndexRange": [
+            14.4,
+            14.7
+          ],
+          "bosses": [
+            {
+              "fold": "墨梅图·第三折",
+              "name": "守画人·洗砚",
+              "title": "砚池所化墨灵",
+              "hp": 9200,
+              "attack": 148
+            },
+            {
+              "fold": "墨梅图·第五折",
+              "name": "文心守护者·砚冰",
+              "title": "画心最后守卫",
+              "hp": 10400,
+              "attack": 172
+            }
+          ]
+        }
+      },
+      {
+        "chapterId": 10,
+        "key": "wenxin",
+        "anthology": "文心雕龙",
+        "name": "万象归宗",
+        "foldCount": 5,
+        "folds": [
+          {
+            "foldId": 46,
+            "fold": "文心雕龙·第一折",
+            "title": "原道",
+            "ambient": "DAO",
+            "playerBaseHp": 12000,
+            "enemyBaseHp": 20600,
+            "initialInk": 1400,
+            "rewardJade": 1260,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 14.7,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 47,
+            "fold": "文心雕龙·第二折",
+            "title": "征圣",
+            "ambient": "SAGE",
+            "playerBaseHp": 12200,
+            "enemyBaseHp": 21000,
+            "initialInk": 1420,
+            "rewardJade": 1320,
+            "enemyWaveInterval": 15,
+            "boss": null,
+            "pressureIndex": 14.8,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 48,
+            "fold": "文心雕龙·第三折",
+            "title": "宗经",
+            "ambient": "CANON",
+            "playerBaseHp": 12400,
+            "enemyBaseHp": 21400,
+            "initialInk": 1440,
+            "rewardJade": 1380,
+            "enemyWaveInterval": 15,
+            "boss": {
+              "name": "墨潮本体·玄澜",
+              "title": "万卷遗忘之怨",
+              "hp": 10000,
+              "attack": 156
+            },
+            "pressureIndex": 14.9,
+            "bossThreatIndex": 0.8
+          },
+          {
+            "foldId": 49,
+            "fold": "文心雕龙·第四折",
+            "title": "神思",
+            "ambient": "MUSE",
+            "playerBaseHp": 12600,
+            "enemyBaseHp": 21800,
+            "initialInk": 1460,
+            "rewardJade": 1440,
+            "enemyWaveInterval": 16,
+            "boss": null,
+            "pressureIndex": 14.9,
+            "bossThreatIndex": null
+          },
+          {
+            "foldId": 50,
+            "fold": "文心雕龙·第五折",
+            "title": "归宗",
+            "ambient": "ONENESS",
+            "playerBaseHp": 13200,
+            "enemyBaseHp": 23000,
+            "initialInk": 1520,
+            "rewardJade": 2000,
+            "enemyWaveInterval": 17,
+            "boss": {
+              "name": "玄墨本源·万象",
+              "title": "万卷遗忘之怨所聚",
+              "hp": 12000,
+              "attack": 185
+            },
+            "pressureIndex": 15.1,
+            "bossThreatIndex": 0.9
+          }
+        ],
+        "aggregate": {
+          "enemyBaseHpRange": [
+            20600,
+            23000
+          ],
+          "initialInkRange": [
+            1400,
+            1520
+          ],
+          "chapterRewardJade": 7400,
+          "pressureIndexRange": [
+            14.7,
+            15.1
+          ],
+          "bosses": [
+            {
+              "fold": "文心雕龙·第三折",
+              "name": "墨潮本体·玄澜",
+              "title": "万卷遗忘之怨",
+              "hp": 10000,
+              "attack": 156
+            },
+            {
+              "fold": "文心雕龙·第五折",
+              "name": "玄墨本源·万象",
+              "title": "万卷遗忘之怨所聚",
+              "hp": 12000,
+              "attack": 185
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "jadeEconomy": {
+    "income": {
+      "initialJade": 120,
+      "onePassFoldRewards": 49200,
+      "onePassTotal": 49320,
+      "victoryFormula": "rewardJade × (0.6 + 0.2 × 星级)，复刷可重复获取",
+      "dailyFirstWinJade": 260,
+      "endlessJadePerWave": 18
+    },
+    "sink": {
+      "pavilionTracks": 11,
+      "costFormula": "50 × 1.5^Lv（取整）",
+      "cooldownCapLevel": 5,
+      "cooldownCapNote": "冷却轨实际生效上限 Lv5（战斗侧 cdMult = max(0.6, 1 - Lv×8%)），墨阁 UI 已封顶展示「已臻化境」，Lv6+ 不再售卖",
+      "milestones": {
+        "allTracksToLv5": 7253,
+        "allTracksToLv8": 27092,
+        "allTracksToLv10": 62332,
+        "allTracksToLv12": 141621
+      }
+    },
+    "recycleLine": {
+      "balancedLevelOnOnePass": 9.4,
+      "verdict": "单通收入 ≈ 49320 灵玉，可支撑 11 轨均衡升至 Lv9.4；全轨 Lv10 需 62332，缺口由每日试炼（260/日）与无尽章境（18/波）补足——回收线闭合，无通货膨胀。",
+      "calibration": "2026-11-01 Task 33：修复冷却轨超上限售卖（Lv6+ 灵玉无效果）的回收线漏洞。"
+    }
+  }
+}

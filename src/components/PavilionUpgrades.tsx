@@ -30,7 +30,20 @@ export const PavilionUpgrades: React.FC<PavilionUpgradesProps> = ({
     return Math.round(50 * Math.pow(1.5, currentLevel));
   };
 
+  // 灵玉回收线校准：冷却轨在战斗侧实际生效上限为 Lv5（cdMult = max(0.6, 1 - Lv*8%)），
+  // 此前 UI 无上限照常售卖，Lv6+ 的灵玉花出去毫无效果（回收线漏洞）。
+  // 封顶后按钮转「已臻化境」，灵玉导向攻击/气血/共鸣等仍在成长的轨。
+  const COOLDOWN_LEVEL_CAP = 5;
+  const isCooldownCapped =
+    progress.heroUpgrades.cooldownLevel >= COOLDOWN_LEVEL_CAP;
+
   const upgradeHeroStat = (stat: keyof PlayerProgress['heroUpgrades']) => {
+    // 封顶防御：冷却轨到顶后拒绝扣费（双保险，UI 按钮同时禁用）
+    if (
+      stat === 'cooldownLevel' &&
+      progress.heroUpgrades.cooldownLevel >= COOLDOWN_LEVEL_CAP
+    )
+      return;
     const cost = getUpgradeCost(progress.heroUpgrades[stat]);
     if (progress.jadeSparks < cost) return;
 
@@ -191,16 +204,22 @@ export const PavilionUpgrades: React.FC<PavilionUpgradesProps> = ({
                 </div>
                 <p className="text-xs text-ink-mid leading-relaxed">
                   运笔愈发迅捷，全技能冷却时间缩短 8%（当前总缩短 {progress.heroUpgrades.cooldownLevel * 8}%）。
+                  {isCooldownCapped && ' 五层已满，笔意已臻化境。'}
                 </p>
               </div>
 
               <button
                 onClick={() => upgradeHeroStat('cooldownLevel')}
-                disabled={progress.jadeSparks < getUpgradeCost(progress.heroUpgrades.cooldownLevel)}
+                disabled={
+                  isCooldownCapped ||
+                  progress.jadeSparks < getUpgradeCost(progress.heroUpgrades.cooldownLevel)
+                }
                 className="btn-seal mt-4 py-2 px-3 text-xs font-serif flex items-center justify-center gap-1.5"
               >
                 <ArrowUp className="w-3.5 h-3.5" />
-                研习 ({getUpgradeCost(progress.heroUpgrades.cooldownLevel)} 灵玉)
+                {isCooldownCapped
+                  ? '已臻化境（上限五层）'
+                  : `研习 (${getUpgradeCost(progress.heroUpgrades.cooldownLevel)} 灵玉)`}
               </button>
             </div>
 
