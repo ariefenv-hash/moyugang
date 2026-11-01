@@ -27,7 +27,7 @@ import {
   WEATHER_EFFECTS,
   BLESSINGS,
 } from '../data/gameData';
-import { CanvasRenderer } from '../utils/canvasRenderer';
+import { CanvasRenderer, detectLowEndDevice } from '../utils/canvasRenderer';
 import { sound } from '../utils/audio';
 import { GestureRecognizer, GestureResult, InkTint } from '../utils/gestureRecognizer';
 import {
@@ -165,9 +165,15 @@ export const BattleView: React.FC<BattleViewProps> = ({
   // Sound Mute State
   const [isMuted, setIsMuted] = useState(sound.getMuted());
 
-  // 行云性能模式：30fps 节流 + 减特效（弱机/省电），持久化 + 低帧自动建议
+  // 行云性能模式：30fps 节流 + 减特效（弱机/省电），持久化 + 低帧自动建议。
+  // 画质档位优先级：玩家显式选择 > 设备内存/核数自动分档（deviceMemory≤4GB 或核≤4 → 行云）
   const [qualityLow, setQualityLowState] = useState<boolean>(() => {
-    try { return localStorage.getItem('ink_steel_quality') === 'low'; } catch { return false; }
+    try {
+      const saved = localStorage.getItem('ink_steel_quality');
+      if (saved === 'low') return true;
+      if (saved === 'high') return false;
+    } catch {}
+    return detectLowEndDevice();
   });
   const qualityLowRef = useRef(qualityLow);
   const [showPerfTip, setShowPerfTip] = useState(false);

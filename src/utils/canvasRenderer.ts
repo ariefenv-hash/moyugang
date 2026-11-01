@@ -29,6 +29,25 @@ import {
   easeInOutQuad,
 } from './animationSystem';
 
+/**
+ * 低端设备侦测（性能自动分档）：
+ * deviceMemory ≤ 4GB（Chrome/Android 真实暴露，Safari/桌面 Firefox 返回 undefined 跳过）
+ * 或 CPU 逻辑核 ≤ 4 → 建议默认启用行云模式（30fps + 氛围天气层/残影/轨迹减载）。
+ * 仅在用户未显式选择画质档时作为初始值，不覆盖玩家偏好。
+ */
+export function detectLowEndDevice(): boolean {
+  try {
+    const nav = navigator as Navigator & { deviceMemory?: number };
+    if (typeof nav.deviceMemory === 'number' && nav.deviceMemory > 0 && nav.deviceMemory <= 4) {
+      return true;
+    }
+    if (typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4) {
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
 export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D;
   private width: number;
