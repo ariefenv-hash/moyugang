@@ -130,7 +130,8 @@ async def main():
         await page.get_by_text('桃花源').first.click()
         await page.wait_for_timeout(500)
         body = await page.evaluate("() => document.body.innerText")
-        ok('A8 桃花源仍为未启之卷（敬请期待）', '敬请期待' in body)
+        # 十章全卷已实装：桃花源不再是未启之卷（原断言随第陆章实装退役）
+        ok('A8 桃花源已启（第陆大章可入）', '第陆大章' in body)
         await page.get_by_text('离骚赋').first.click()
         await page.wait_for_timeout(500)
 
@@ -199,12 +200,19 @@ async def main():
         ok('F2 结算含第五章尾声「玄册焚尽/路漫漫其修远兮」', '玄册焚尽' in vbody and '路漫漫其修远兮' in vbody)
         ok('F3 新成就「九歌天问」首次通关即解锁', '九歌天问' in vbody)
         nxt = await page.get_by_role('button', name='启下一章').count()
-        log('F4 终折无「启下一章」按钮（当前上界内最后大章）', nxt == 0)
+        # 十章全卷已实装：第五章通关后递进第六章（原断言「无启下一章」随第陆章实装退役）
+        log('F4 通关后「启下一章」按钮出现（递进第陆大章）', nxt >= 1)
         await page.screenshot(path=f'{OUT}/verify_ch5_victory.png')
 
-        # ============ D 组：折三 Boss 玄墨河伯（重新载入 → 第三折） ============
-        await page.evaluate("() => { location.reload(); }")
-        await page.wait_for_timeout(1500)
+        # ============ D 组：折三 Boss 玄墨河伯（重置进度直入 → 第三折） ============
+        # 原 reload 方案依赖通关后的章页落点，两段式章签改版后不确定；
+        # 改为重置进度（storySeen 含第五章，引子不弹）后重新进入，确定性落章
+        await page.evaluate(
+            """([key, val]) => localStorage.setItem(key, val)""",
+            [STORAGE, make_progress(25, list(range(1, 25)), [1, 2, 3, 4, 5])],
+        )
+        await page.goto(URL, wait_until='networkidle')
+        await page.wait_for_timeout(1400)
         await page.get_by_text('启卷入战').click()
         await page.wait_for_timeout(900)
         try:
