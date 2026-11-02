@@ -59,6 +59,8 @@ export interface UnitInstance {
   enraged?: boolean;
   /** Boss 专属：无休狂战姿态（渲染暗红氛围） */
   isBoss?: boolean;
+  /** Boss 专属：二阶段专属机制冷却（墨震八荒/弦召残响/影袭瞬步，狂暴期间循环释放） */
+  bossSkillCd?: number;
 }
 
 export interface HeroInstance {

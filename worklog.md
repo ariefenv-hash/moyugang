@@ -754,3 +754,20 @@ Work Log:
 Stage Summary:
 - 卷面试炼体系补全「日/周」双频节奏：每日轻快普折问战，周试炼首领折重锋问战；同一套词缀-祝福-烘焙管线零新增战斗侧代码
 - 修改：src/data/weeklyTrial.ts（新增）· src/data/dailyTrial.ts（导出共用工具，行为无变化）· src/types/game.ts（weeklyDone 字段）· src/App.tsx（周试炼结算分支）· src/components/ChapterSelect.tsx（周试炼通栏）· scripts/verify_weekly_trial.mjs（新增）· scripts/verify_weekly_trial_e2e.py（新增）· worklog.md
+
+---
+Task ID: 40
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查模式第三轮）
+Task: Boss 机制二阶段·暗墨领域——狂暴数值之上再开兵种专属机制层
+
+Work Log:
+- 待办池认领（巡查第三轮「boss 机制二阶段」项；此前二阶段仅为数值狂暴（50% 血 attack×1.25/speed×1.35+暗红气场），本次升级为真正的机制层）
+- UnitInstance 增 bossSkillCd? 可选字段（二阶段专属机制冷却）；狂暴期间按兵种三式循环：GUARDIAN「墨震八荒」踞地践踏（半径 240 AOE，attack×1.6，武将七五折承伤，cd 8s）；HARPIST「弦召残响」弦音化卒（唤一对墨卒入阵，场上敌军 16 护栏防滚雪球，cd 11s）；SWORD 及其余「影袭瞬步」向阵前瞬步 150+断金一刃（半径 110 溅射，attack×1.4，武将七五折，cd 6s）
+- 演出层：震/召/影三印章 + addFxRing 震波环/暗影环 + 屏幕震动 + 兵种音色（震用 ultimate 长音、召用 G3 拨弦、影用 D3 拨弦）
+- 无头驱动缝：__inkGestureDebug 增 bossPhase 计数（slam/summon/strike/lastSkill）、bosses() 观测、spawnTestBoss（与正式 boss 同一 spawnUnit(isBoss=true) 管线，仅免 bossTime 等待）、forceEnrageBoss(type?)（复刻自然狂暴路径，仅缩短首冷却 0.8s）
+- 新增 scripts/verify_boss_phase2.py：14 项（静态三式接线 + 三兵种机制逐式驱动 + 狂暴数值 + 循环二连 + 零异常）；注意 types/game.ts 为纯类型模块，Vite dev 下返回 export {} 空壳，静态断言须走 ?raw 通道
+- 全量回归：boss 二阶段 14/14 · 蚀文咒师 9/9 · 生产冒烟 5/5；tsc 零错误 · vite build 通过（PWA 272 entries）
+
+Stage Summary:
+- boss 战从「数值狂暴」升级为「狂暴+机制」双层：守垒型震波逼走位、召唤型滚雪球施压、突袭型瞬步贴脸，十章首领与无尽每五波玄墨霸主全体受益
+- 修改：src/types/game.ts（bossSkillCd 字段）· src/components/BattleView.tsx（机制层+驱动缝）· scripts/verify_boss_phase2.py（新增）· worklog.md

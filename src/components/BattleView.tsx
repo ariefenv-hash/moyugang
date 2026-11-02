@@ -2784,6 +2784,40 @@ export const BattleView: React.FC<BattleViewProps> = ({
     dbg.__inkGestureDebug.clearCorruptZones = () => {
       corruptZonesRef.current = [];
     };
+    // Boss 二阶段机制观测/无头驱动缝（spawnTestBoss 与正式 boss 同一 spawnUnit(isBoss=true) 管线，仅免 bossTime 等待）
+    if (!dbg.__inkGestureDebug.bossPhase) {
+      dbg.__inkGestureDebug.bossPhase = { slam: 0, summon: 0, strike: 0, lastSkill: '' };
+    }
+    dbg.__inkGestureDebug.bosses = () =>
+      unitsRef.current
+        .filter((u) => u.isBoss && u.hp > 0)
+        .map((u) => ({
+          type: u.type,
+          enraged: !!u.enraged,
+          hp: Math.round(u.hp),
+          attack: u.attack,
+          x: Math.round(u.x),
+          bossSkillCd: u.bossSkillCd,
+        }));
+    dbg.__inkGestureDebug.spawnTestBoss = (type: string = 'GUARDIAN', x?: number) => {
+      const known: UnitType[] = ['GUARDIAN', 'HARPIST', 'SWORD', 'ARCHER', 'RUNECASTER'];
+      const t = known.includes(type as UnitType) ? (type as UnitType) : 'GUARDIAN';
+      spawnUnit(t, true, x ?? WORLD_WIDTH - 200, undefined, true);
+      return true;
+    };
+    dbg.__inkGestureDebug.forceEnrageBoss = (type?: string) => {
+      const b = unitsRef.current.find(
+        (u) => u.isBoss && u.hp > 0 && (!type || u.type === type)
+      );
+      if (!b) return false;
+      if (!b.enraged) {
+        b.enraged = true;
+        b.attack = Math.round(b.attack * 1.25);
+        b.speed = b.speed * 1.35;
+      }
+      b.bossSkillCd = 0.8;
+      return true;
+    };
     // 最近一次经典手势识别结果（无头透视 TAP/DRAG 误判排查；仅首次初始化，渲染不重置）
     if (dbg.__inkGestureDebug.lastGesture === undefined) {
       dbg.__inkGestureDebug.lastGesture = null;
@@ -3688,6 +3722,64 @@ export const BattleView: React.FC<BattleViewProps> = ({
         triggerSealStamp(unit.x, unit.y - 60, '狂');
         setStageBanner(`${unit.type === 'GUARDIAN' ? '玄墨狂姿 · 破阵' : '残红狂姿 · 破阵'}：敌首陷入暗墨狂暴！`);
         safeTimeout(() => setStageBanner(null), 3000);
+      }
+
+      // ===== Boss 二阶段专属机制（狂暴数值之上再开暗墨领域，按兵种三式循环） =====
+      if (unit.isBoss && unit.isEnemy && unit.enraged && unit.hp > 0) {
+        unit.bossSkillCd = (unit.bossSkillCd ?? 3.2) - dt;
+        if (unit.bossSkillCd <= 0) {
+          const dbgBoss = (window as unknown as Record<string, any>).__inkGestureDebug;
+          if (unit.type === 'GUARDIAN') {
+            // 墨震八荒：踞地践踏，震波重创近身全军（半径 240，武将七五折承伤）
+            const R = 240;
+            const dmg = Math.round(unit.attack * 1.6);
+            for (const u of unitsRef.current) {
+              if (!u.isEnemy && u.hp > 0 && Math.hypot(u.x - unit.x, u.y - unit.y) <= R) {
+                applyDamage(u, dmg, true, unit.x, unit.y);
+              }
+            }
+            const bh = heroRef.current;
+            if (bh.state !== 'DEAD' && Math.hypot(bh.x - unit.x, bh.y - unit.y) <= R) {
+              applyDamage('HERO', Math.round(dmg * 0.75), true, unit.x, unit.y);
+            }
+            rendererRef.current?.addFxRing(unit.x, unit.y, 'rgba(159, 18, 57, 0.85)', 10, R, 0.45, 6, true);
+            triggerShake(11, 0.45);
+            triggerSealStamp(unit.x, unit.y - 60, '震');
+            sound.playUltimate();
+            if (dbgBoss?.bossPhase) { dbgBoss.bossPhase.slam += 1; dbgBoss.bossPhase.lastSkill = '墨震八荒'; }
+            unit.bossSkillCd = 8;
+          } else if (unit.type === 'HARPIST') {
+            // 弦召残响：弦音化卒——唤一对墨卒入阵（场上敌军 16 护栏防滚雪球）
+            const foes = unitsRef.current.filter((u) => u.isEnemy && u.hp > 0).length;
+            if (foes < 16) {
+              spawnUnit('SWORD', true, Math.max(120, unit.x - 46));
+              spawnUnit('SWORD', true, Math.max(120, unit.x - 92));
+              triggerSealStamp(unit.x, unit.y - 60, '召');
+              sound.playPluck(196, 0.5);
+            }
+            if (dbgBoss?.bossPhase) { dbgBoss.bossPhase.summon += 1; dbgBoss.bossPhase.lastSkill = '弦召残响'; }
+            unit.bossSkillCd = 11;
+          } else {
+            // 影袭瞬步：向阵前瞬步 150 并挥出断金一刃（半径 110 溅射，武将七五折）
+            unit.x = Math.max(120, unit.x - 150);
+            const R2 = 110;
+            const dmg2 = Math.round(unit.attack * 1.4);
+            for (const u of unitsRef.current) {
+              if (!u.isEnemy && u.hp > 0 && Math.hypot(u.x - unit.x, u.y - unit.y) <= R2) {
+                applyDamage(u, dmg2, true, unit.x, unit.y);
+              }
+            }
+            const sh = heroRef.current;
+            if (sh.state !== 'DEAD' && Math.hypot(sh.x - unit.x, sh.y - unit.y) <= R2) {
+              applyDamage('HERO', Math.round(dmg2 * 0.75), true, unit.x, unit.y);
+            }
+            rendererRef.current?.addFxRing(unit.x, unit.y, 'rgba(30, 30, 46, 0.9)', 8, R2, 0.4, 5, true);
+            triggerSealStamp(unit.x, unit.y - 60, '影');
+            sound.playPluck(146.83, 0.4);
+            if (dbgBoss?.bossPhase) { dbgBoss.bossPhase.strike += 1; dbgBoss.bossPhase.lastSkill = '影袭瞬步'; }
+            unit.bossSkillCd = 6;
+          }
+        }
       }
 
       if (unit.type === 'SCRIBE' && !unit.isEnemy) {
