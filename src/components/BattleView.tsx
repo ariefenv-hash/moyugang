@@ -41,6 +41,7 @@ import {
   CharMatchResult,
 } from '../utils/charRecognizer';
 import { setActiveWeapon, type WeaponId } from '../utils/weaponSystem';
+import { ParticlePool } from '../utils/particlePool';
 import { PauseOverlay } from './PauseOverlay';
 import { BlessingModal } from './BlessingModal';
 import bgInkMountains from '../assets/images/bg_ink_mountains_1791652099827.jpg';
@@ -144,6 +145,16 @@ const drawCharStrokesPreview = (
   }
   ctx.restore();
 };
+
+// ===== 粒子对象池（Task 41）· 模块级单例：跨战斗复用，GC 压力趋平 =====
+const particlePool = new ParticlePool();
+
+/** 统一落笔：取池对象 → 字面量全量覆盖（tsc 保证必填齐备）→ 入册 */
+function spawnParticle(list: Particle[], init: Particle): void {
+  const p = particlePool.acquire();
+  Object.assign(p, init);
+  list.push(p);
+}
 
 interface BattleViewProps {
   level: LevelConfig;
@@ -868,7 +879,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     if (!qualityLowRef.current) {
       const hero = heroRef.current;
       for (let i = 0; i < 26; i++) {
-        particlesRef.current.push({
+        spawnParticle(particlesRef.current, {
           id: `p_milestone_${seq}_${i}`,
           x: hero.x + (Math.random() - 0.5) * 90,
           y: hero.y - 20 - Math.random() * 60,
@@ -940,7 +951,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     // 落咒演出：紫黑墨尘自地缝翻起
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
-      particlesRef.current.push({
+      spawnParticle(particlesRef.current, {
         id: `p_corrupt_${Date.now()}_${i}`,
         x: x + Math.cos(a) * 14,
         y: y + Math.sin(a) * 6,
@@ -1020,7 +1031,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           const touched = z.x + z.r >= minX && z.x - z.r <= maxX;
           if (touched) {
             for (let i = 0; i < 8; i++) {
-              particlesRef.current.push({
+              spawnParticle(particlesRef.current, {
                 id: `p_purge_${Date.now()}_${i}`,
                 x: z.x + (Math.random() - 0.5) * z.r,
                 y: z.y + (Math.random() - 0.5) * z.r * 0.5,
@@ -1464,7 +1475,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     const burst = killShot ? 14 : heavyHit ? 8 : 4;
     for (let i = 0; i < burst; i++) {
-      particlesRef.current.push({
+      spawnParticle(particlesRef.current, {
         id: `p_${Math.random()}`,
         x: unit.x,
         y: unit.y,
@@ -1674,7 +1685,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           hero.y = Math.max(LANE_MIN_Y.current, Math.min(LANE_MAX_Y.current, tb.y));
           // 跨步残影：三道笔势掠痕
           for (let i = 0; i < 6; i++) {
-            particlesRef.current.push({
+            spawnParticle(particlesRef.current, {
               id: `p_lunge_${Math.random()}`,
               x: hero.x - dirX * (10 + i * 16),
               y: hero.y,
@@ -1717,7 +1728,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       if (spinHit) armChain();
       for (let i = 0; i < 14; i++) {
         const ang = (i / 14) * Math.PI * 2;
-        particlesRef.current.push({
+        spawnParticle(particlesRef.current, {
           id: `p_spin_${Math.random()}`,
           x: hero.x + Math.cos(ang) * 60,
           y: hero.y + Math.sin(ang) * 34,
@@ -1831,7 +1842,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     rendererRef.current?.addFxRing(endX, hero.y, fxColor, 6, 46, 0.3, 2.4, true);
     for (let i = 0; i < 10; i++) {
       const tt = i / 9;
-      particlesRef.current.push({
+      spawnParticle(particlesRef.current, {
         id: `p_dash_${Date.now()}_${i}`,
         x: startX + (endX - startX) * tt,
         y: hero.y + (Math.random() - 0.5) * 30,
@@ -1885,7 +1896,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     rendererRef.current?.addFxRing(backX, hero.y, fxColor, 5, 40, 0.28, 2.2, true);
     for (let i = 0; i < 9; i++) {
       const tt = i / 8;
-      particlesRef.current.push({
+      spawnParticle(particlesRef.current, {
         id: `p_retreat_${Date.now()}_${i}`,
         x: startX + (backX - startX) * tt,
         y: hero.y + (Math.random() - 0.5) * 26,
@@ -1968,7 +1979,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     triggerShake(3.5, 0.16);
     for (let i = 0; i < 14; i++) {
       const ang = (i / 14) * Math.PI * 2;
-      particlesRef.current.push({
+      spawnParticle(particlesRef.current, {
         id: `p_bshield_${Date.now()}_${i}`,
         x: hero.x + Math.cos(ang) * 26,
         y: hero.y + Math.sin(ang) * 12,
@@ -2027,7 +2038,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
         });
         // 特效强化：针出金芒（枪口星火迸射）
         for (let k = 0; k < 3; k++) {
-          particlesRef.current.push({
+          spawnParticle(particlesRef.current, {
             id: `p_barrage_${Date.now()}_${i}_${k}`,
             x: heroRef.current.x + 24 * heroRef.current.facing,
             y: heroRef.current.y + (Math.random() - 0.5) * 14,
@@ -2129,7 +2140,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     });
 
     for (let i = 0; i < 64; i++) {
-      particlesRef.current.push({
+      spawnParticle(particlesRef.current, {
         id: `p_ult_${i}`,
         x: hero.x + (Math.random() - 0.5) * 560,
         y: hero.y + (Math.random() - 0.5) * 90,
@@ -2202,7 +2213,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
         });
         // 浪起水花
         for (let k = 0; k < 7; k++) {
-          particlesRef.current.push({
+          spawnParticle(particlesRef.current, {
             id: `p_wave_${Date.now()}_${i}_${k}`,
             x: h.x + 24 * h.facing + (Math.random() - 0.5) * 30,
             y: wy + (Math.random() - 0.5) * 26,
@@ -2265,7 +2276,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     });
 
     for (let i = 0; i < 22; i++) {
-      particlesRef.current.push({
+      spawnParticle(particlesRef.current, {
         id: `p_heart_${i}`,
         x: hero.x + (Math.random() - 0.5) * 320,
         y: hero.y + (Math.random() - 0.5) * 60,
@@ -2324,7 +2335,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     // 墨雨：自天而降的墨滴群
     for (let i = 0; i < 46; i++) {
-      particlesRef.current.push({
+      spawnParticle(particlesRef.current, {
         id: `p_nova_${i}`,
         x: hero.x + (Math.random() - 0.5) * 980,
         y: hero.y + (Math.random() - 0.5) * 200,
@@ -2390,7 +2401,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     // 龙吟起手：墨尘腾空
     for (let i = 0; i < 26; i++) {
-      particlesRef.current.push({
+      spawnParticle(particlesRef.current, {
         id: `p_dk_${i}`,
         x: hero.x + dir * 60 + (Math.random() - 0.5) * 120,
         y: hero.y + (Math.random() - 0.5) * 80,
@@ -2781,6 +2792,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     // 蚀痕注入/清除（无头验证专用测试缝：与 spawnCorruptZone 同一落点管线）
     dbg.__inkGestureDebug.spawnCorruptZone = (x: number, y: number, r?: number) =>
       spawnCorruptZone(x, y, r);
+    dbg.__inkGestureDebug.particlePool = () => particlePool.stats();
     dbg.__inkGestureDebug.clearCorruptZones = () => {
       corruptZonesRef.current = [];
     };
@@ -3072,7 +3084,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
                   ghost.emitCursor += 1;
                   emitted += 1;
                   if (!pt || Math.random() < 0.35) continue;
-                  particlesRef.current.push({
+                  spawnParticle(particlesRef.current, {
                     id: `p_ghost_${Date.now()}_${ghost.emitCursor}`,
                     x: pt.x + ghost.camX0,
                     y: pt.y,
@@ -3436,7 +3448,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           const bossSpawnY = (LANE_MIN_Y.current + LANE_MAX_Y.current) * 0.5;
           rendererRef.current?.addFxRing(bossSpawnX, bossSpawnY, 'rgba(159, 18, 57, 0.9)', 12, 190, 0.5, 4, true);
           for (let i = 0; i < 16; i++) {
-            particlesRef.current.push({
+            spawnParticle(particlesRef.current, {
               id: `p_bossin_${Date.now()}_${i}`,
               x: bossSpawnX + (Math.random() - 0.5) * 70,
               y: bossSpawnY + (Math.random() - 0.5) * 46,
@@ -3592,7 +3604,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           triggerHaptic([30, 30, 30]);
 
           for (let pi = 0; pi < 32; pi++) {
-            particlesRef.current.push({
+            spawnParticle(particlesRef.current, {
               id: `wg_${pi}_${Math.random()}`,
               x: hero.x + (Math.random() - 0.5) * 260,
               y: hero.y + (Math.random() - 0.5) * 60,
@@ -3625,7 +3637,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
       // 墨色尾迹
       if (Math.random() < 0.6) {
-        particlesRef.current.push({
+        spawnParticle(particlesRef.current, {
           id: `dk_${Math.random()}`,
           x: dragon.x - Math.sign(dragon.vx) * 20,
           y: dragon.y,
@@ -4059,14 +4071,19 @@ export const BattleView: React.FC<BattleViewProps> = ({
       if (p.vRot) p.rotation = (p.rotation || 0) + p.vRot * dt;
 
       if (p.life <= 0) {
-        particlesRef.current.splice(i, 1);
+        // 池化回收 + 换出移除（反向迭代下与 splice(i,1) 等价且 O(1)）
+        particlePool.release(p);
+        const last = particlesRef.current.pop()!;
+        if (i < particlesRef.current.length) particlesRef.current[i] = last;
       }
     }
 
-    // 行云模式粒子预算：低载设备限制同屏粒子存量（裁最老）
+    // 行云模式粒子预算：低载设备限制同屏粒子存量（裁最老，归还池）
     const maxParticles = qualityLowRef.current ? 130 : 420;
     if (particlesRef.current.length > maxParticles) {
-      particlesRef.current.splice(0, particlesRef.current.length - maxParticles);
+      const overflow = particlesRef.current.length - maxParticles;
+      const removed = particlesRef.current.splice(0, overflow);
+      for (const rp of removed) particlePool.release(rp);
     }
 
     // Update Damage Numbers

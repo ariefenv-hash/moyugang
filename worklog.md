@@ -771,3 +771,20 @@ Work Log:
 Stage Summary:
 - boss 战从「数值狂暴」升级为「狂暴+机制」双层：守垒型震波逼走位、召唤型滚雪球施压、突袭型瞬步贴脸，十章首领与无尽每五波玄墨霸主全体受益
 - 修改：src/types/game.ts（bossSkillCd 字段）· src/components/BattleView.tsx（机制层+驱动缝）· scripts/verify_boss_phase2.py（新增）· worklog.md
+
+---
+Task ID: 41
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查模式第四轮）
+Task: 粒子对象池化——短命高频对象分配/回收降本（待办池性能项）
+
+Work Log:
+- 待办池认领（性能远景项「粒子对象池化」；核对池内其余候选：新字诀墨/龙已在九字诀落地、无尽章节化已落 ENDLESS_VENUES、灵玉回收线已落 Task 32-35，本项为池中硕果仅存的实装项）
+- 新增 src/utils/particlePool.ts：ParticlePool 类（acquire/release/stats），FREE_CAP=480 略高于战斗帽 420，池满即弃内存有界；设计取舍三条——id 字段全程只写不读故池不管理；复用仅重置可选字段 rotation/vRot（必填字段由 tsc 保证调用点字面量全量覆盖，免全字段清零开销）；stats() 输出 acquired/reused/released/live/peakLive/free/reuseRate 供无头缝观测
+- BattleView.tsx：模块级单例 particlePool + 统一落笔 spawnParticle(list, init)（取池对象→字面量覆盖→入册）；十九处生成点全量改道；死亡回收由 splice(i,1) 改为「release + 反向迭代换出移除」（O(n)→O(1)）；溢出裁老路径同样归还池
+- 无头缝：__inkGestureDebug.particlePool() 输出统计快照（实测八手突刺 acquired=30/reused=20/复用率 0.667，池化收益实证）
+- 新增 scripts/verify_particle_pool.py：9 项（静态三断言 + 动态生发/帽遵守/归还/复用 + 零异常）
+- 全量回归：粒子池 9/9 · 蚀文咒师 9/9 · boss 二阶段 14/14 · 波次里程碑 8/8 · 生产冒烟 5/5；tsc 零错误 · vite build 通过（PWA 272 entries）
+
+Stage Summary:
+- 同屏至多 420 颗（行云 130）粒子的生灭从「每帧新分配 + O(n) splice」转为池化复用 + O(1) 换出，低端机 GC 停顿进一步压平；溢出/死亡双路径全量归还，内存峰值封顶
+- 修改：src/utils/particlePool.ts（新增）· src/components/BattleView.tsx（池接线+回收路径）· scripts/verify_particle_pool.py（新增）· worklog.md
