@@ -2,7 +2,7 @@ export type GameMode = 'MENU' | 'LEVEL_SELECT' | 'BATTLE' | 'UPGRADES' | 'LORE' 
 
 export type ArmyCommand = 'DEFEND' | 'HOLD' | 'ATTACK' | 'FOLLOW_HERO';
 
-export type UnitType = 'SCRIBE' | 'SWORD' | 'ARCHER' | 'GUARDIAN' | 'HARPIST';
+export type UnitType = 'SCRIBE' | 'SWORD' | 'ARCHER' | 'GUARDIAN' | 'HARPIST' | 'RUNECASTER';
 
 export interface UnitConfig {
   type: UnitType;
@@ -453,6 +453,18 @@ export interface InkSplat {
   y: number;
   r: number;
   /** 形状随机种子（旋转 + 瓣形抖动，保证每帧渲染一致） */
+  seed: number;
+  life: number;
+  maxLife: number;
+}
+
+/** 蚀痕污染带（蚀文咒师咒弹落点：升腾咒雾污染书符笔迹，正字临痕可驱散） */
+export interface InkCorruptZone {
+  id: string;
+  x: number;
+  y: number;
+  r: number;
+  /** 形状/相位随机种子（蚀纹折线与咒雾呼吸每帧渲染一致） */
   seed: number;
   life: number;
   maxLife: number;

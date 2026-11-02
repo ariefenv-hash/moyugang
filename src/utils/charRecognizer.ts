@@ -208,6 +208,21 @@ const GRADE_META: Record<CharGrade, { text: string; powerMult: number }> = {
   NENG: { text: '能品', powerMult: 1.0 },
 };
 
+const GRADE_ORDER: CharGrade[] = ['NENG', 'MIAO', 'SHEN'];
+
+/**
+ * 蚀痕剥级：蚀文咒痕浸染笔迹时，朱印评级按污染占比逐级裁降（SHEN→MIAO→NENG，触底即停）。
+ * 不动识别管线本体（$P 对平滑形变天然宽容，阈值游戏不可靠）——评级裁夺在此显式结算，
+ * 触底保留能品：痕上仍可施法反制（正字驱蚀），但威力与文思收益必损。
+ */
+export function demoteCharGrade(m: CharMatchResult, levels: number): CharMatchResult {
+  if (levels <= 0) return m;
+  const idx = Math.max(0, GRADE_ORDER.indexOf(m.grade) - levels);
+  const grade = GRADE_ORDER[idx];
+  const meta = GRADE_META[grade];
+  return { ...m, grade, gradeText: meta.text, powerMult: meta.powerMult };
+}
+
 /** 不成字分数线（超过则驳回；实测潦草同字上限≈0.033，连笔变体入库后收紧至 0.078 保宁拒勿误） */
 const FAIL_SCORE = 0.078;
 /** 朱印评级分数线（基于 $P 贪心点云距离 + 笔画数惩罚的实测标定） */

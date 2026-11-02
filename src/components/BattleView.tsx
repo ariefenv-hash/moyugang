@@ -20,6 +20,7 @@ import {
   InkDragon,
   InkTreasure,
   InkSplat,
+  InkCorruptZone,
 } from '../types/game';
 import {
   UNIT_CONFIGS,
@@ -33,6 +34,7 @@ import { GestureRecognizer, GestureResult, InkTint } from '../utils/gestureRecog
 import {
   recognizeChar,
   peekCharMatch,
+  demoteCharGrade,
   CHAR_MAX_STROKES,
   CHAR_EARLY_COMMIT_SCORE,
   CharStrokePoint,
@@ -379,6 +381,16 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
   // ===== 地面墨渍贴花（击杀/重击飞溅痕迹） =====
   const inkSplatsRef = useRef<InkSplat[]>([]);
+
+  // ===== 蚀痕污染带（蚀文咒师咒弹落点：污染书符笔迹，正字临痕可驱） =====
+  const corruptZonesRef = useRef<InkCorruptZone[]>([]);
+  const corruptHintShownRef = useRef(false);
+  /** 单笔污染采点/总采点（收笔汇入整字，蚀痕剥级结算用） */
+  const strokePollutedRef = useRef(0);
+  const strokeTotalRef = useRef(0);
+  /** 整字累计污染采点/总采点（commit 后清零） */
+  const charPollutedAccRef = useRef(0);
+  const charTotalAccRef = useRef(0);
 
   // 2.5D Arena Geometry
   const WORLD_WIDTH = 2600;
@@ -912,6 +924,43 @@ export const BattleView: React.FC<BattleViewProps> = ({
     if (splats.length > 26) splats.splice(0, splats.length - 26);
   };
 
+  // 蚀痕落地：咒弹落点升腾污染带（上限 4 处，最旧者先散）
+  const spawnCorruptZone = (x: number, y: number, r: number = 48) => {
+    const zones = corruptZonesRef.current;
+    zones.push({
+      id: `corrupt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      x,
+      y,
+      r,
+      seed: Math.random() * Math.PI * 2,
+      life: 9,
+      maxLife: 9,
+    });
+    if (zones.length > 4) zones.splice(0, zones.length - 4);
+    // 落咒演出：紫黑墨尘自地缝翻起
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      particlesRef.current.push({
+        id: `p_corrupt_${Date.now()}_${i}`,
+        x: x + Math.cos(a) * 14,
+        y: y + Math.sin(a) * 6,
+        altitudeZ: 4,
+        vx: Math.cos(a) * 46,
+        vy: Math.sin(a) * 20,
+        vz: 60 + Math.random() * 70,
+        color: '#7c3aed',
+        size: 2.2 + Math.random() * 2,
+        alpha: 0.85,
+        life: 0.7,
+        maxLife: 0.7,
+        type: 'SMOKE',
+        rotation: Math.random() * Math.PI,
+        vRot: (Math.random() - 0.5) * 6,
+      });
+    }
+    sound.playPluck(146.83, 0.45);
+  };
+
   // ===== 字诀助手：收笔判定 / 技能投射（分屏时代：上区即纸，无模式开关） =====
   // 字诀收笔判定：停笔 550ms 自动识别（集满笔画数则立即判定）——笔间自然停顿实测约 300-500ms，550ms 不拆字
   const commitCharStrokes = () => {
@@ -925,6 +974,14 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     if (heroRef.current.state === 'DEAD') return;
     const match = recognizeChar({ strokes });
+    // 蚀痕剥级占比先行结算并清零（不随成败分支遗漏）
+    const corruptRatio =
+      charTotalAccRef.current > 0
+        ? charPollutedAccRef.current / charTotalAccRef.current
+        : 0;
+    const demoteLevels = corruptRatio >= 0.55 ? 2 : corruptRatio >= 0.25 ? 1 : 0;
+    charPollutedAccRef.current = 0;
+    charTotalAccRef.current = 0;
     if (!match) {
       sound.playCharFail();
       // 墨渍引导：足够接近某字时提示「近『X』形」，帮助玩家修正
@@ -940,12 +997,58 @@ export const BattleView: React.FC<BattleViewProps> = ({
       return;
     }
 
-    sound.playCharCast(match.grade);
-    triggerHaptic(match.grade === 'SHEN' ? [20, 30, 20] : 20);
-    triggerSealStamp(heroRef.current.x, heroRef.current.y - 72, match.char);
+    // 蚀痕剥级：触底保留能品，威力/文思收益必损；剥级时在提示中明示因果
+    const finalMatch = demoteCharGrade(match, demoteLevels);
+    const corrodeNote =
+      demoteLevels > 0
+        ? ` · 蚀痕剥级（污染${Math.round(corruptRatio * 100)}%）`
+        : '';
+
+    sound.playCharCast(finalMatch.grade);
+    triggerHaptic(finalMatch.grade === 'SHEN' ? [20, 30, 20] : 20);
+    triggerSealStamp(heroRef.current.x, heroRef.current.y - 72, finalMatch.char);
+
+    // 正字驱蚀：成字笔迹所覆之蚀痕尽数消散（以书代战，化咒为净）
+    if (corruptZonesRef.current.length > 0) {
+      const strokeXs: number[] = [];
+      for (const s of strokes) for (const p of s) strokeXs.push(p.x + cameraX.current);
+      if (strokeXs.length > 0) {
+        const minX = Math.min(...strokeXs) - 24;
+        const maxX = Math.max(...strokeXs) + 24;
+        const before = corruptZonesRef.current.length;
+        const purged = corruptZonesRef.current.filter((z) => {
+          const touched = z.x + z.r >= minX && z.x - z.r <= maxX;
+          if (touched) {
+            for (let i = 0; i < 8; i++) {
+              particlesRef.current.push({
+                id: `p_purge_${Date.now()}_${i}`,
+                x: z.x + (Math.random() - 0.5) * z.r,
+                y: z.y + (Math.random() - 0.5) * z.r * 0.5,
+                altitudeZ: 6,
+                vx: (Math.random() - 0.5) * 40,
+                vy: (Math.random() - 0.5) * 16,
+                vz: 90 + Math.random() * 80,
+                color: '#fcd34d',
+                size: 1.8 + Math.random() * 1.6,
+                alpha: 0.9,
+                life: 0.6,
+                maxLife: 0.6,
+                type: 'STAR',
+              });
+            }
+          }
+          return !touched;
+        });
+        corruptZonesRef.current = purged;
+        if (purged.length < before) {
+          sound.playPluck(659.25, 0.4);
+          flashGestureBadge('「净」', '正字驱蚀 · 蚀痕消散');
+        }
+      }
+    }
 
     // 字迹化灵：成字墨稿不即散，化作该字属性的灵韵（0.95s 内沿写序燃尽飞散，世界锚定）
-    const ghostFx = CHAR_GHOST_FX[match.char];
+    const ghostFx = CHAR_GHOST_FX[finalMatch.char];
     if (ghostFx) {
       const flatPts: { x: number; y: number }[] = [];
       for (const s of strokes) {
@@ -971,17 +1074,17 @@ export const BattleView: React.FC<BattleViewProps> = ({
     const chainBonus = Math.min(0.3, (cc.count - 1) * 0.1);
 
     setCharHint({
-      text: `「${match.char}」`,
+      text: `「${finalMatch.char}」`,
       sub:
         cc.count >= 2
-          ? `${match.gradeText} · ${match.name}（${match.poetic}）· 文思${cc.count}段 增伤+${Math.round(chainBonus * 100)}%`
-          : `${match.gradeText} · ${match.name}（${match.poetic}）`,
+          ? `${finalMatch.gradeText} · ${finalMatch.name}（${finalMatch.poetic}）· 文思${cc.count}段 增伤+${Math.round(chainBonus * 100)}%${corrodeNote}`
+          : `${finalMatch.gradeText} · ${finalMatch.name}（${finalMatch.poetic}）${corrodeNote}`,
     });
     safeTimeout(
-      () => setCharHint((prev) => (prev?.text === `「${match.char}」` ? null : prev)),
+      () => setCharHint((prev) => (prev?.text === `「${finalMatch.char}」` ? null : prev)),
       2400
     );
-    castCharAbility(match, chainBonus);
+    castCharAbility(finalMatch, chainBonus);
   };
 
   const scheduleCharCommit = () => {
@@ -1000,6 +1103,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
     if (charStrokesRef.current.length === 0) return;
     charStrokesRef.current.pop();
+    charPollutedAccRef.current = 0;
+    charTotalAccRef.current = 0;
     setCharStrokeCount(charStrokesRef.current.length);
     if (charStrokesRef.current.length > 0) scheduleCharCommit();
     sound.playPluck(392, 0.25);
@@ -1011,6 +1116,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
       charCommitTimerRef.current = null;
     }
     charStrokesRef.current = [];
+    charPollutedAccRef.current = 0;
+    charTotalAccRef.current = 0;
     setCharStrokeCount(0);
     sound.playPluck(329.63, 0.3);
   };
@@ -2338,6 +2445,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
       charCommitTimerRef.current = null;
     }
 
+    // 单笔污染统计起点（收笔时汇入整字占比）
+    strokePollutedRef.current = 0;
+    strokeTotalRef.current = 0;
+
     gestureRecognizer.current.startStroke(clientX, clientY, e.pointerType);
   };
 
@@ -2351,7 +2462,34 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     if (!gestureRecognizer.current.getIsTracing()) return;
 
-    gestureRecognizer.current.addPoint(clientX, clientY);
+    // 蚀痕扰墨：书符区笔迹穿过蚀痕上空时手腕发蚀——点迹抖动，画得正也写得歪
+    let ptX = clientX;
+    let ptY = clientY;
+    if (strokeZoneRef.current === 'CAST' && corruptZonesRef.current.length > 0) {
+      const wX = clientX + cameraX.current;
+      for (const z of corruptZonesRef.current) {
+        if (z.life > 0 && Math.abs(wX - z.x) <= z.r) {
+          const t = gameTimeRef.current;
+          const idx = gestureRecognizer.current.getPoints().length;
+          // 相关性摇摆（成段歪斜，视觉腕部发蚀）+ 逐点微颤
+          ptX += Math.sin(t * 21 + idx * 1.9 + z.seed) * 6 + (Math.random() - 0.5) * 3;
+          ptY += Math.cos(t * 24 + idx * 2.3 + z.seed) * 5 + (Math.random() - 0.5) * 2.4;
+          // 污染采点统计（收笔结算蚀痕剥级）
+          strokePollutedRef.current += 1;
+          if (!corruptHintShownRef.current) {
+            corruptHintShownRef.current = true;
+            flashGestureBadge('「蚀」', '蚀痕扰墨 · 书字于痕上可驱之', 2600);
+          }
+          // 无头观测：本次会话被污染的采点数
+          const dbg = (window as unknown as Record<string, any>).__inkGestureDebug;
+          if (dbg) dbg.pollutedPoints = (dbg.pollutedPoints || 0) + 1;
+          break;
+        }
+      }
+    }
+
+    gestureRecognizer.current.addPoint(ptX, ptY);
+    strokeTotalRef.current += 1;
 
     // If dragging slowly in gesture mode, continuously lead the hero!
     // 分屏牵引法度：书符区（上）恒为纸绝不带跑角色；行止区（下）拖动引路
@@ -2554,6 +2692,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
       }
       if (strokePts.length >= 2 && pathLen >= 6) {
         charStrokesRef.current.push(strokePts);
+        // 汇入整字污染占比（蚀痕剥级在收笔判定时结算）
+        charPollutedAccRef.current += strokePollutedRef.current;
+        charTotalAccRef.current += strokePts.length;
         setCharStrokeCount(charStrokesRef.current.length);
         if (charStrokesRef.current.length >= CHAR_MAX_STROKES) {
           commitCharStrokes();
@@ -2629,6 +2770,20 @@ export const BattleView: React.FC<BattleViewProps> = ({
     });
     dbg.__inkGestureDebug.heroTarget = () => heroTargetMove.current;
     dbg.__inkGestureDebug.strokeZone = () => strokeZoneRef.current;
+    // 蚀痕观测（无头验证用）：数量/位置/剩余寿命
+    dbg.__inkGestureDebug.corruptZones = () =>
+      corruptZonesRef.current.map((z) => ({
+        x: Math.round(z.x),
+        y: Math.round(z.y),
+        r: z.r,
+        life: Math.round(z.life * 10) / 10,
+      }));
+    // 蚀痕注入/清除（无头验证专用测试缝：与 spawnCorruptZone 同一落点管线）
+    dbg.__inkGestureDebug.spawnCorruptZone = (x: number, y: number, r?: number) =>
+      spawnCorruptZone(x, y, r);
+    dbg.__inkGestureDebug.clearCorruptZones = () => {
+      corruptZonesRef.current = [];
+    };
     // 最近一次经典手势识别结果（无头透视 TAP/DRAG 误判排查；仅首次初始化，渲染不重置）
     if (dbg.__inkGestureDebug.lastGesture === undefined) {
       dbg.__inkGestureDebug.lastGesture = null;
@@ -2842,6 +2997,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           treasuresRef.current,
           inkSlowTimerRef.current > 0 ? inkSlowTimerRef.current / INK_SLOW_DURATION : 0,
           inkSplatsRef.current,
+          corruptZonesRef.current,
           comboRef.current.tier,
           comboRef.current.count
         );
@@ -3283,6 +3439,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
         if (waveNo >= 3) pool.push('ARCHER');
         if (waveNo >= 5) pool.push('GUARDIAN');
         if (waveNo >= 7) pool.push('HARPIST');
+        if (waveNo >= 9) pool.push('RUNECASTER');
 
         for (let i = 0; i < count; i++) {
           const pick = pool[Math.floor(Math.random() * pool.length)];
@@ -3478,6 +3635,13 @@ export const BattleView: React.FC<BattleViewProps> = ({
       if (sp.life <= 0) inkSplatsRef.current.splice(i, 1);
     }
 
+    // 蚀痕污染带自然消散（正字驱蚀另行即时清除）
+    for (let i = corruptZonesRef.current.length - 1; i >= 0; i--) {
+      const cz = corruptZonesRef.current[i];
+      cz.life -= dt;
+      if (cz.life <= 0) corruptZonesRef.current.splice(i, 1);
+    }
+
     // Update Units
     for (let i = units.length - 1; i >= 0; i--) {
       const unit = units[i];
@@ -3624,7 +3788,54 @@ export const BattleView: React.FC<BattleViewProps> = ({
         }
       }
 
-      if (nearestTarget && minDistance <= unit.attackRange) {
+      if (unit.type === 'RUNECASTER' && nearestTarget) {
+        // 咒师游斗：贴脸即退，咒距内吟唱遥书，过远则前压
+        if (minDistance < 190) {
+          unit.state = 'RETREAT';
+          unit.facing = unit.isEnemy ? 1 : -1;
+          unit.x += (unit.isEnemy ? 1 : -1) * effectiveSpeed * 0.9 * dt;
+        } else if (minDistance <= unit.attackRange) {
+          unit.state = 'ATTACK';
+          unit.facing = unit.isEnemy ? -1 : 1;
+          if (unit.attackCooldown <= 0) {
+            unit.attackCooldown = 1 / UNIT_CONFIGS[unit.type].attackSpeed;
+            const isBase = nearestTarget === 'BASE';
+            const isHero = nearestTarget === 'HERO';
+            const tgtUnit = isBase || isHero ? null : (nearestTarget as UnitInstance);
+            const tx = isBase
+              ? unit.isEnemy ? 100 : WORLD_WIDTH - 100
+              : isHero
+                ? hero.x
+                : tgtUnit!.x;
+            const ty = isBase ? unit.y : isHero ? hero.y : tgtUnit!.y;
+            const dx = tx - unit.x;
+            const dy = ty - unit.y;
+            const dist = Math.max(60, Math.hypot(dx, dy));
+            const orbSpeed = 300;
+            sound.playPluck(164.81, 0.4);
+            projectilesRef.current.push({
+              id: `orb_${Date.now()}_${Math.random()}`,
+              x: unit.x + unit.facing * 16,
+              y: unit.y,
+              altitudeZ: 30,
+              targetX: tx,
+              targetY: ty,
+              vx: (dx / dist) * orbSpeed,
+              vy: (dy / dist) * orbSpeed,
+              vz: 0,
+              damage: unit.attack,
+              isEnemy: unit.isEnemy,
+              type: 'DARK_ORB',
+              duration: 0,
+              maxDuration: dist / orbSpeed + 0.12,
+            });
+          }
+        } else {
+          unit.state = 'WALK';
+          unit.facing = unit.isEnemy ? -1 : 1;
+          unit.x += unit.facing * effectiveSpeed * dt;
+        }
+      } else if (nearestTarget && minDistance <= unit.attackRange) {
         unit.state = 'ATTACK';
         if (unit.attackCooldown <= 0) {
           unit.attackCooldown = 1 / UNIT_CONFIGS[unit.type].attackSpeed;
@@ -3703,6 +3914,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
       proj.duration += dt;
 
       if (proj.duration >= proj.maxDuration) {
+        // 蚀文咒弹落空 → 咒力入地，蚀痕升腾
+        if (proj.type === 'DARK_ORB') {
+          spawnCorruptZone(proj.x, proj.y);
+        }
         projectilesRef.current.splice(i, 1);
         continue;
       }

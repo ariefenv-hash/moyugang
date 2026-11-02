@@ -259,6 +259,19 @@ export const UNIT_CONFIGS: Record<string, UnitConfig> = {
     description: '抚七弦古琴，音波如涟漪荡漾，既可震退大片敌兵，亦可为全军恢复墨元。',
     icon: 'Music',
   },
+  RUNECASTER: {
+    type: 'RUNECASTER',
+    name: '蚀文咒师',
+    title: '洗墨遗孽',
+    cost: 220,
+    maxHp: 210,
+    attack: 22,
+    attackRange: 430,
+    attackSpeed: 0.3,
+    speed: 118,
+    description: '执洗墨遗笔遥书蚀文咒：咒弹落处蚀痕升腾，笔迹过之朱印受蚀剥级；正字临痕可驱。仅现于玄墨军阵。',
+    icon: 'Sparkles',
+  },
 };
 
 /** 无尽试炼特殊关卡：波次无限，敌势逐波狂涨（id 取 999 区间，避开主线关卡 id） */

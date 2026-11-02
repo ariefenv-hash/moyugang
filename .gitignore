@@ -18,3 +18,5 @@ agent-ctx/
 .clawhub/
 .push-tmp/
 __pycache__/
+package-lock.json
+node_modules/

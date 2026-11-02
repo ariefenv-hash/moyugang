@@ -10,6 +10,7 @@ import {
   InkDragon,
   InkTreasure,
   InkSplat,
+  InkCorruptZone,
 } from '../types/game';
 import { UNIT_CONFIGS } from '../data/gameData';
 import { drawVectorWeapon, getWeaponReach, getActiveWeaponId } from './weaponSystem';
@@ -61,6 +62,8 @@ export class CanvasRenderer {
   /* ===== 程序化动作引擎内部状态（v3） ===== */
   private frameDt: number = 1 / 60;
   private lastGameTime: number = -1;
+  /** 当前帧游戏时间（弹体/单位动画取相位用） */
+  private frameGameTime: number = 0;
   private heroPose: StickPose = makeDefaultPose();
   private heroWalkPhase: number = 0;
   private lastHeroX: number = 0;
@@ -170,6 +173,7 @@ export class CanvasRenderer {
     treasures: InkTreasure[] = [],
     inkSlowProgress: number = 0,
     inkSplats: InkSplat[] = [],
+    corruptZones: InkCorruptZone[] = [],
     comboTier: string = 'NONE',
     comboCount: number = 0
   ) {
@@ -182,6 +186,7 @@ export class CanvasRenderer {
         : Math.max(0, Math.min(0.05, gameTime - this.lastGameTime));
     this.lastGameTime = gameTime;
     this.frameDt = dt;
+    this.frameGameTime = gameTime;
     this.stepFX(dt);
 
     // 每帧重置基准变换到逻辑坐标系（物理分辨率由 dpr 缩放）
@@ -198,6 +203,9 @@ export class CanvasRenderer {
 
     // 2.5 地面墨渍贴花（击杀/重击飞溅的水墨痕迹，画在单位层之下）
     this.drawInkSplats(inkSplats, cameraX);
+
+    // 2.6 蚀痕污染带（咒师落咒处：地面墨痕 + 升腾咒雾柱，污染上方书符区）
+    this.drawCorruptZones(corruptZones, cameraX, gameTime);
 
     // 3. Ground Lotus Traps / Runes
     lotusTraps.forEach((trap) => {
@@ -3984,6 +3992,59 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
+  /** 蚀痕污染带：地面紫黑墨痕 + 蚀纹折线 + 升腾咒雾柱（书符区污染的可视化根） */
+  private drawCorruptZones(zones: InkCorruptZone[], cameraX: number, gameTime: number) {
+    const ctx = this.ctx;
+    for (const z of zones) {
+      const sx = z.x - cameraX;
+      if (sx < -180 || sx > this.width + 180) continue;
+      const born = Math.min(1, (z.maxLife - z.life) / 0.4);
+      const fade = Math.min(1, Math.max(0, z.life) / 0.8);
+      const k = born * fade;
+      if (k <= 0) continue;
+      const pulse = 0.82 + Math.sin(gameTime * 3.4 + z.seed) * 0.18;
+      ctx.save();
+      // —— 地面蚀痕主体（透视压扁椭圆，紫黑墨渍） ——
+      ctx.globalAlpha = k * 0.55 * pulse;
+      ctx.fillStyle = '#2e103c';
+      ctx.beginPath();
+      ctx.ellipse(sx, z.y, z.r * pulse, z.r * 0.42 * pulse, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // —— 蚀纹折线（seed 三笔，缓慢蠕动） ——
+      ctx.globalAlpha = k * 0.5 * pulse;
+      ctx.strokeStyle = '#a78bfa';
+      ctx.lineWidth = 1.6;
+      for (let s = 0; s < 3; s++) {
+        ctx.beginPath();
+        const ang = z.seed + s * 2.09;
+        for (let i = 0; i <= 3; i++) {
+          const rr = (z.r * 0.85 * (i + 1)) / 4;
+          const a2 = ang + Math.sin(gameTime * 1.7 + s * 3 + i) * 0.35;
+          const px = sx + Math.cos(a2) * rr;
+          const py = z.y + Math.sin(a2) * rr * 0.42;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+      // —— 升腾咒雾柱（污染上方书符区的可视根，缓呼吸） ——
+      const colH = Math.min(300, Math.max(180, z.y * 0.42));
+      const g = ctx.createLinearGradient(0, z.y, 0, z.y - colH);
+      g.addColorStop(0, `rgba(88, 28, 135, ${0.17 * k})`);
+      g.addColorStop(1, 'rgba(88, 28, 135, 0)');
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = g;
+      ctx.fillRect(sx - z.r * pulse, z.y - colH, z.r * 2 * pulse, colH);
+      // —— 柱中浮字「蚀」 ——
+      ctx.globalAlpha = k * 0.55 * pulse;
+      ctx.fillStyle = '#c4b5fd';
+      ctx.font = '600 13px "Noto Serif SC", serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('蚀', sx, z.y - colH * 0.55 + Math.sin(gameTime * 2 + z.seed) * 6);
+      ctx.restore();
+    }
+  }
+
   /** 地面墨渍贴花（seed 决定瓣形，life 驱动淡出；透视压扁贴地） */
   private drawInkSplats(splats: InkSplat[], cameraX: number) {
     if (splats.length === 0) return;
@@ -4965,6 +5026,86 @@ export class CanvasRenderer {
         }
         break;
       }
+
+      /* ------------------------------------------------ 蚀文咒师：悬笔咒袍 · 洗墨遗孽（敌军专属） ------------------------------------------------ */
+      case 'RUNECASTER': {
+        const hover = Math.sin(gameTime * 2.2 + (unit.limbPhase || 0)) * 3.5;
+        const sway = Math.sin(gameTime * 1.5 + (unit.limbPhase || 0)) * 0.05;
+        const robeY = -26 + hover;
+        // 咒袍（下摆蚀纹波动）
+        ctx.fillStyle = mainColor;
+        const hemW = Math.sin(gameTime * 2.6 + (unit.limbPhase || 0)) * 2.2;
+        ctx.beginPath();
+        ctx.moveTo(Math.sin(sway) * 8, robeY - 22);
+        ctx.lineTo(-10 + hemW, robeY + 10);
+        ctx.quadraticCurveTo(0, robeY + 14, 10 + hemW * 0.7, robeY + 10);
+        ctx.closePath();
+        ctx.fill();
+        // 蚀纹衣缘（幽紫）
+        ctx.strokeStyle = '#a78bfa';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(-9 + hemW * 0.8, robeY + 8);
+        ctx.quadraticCurveTo(0, robeY + 12, 9 + hemW * 0.6, robeY + 8);
+        ctx.stroke();
+        // 躯干
+        const shX = Math.sin(sway) * 8 + 1.5;
+        const shY = robeY - 22;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 3.1;
+        ctx.beginPath();
+        ctx.moveTo(shX, shY + 2);
+        ctx.lineTo(shX + 2, shY - 11);
+        ctx.stroke();
+        // 兜帽头（低垂）+ 帽尖
+        ctx.fillStyle = mainColor;
+        ctx.beginPath();
+        ctx.arc(shX + 2, shY - 17, 6.2, 0, TAU);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(shX + 2, shY - 26);
+        ctx.quadraticCurveTo(shX + 8, shY - 21, shX + 6, shY - 14);
+        ctx.quadraticCurveTo(shX + 2, shY - 18, shX + 2, shY - 26);
+        ctx.fill();
+        // 瞳光（幽紫，咒师在场标识）
+        ctx.fillStyle = '#c4b5fd';
+        ctx.beginPath();
+        ctx.arc(shX + 5, shY - 17.5, 1.3, 0, TAU);
+        ctx.fill();
+        // 洗墨之笔（倒握长笔，笔锋向下滴墨）
+        const brA =
+          since >= 0
+            ? lerp(0.5, -1.35, easeOutCubic(Math.min(1, since / 0.3)))
+            : 0.5 + Math.sin(gameTime * 1.8 + (unit.limbPhase || 0)) * 0.04;
+        const bx = shX + 3;
+        const by = shY - 12;
+        const tipX = bx + Math.sin(brA) * 26;
+        const tipY = by + Math.cos(brA) * 26;
+        ctx.strokeStyle = '#57534e';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+        // 笔锋（幽紫滴墨）
+        ctx.fillStyle = '#7c3aed';
+        ctx.beginPath();
+        ctx.arc(tipX, tipY + 2, 2.4, 0, TAU);
+        ctx.fill();
+        // 吟唱：笔尖蚀文咒环（施法后 0.55s 内扩散消散）
+        if (since >= 0 && since < 0.55) {
+          const t = since / 0.55;
+          ctx.save();
+          ctx.globalAlpha = 1 - t;
+          ctx.strokeStyle = '#a78bfa';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(tipX, tipY, 4 + t * 13, 0, TAU);
+          ctx.stroke();
+          ctx.restore();
+        }
+        break;
+      }
     }
 
     // 受击白闪（命中前几帧加性提亮，强化打击反馈）
@@ -5318,6 +5459,40 @@ export class CanvasRenderer {
       ctx.beginPath();
       ctx.moveTo(-34, 6);
       ctx.lineTo(-14, 8);
+      ctx.stroke();
+    } else if (proj.type === 'DARK_ORB') {
+      // 蚀文咒弹（咒师遥书）：幽紫墨球 + 内环蚀文 + 墨色拖尾
+      const orbPulse = 0.85 + Math.sin(this.frameGameTime * 9 + proj.x * 0.05) * 0.15;
+      const orbGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 11 * orbPulse);
+      orbGrad.addColorStop(0, '#c4b5fd');
+      orbGrad.addColorStop(0.45, '#7c3aed');
+      orbGrad.addColorStop(1, 'rgba(46, 16, 60, 0)');
+      ctx.fillStyle = orbGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 11 * orbPulse, 0, Math.PI * 2);
+      ctx.fill();
+      // 内环蚀纹（随飞行自转，咒意流转）
+      ctx.save();
+      ctx.rotate(this.frameGameTime * 5);
+      ctx.strokeStyle = 'rgba(196, 181, 253, 0.75)';
+      ctx.lineWidth = 1.1;
+      for (let s = 0; s < 3; s++) {
+        ctx.beginPath();
+        const a0 = (s / 3) * (Math.PI * 2);
+        ctx.arc(0, 0, 5.5, a0, a0 + 1.4);
+        ctx.stroke();
+      }
+      ctx.restore();
+      // 墨色拖尾
+      const tailGrad = ctx.createLinearGradient(-26, 0, -4, 0);
+      tailGrad.addColorStop(0, 'rgba(46, 16, 60, 0)');
+      tailGrad.addColorStop(1, 'rgba(124, 58, 237, 0.55)');
+      ctx.strokeStyle = tailGrad;
+      ctx.lineWidth = 4.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-26, 0);
+      ctx.lineTo(-4, 0);
       ctx.stroke();
     }
 
