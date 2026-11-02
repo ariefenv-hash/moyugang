@@ -65,9 +65,8 @@ async def main():
             await page.get_by_role('button', name='落墨').click()
             await page.wait_for_timeout(260)
 
-        # 4) 字诀模式：写「山」（4 笔）→ 竹影墨盾
-        await page.get_by_role('button', name='字诀').click()
-        await page.wait_for_timeout(2200)
+        # 4) 字诀画字：分屏改版后上区即纸（无模式开关），直接写「山」（4 笔）→ 竹影墨盾
+        await page.wait_for_timeout(600)
         canvas = page.locator('canvas').last
         box = await canvas.bounding_box()
         cx, cy = box['x'] + box['width'] / 2, box['y'] + box['height'] * 0.52
@@ -96,6 +95,10 @@ async def main():
         await page.mouse.move(cx - 68, cy + 50, steps=5)
         await page.mouse.move(cx - 74, cy + 76, steps=3)
         await page.mouse.up()
+        # 浮签在首笔收笔后、停笔判定（550ms）前浮现（charStrokeCount 于收笔时更新）
+        pill = await page.evaluate(
+            "() => ({ back: [...document.querySelectorAll('button')].some(b => b.textContent.includes('退笔')),"
+            " clear: [...document.querySelectorAll('button')].some(b => b.textContent.includes('重写')) })")
         await stroke(page, cx + 4, cy - 74, cx + 4, cy + 76)
         await stroke(page, cx + 76, cy - 74, cx + 76, cy + 76)
         await page.wait_for_timeout(900)
@@ -105,11 +108,6 @@ async def main():
         await page.wait_for_timeout(400)
         await page.screenshot(path=f'{OUT}/verify8_river_waves.png')
         await page.wait_for_timeout(1800)
-
-        # 6) 字诀浮签：退笔/重写按钮存在
-        pill = await page.evaluate(
-            "() => ({ back: [...document.querySelectorAll('button')].some(b => b.textContent.includes('退笔')),"
-            " clear: [...document.querySelectorAll('button')].some(b => b.textContent.includes('重写')) })")
 
         # 7) V 键切回青霜剑
         await page.keyboard.press('v')

@@ -374,14 +374,11 @@ async def main():
         log('C7 突进补位（点远处敌人跨步命中）', lunge_ok, detail)
         await ensure_alive(page)
 
-        # —— C8 字诀文思连段 ——
+        # —— C8 字诀文思连段（分屏改版后：上区即纸，无模式开关，直接画字） ——
         await ensure_alive(page)
         await ensure_hero_alive(page)
         await handle_blessing(page)
-        await page.get_by_role('button', name='字诀').click()
-        await page.wait_for_timeout(2100)
-        in_char = await page.evaluate("() => window.__inkGestureDebug?.isCharMode?.()")
-        log('C8a-0 字诀模式开启', bool(in_char))
+        await page.wait_for_timeout(400)
 
         async def write_shan():
             await ensure_hero_alive(page)
@@ -419,7 +416,6 @@ async def main():
                      hint: [...document.querySelectorAll('div')].map(d => d.textContent || '').find(t => (t.includes('「') || t.includes('墨渍')) && t.length < 80) || '' })""")
             log('C8c 诊断', False, str(diag))
         log('C8c 三连写触发文思3段(+20%)', found3, txt3[:46])
-        await page.get_by_role('button', name='字诀').click()
         await page.wait_for_timeout(1500)
         await page.screenshot(path=f'{OUT}/verify12_desktop_combo.png')
 
@@ -444,8 +440,7 @@ async def main():
 
         mbox = await mpage.locator('canvas').last.bounding_box()
         mcx, mcy = mbox['x'] + mbox['width']/2, mbox['y'] + mbox['height']*0.42
-        await mpage.get_by_role('button', name='字诀').tap()
-        await mpage.wait_for_timeout(2100)
+        await mpage.wait_for_timeout(600)  # 分屏改版后：上区即纸，无需模式开关
         mcdp = await mpage.context.new_cdp_session(mpage)
         async def mtouch_poly(tpl_pts):
             p = [(mcx + (q[0]-0.5)*110, mcy + (q[1]-0.5)*110) for q in tpl_pts]

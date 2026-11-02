@@ -4,7 +4,7 @@
   1. 无完卷进度 → 主菜单不显示文心殿入口
   2. 预置完卷第一卷（id=5）→ 主菜单出现「文心殿·藏卷」→ 点入
   3. 第一章卡已入藏，展开可见 章前引子/卷首诗/通关尾声 三段卷宗
-  4. 第二章卡未入藏（未完卷·完卷后入藏）
+  4. 第二章卡未入藏（已破 n/m 折 · 完卷后入藏，Task 42 起展示折数进度）
   5. 无 console/page 错误
 """
 import sys
@@ -76,9 +76,11 @@ with sync_playwright() as pw:
     chap1_card = page.locator("text=《风雅集·翰墨千秋》").first
     check("3b. 第一章卷签在殿", chap1_card.is_visible())
 
-    # 4. 第二章未入藏
-    ch2_label = page.locator("text=未完卷 · 完卷后入藏").first.is_visible()
-    check("4. 第二章未入藏提示", ch2_label)
+    # 4. 第二章未入藏（Task 42 起文案带折数进度：零进度章显示「未破一折」）
+    ch2_label = page.locator("text=完卷后入藏").first.is_visible()
+    body_txt = page.locator("body").inner_text()
+    fold_aware = ("未破一折" in body_txt) or ("已破" in body_txt)
+    check("4. 第二章未入藏提示（含折数进度）", ch2_label and fold_aware)
 
     # 已藏计数
     counter = page.locator("text=1</span> / 10").count()

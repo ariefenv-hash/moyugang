@@ -144,21 +144,19 @@ async def main():
 
         canvas = page.locator('canvas').last
         box = await canvas.bounding_box()
-        cx, cy = box['x'] + box['width'] / 2, box['y'] + box['height'] * 0.52
+        cx, cy = box['x'] + box['width'] / 2, box['y'] + box['height'] * 0.30   # 写字中心：书符区（上区）
+        cy_act = box['y'] + box['height'] * 0.75                                 # 快速招中心：行止区（下区，分屏后快速招仅认行止区）
 
         # —— T01 经典拖动引路 ——
         p0 = await hero_pos(page)
-        await poly_stroke(page, [(cx - 200, cy + 40), (cx + 60, cy + 40)], steps_per_seg=14)
+        await poly_stroke(page, [(cx - 200, cy_act + 40), (cx + 60, cy_act + 40)], steps_per_seg=14)
         await page.wait_for_timeout(1300)
         p1 = await hero_pos(page)
         moved = p0 and p1 and (p1['x'] - p0['x']) > 50
         log('T01 拖动引路角色跟随', bool(moved), f"dx={p1['x']-p0['x']:.0f}" if p0 and p1 else '')
 
-        # —— T09/T10 字诀：书写站定 + 自信早判 ——
-        await page.get_by_role('button', name='字诀').click()
-        await page.wait_for_timeout(2100)
-        in_char = await page.evaluate("() => window.__inkGestureDebug?.isCharMode?.()")
-        log('T09a 字诀模式开启', bool(in_char))
+        # —— T09/T10 字诀：书写站定 + 自信早判（分屏改版后：上区即纸，无模式开关） ——
+        await page.wait_for_timeout(600)
 
         await wait_hero_stable(page)          # 等 T01 滑行余波结束，角色静止后计时
         p0 = await hero_pos(page)
@@ -198,14 +196,14 @@ async def main():
         await page.wait_for_timeout(250)
         pill1 = await page.evaluate(
             "() => [...document.querySelectorAll('span')].map(s => s.textContent).find(t => t.includes('已书')) || ''")
-        undo_ok = '1 笔' in pill0 and '0 笔' in pill1
+        undo_ok = '1 笔' in pill0 and pill1 == ''   # 分屏改版后浮签仅在 count>0 时渲染：退笔后浮签撤除即成功
         await norm_stroke(page, SHAN[0], cx, cy)
         await page.wait_for_timeout(250)
         await page.get_by_role('button', name='重写').click()
         await page.wait_for_timeout(250)
         pill2 = await page.evaluate(
             "() => [...document.querySelectorAll('span')].map(s => s.textContent).find(t => t.includes('已书')) || ''")
-        clear_ok = '0 笔' in pill2
+        clear_ok = pill2 == ''
         log('T11 退笔/重写', undo_ok and clear_ok, f'{pill0}→{pill1}→{pill2}')
 
         # —— T12 多指守卫（CDP 双指触摸） ——
@@ -249,32 +247,31 @@ async def main():
         found, ms, txt = await find_hint(page, '「山」', budget_ms=900)
         log('T13 pointercancel 弃笔后续写仍成「山」', found, txt[:26])
         await page.wait_for_timeout(2600)
-        await page.get_by_role('button', name='字诀').click()  # 关字诀
-        await page.wait_for_timeout(2100)
+        await page.wait_for_timeout(600)  # 分屏改版后无需关字诀
 
         # —— T02 横 ——
-        await poly_stroke(page, [(cx-140, cy), (cx+140, cy)], steps_per_seg=9)
+        await poly_stroke(page, [(cx-140, cy_act), (cx+140, cy_act)], steps_per_seg=9)
         await page.wait_for_timeout(250)
         b = await badge(page)
         log('T02 横划→断水斩', '「横」' in b, b)
         await clear_badge_wait(page, 1900)
 
         # —— T07 斜向快扫（dx=200, dy=155，比例1.29：新1.22过 / 旧1.35拒） ——
-        await poly_stroke(page, [(cx-100, cy-78), (cx+100, cy+77)], steps_per_seg=9)
+        await poly_stroke(page, [(cx-100, cy_act-78), (cx+100, cy_act+77)], steps_per_seg=9)
         await page.wait_for_timeout(250)
         b = await badge(page)
         log('T07 斜向快扫（1.29 比例）仍判横', '「横」' in b, b)
         await clear_badge_wait(page, 1900)
 
         # —— T03 竖 ——
-        await poly_stroke(page, [(cx, cy-40), (cx, cy+130)], steps_per_seg=9)
+        await poly_stroke(page, [(cx, cy_act-40), (cx, cy_act+130)], steps_per_seg=9)
         await page.wait_for_timeout(250)
         b = await badge(page)
         log('T03 竖划→笔落惊风', '「竖」' in b, b)
         await clear_badge_wait(page, 1900)
 
         # —— T04 提 ——
-        await poly_stroke(page, [(cx, cy+80), (cx, cy-110)], steps_per_seg=9)
+        await poly_stroke(page, [(cx, cy_act+80), (cx, cy_act-110)], steps_per_seg=9)
         await page.wait_for_timeout(250)
         b = await badge(page)
         log('T04 提划→轻功腾跃', '「提」' in b, b)
@@ -282,7 +279,7 @@ async def main():
 
         # —— T05 圆 ——
         import math
-        circ = [(cx + 80*math.cos(a), cy + 70*math.sin(a))
+        circ = [(cx + 80*math.cos(a), cy_act + 70*math.sin(a))
                 for a in [i*math.pi/9 for i in range(19)]]
         await poly_stroke(page, circ, steps_per_seg=2)
         await page.wait_for_timeout(250)
@@ -291,16 +288,16 @@ async def main():
         await clear_badge_wait(page, 1900)
 
         # —— T06 折（真 Z：x 向三次变向；首尾距/路径比 0.59 > 0.33 不会被圆抢判） ——
-        await poly_stroke(page, [(cx-130, cy-70), (cx+30, cy-20), (cx-70, cy+30), (cx+90, cy+80)],
+        await poly_stroke(page, [(cx-130, cy_act-70), (cx+30, cy_act-20), (cx-70, cy_act+30), (cx+90, cy_act+80)],
                           steps_per_seg=6)
         await page.wait_for_timeout(250)
         b = await badge(page)
         log('T06 Z 折→星河笔阵', '「折」' in b, b)
         await clear_badge_wait(page, 1900)
 
-        # —— T08 长按点按（450ms 仍算「点」；点地→「行」点敌→「点」） ——
+        # —— T08 长按点按（450ms 仍算「点」；点地→「行」点敌→「点」；行止区点地） ——
         await ensure_alive(page)
-        await page.mouse.move(cx - 60, cy + 60)
+        await page.mouse.move(cx - 60, cy_act + 60)
         await page.mouse.down()
         await page.wait_for_timeout(450)
         await page.mouse.up()
@@ -309,18 +306,18 @@ async def main():
         log('T08 长按450ms→仍判点按', ('「点」' in b) or ('「行」' in b), b)
         await clear_badge_wait(page, 1900)
 
-        # —— T14 指针捕获（滑过顶栏 HUD 不断笔；提速防 duration>650ms 落入 DRAG） ——
+        # —— T14 指针捕获（起笔行止区、斜扫滑出顶栏不断笔；判据=trace 完整收到顶栏坐标，
+        #      出招判定已由 T02 覆盖——分屏后斜率/分区路由变化不影响「捕获不断笔」本体） ——
         await ensure_alive(page)
         await page.evaluate("() => { window.__inkGestureDebug.trace.length = 0; }")
-        await poly_stroke(page, [(1150, 150), (900, 80), (700, 34)], steps_per_seg=4)
+        await poly_stroke(page, [(700, int(cy_act) + 10), (1250, 34)], steps_per_seg=3)
         await page.wait_for_timeout(250)
+        tr = await page.evaluate("() => window.__inkGestureDebug.trace.slice(-14)")
+        move_ys = [e['y'] for e in tr if e['ev'] == 'move']
         b = await badge(page)
-        if '「横」' in b:
-            log('T14 笔画滑出画布至顶栏仍判横（指针捕获）', True, b)
-        else:
-            tr = await page.evaluate("() => window.__inkGestureDebug.trace.slice(-12)")
-            log('T14 笔画滑出画布至顶栏仍判横（指针捕获）', False,
-                f"badge={b!r} trace={[(e['ev'],e['x'],e['y']) for e in tr]}")
+        captured = bool(move_ys) and min(move_ys) < 120 and move_ys[0] > int(cy_act) - 40
+        log('T14 笔画滑出画布至顶栏（指针捕获不断笔）', captured,
+            f"badge={b!r} firstY={move_ys[0] if move_ys else None} minY={min(move_ys) if move_ys else None}")
         await clear_badge_wait(page, 1900)
 
         # —— T15 右键 contextmenu 拦截（window 监听 + 延迟读取：preventDefault 发生在后续派发阶段） ——
@@ -369,9 +366,8 @@ async def main():
         m_moved = mp0 and mp1 and abs(mp1['x'] - mp0['x']) > 30
         log('M1 触摸点按移动', bool(m_moved), f"dx={mp1['x']-mp0['x']:.0f}" if mp0 and mp1 else '')
 
-        # M2 触摸写「山」（含早判） + 书写站定
-        await mpage.get_by_role('button', name='字诀').tap()
-        await mpage.wait_for_timeout(2100)
+        # M2 触摸写「山」（含早判） + 书写站定（分屏改版后：上区即纸，无模式开关）
+        await mpage.wait_for_timeout(600)
         await wait_hero_stable(mpage)   # 等 M1 滑行余波结束
         mp0 = await mpage.evaluate("() => window.__inkGestureDebug?.heroPos?.() || null")
         mcdp = await mpage.context.new_cdp_session(mpage)

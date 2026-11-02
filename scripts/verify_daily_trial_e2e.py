@@ -96,7 +96,23 @@ with sync_playwright() as pw:
             return units.map(u => ({ type: u.type, attack: u.attack, hp: u.hp, maxHp: u.maxHp }));
         }"""
     )
-    # 词缀今天为 atk=1.1 hp=1.1（墨涛拍岸）；等首波敌人出现（神思折 8s 首波）
+    # 词缀系数从 dailyTrial.ts 播种算法动态复算（消除日期脆弱性：词境按日更替）
+    import subprocess, math
+    try:
+        node_out = subprocess.run(
+            ["npx", "tsx", "-e",
+             "import { getDailyTrialInfo } from './src/data/dailyTrial';"
+             "const info = getDailyTrialInfo();"
+             "const cfg: any = { enemyAtkMult: 1, enemyHpMult: 1, initialInkMult: 1, waveIntervalMult: 1, playerBaseHpMult: 1 };"
+             "for (const m of info.modifiers) m.apply(cfg);"
+             "console.log(JSON.stringify({ atk: cfg.enemyAtkMult, hp: cfg.enemyHpMult, mods: info.modifiers.map((m: any) => m.name) }));"],
+            capture_output=True, text=True, timeout=60, cwd=".")
+        mult_info = json.loads(node_out.stdout.strip().splitlines()[-1]) if node_out.returncode == 0 else {"atk": None, "hp": None}
+    except Exception as ex:
+        mult_info = {"atk": None, "hp": None}
+        print(f"  [WARN] 当日词缀复算失败: {ex}")
+
+    # 等首波敌人出现（神思折 8s 首波）
     import time
     t0 = time.time()
     mults = []
@@ -107,24 +123,26 @@ with sync_playwright() as pw:
         if mults:
             break
         page.wait_for_timeout(600)
-    # 期待：SWORD config attack=26 → ×1.1 = 28.6 → round 29；hp 240×1.1 = 264
-    # ARCHER attack=34 → 37；hp 180 → 198；GUARDIAN attack=24 → 26；hp 650 → 715
-    import math
+    # 期待：敌人属性 = UNIT_CONFIGS 基础值 × 当日词缀系数（动态）
     EXPECT = {
         "SWORD": (26, 240),
         "ARCHER": (34, 180),
         "GUARDIAN": (24, 650),
     }
-    if mults:
+    if mults and mult_info.get("atk") is not None:
+        atk_mult, hp_mult = float(mult_info["atk"]), float(mult_info["hp"])
         sample = mults[0]
         base_atk, base_hp = EXPECT.get(sample["type"], (26, 240))
-        atk_ok = sample["attack"] in (math.floor(base_atk * 1.1), math.floor(base_atk * 1.1) + 1)
-        hp_ok = sample["maxHp"] in (math.floor(base_hp * 1.1) - 1, math.floor(base_hp * 1.1), math.floor(base_hp * 1.1) + 1)
-        check("5a. 敌军攻击带词缀系数", atk_ok, f"{sample['type']} attack={sample['attack']}（{base_atk}×1.1≈{round(base_atk*1.1)}）")
-        check("5b. 敌军气血带词缀系数", hp_ok, f"{sample['type']} maxHp={sample['maxHp']}（{base_hp}×1.1={round(base_hp*1.1)}）")
-    else:
+        atk_ok = sample["attack"] in (math.floor(base_atk * atk_mult), math.floor(base_atk * atk_mult) + 1)
+        hp_ok = sample["maxHp"] in (math.floor(base_hp * hp_mult) - 1, math.floor(base_hp * hp_mult), math.floor(base_hp * hp_mult) + 1)
+        check("5a. 敌军攻击带词缀系数", atk_ok, f"{sample['type']} attack={sample['attack']}（{base_atk}×{atk_mult}≈{round(base_atk*atk_mult)}，当日词缀 {mult_info.get('mods')}）")
+        check("5b. 敌军气血带词缀系数", hp_ok, f"{sample['type']} maxHp={sample['maxHp']}（{base_hp}×{hp_mult}={round(base_hp*hp_mult)}）")
+    elif not mults:
         check("5a. 敌军攻击带词缀系数", False, "30s 内无敌人出现")
         check("5b. 敌军气血带词缀系数", False, "30s 内无敌人出现")
+    else:
+        check("5a. 敌军攻击带词缀系数", False, f"当日词缀复算失败 {mult_info}")
+        check("5b. 敌军气血带词缀系数", False, f"当日词缀复算失败 {mult_info}")
 
     # 6. 无 console 错误
     real_errors = [e for e in console_errors if "favicon" not in e.lower()]

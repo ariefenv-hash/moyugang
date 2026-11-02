@@ -18,8 +18,8 @@
     Z5 上区空点首现「书」分区提示浮签
     Z6 分区线与「书符/行止」标签渲染
     Z7 字诀开启分区线隐去，关闭恢复
-    Z8 书符区横划照常出招（断水斩）
-    Z9 出招清残留：点地移动目标 → 横划出招 → 目标被清、角色不继续走
+    Z8 分区隔离：书符区（上区）横划只写字不出招
+    Z9 行止区出招清残留：点地移动目标 → 行止区横划出招 → 目标被清
   H 组 信息展示增强
     H1 战况行（波次/敌情/用时/墨阁%/敌营%）渲染且数值在界内
     H2 画圆起盾 → 「墨盾 N」实时 chip
@@ -246,36 +246,32 @@ async def main():
         log('Z3 书符区拖动画字不带跑角色（<12px）', bool(drag_static),
             f"dx={abs(z3b['x'] - z3a['x']):.0f}" if z3a and z3b else '')
 
-        # Z4 下区慢速拖动 → 跟随
+        # Z4 下区慢速拖动 → 跟随（路径取左半屏，避开右侧技能键集群的 pointer 拦截）
         await wait_hero_stable(page, quiet_ms=450, max_ms=6000)
         z4a = await hero_pos(page)
-        await slow_drag(page, [(mid_x + 160, low_y), (mid_x + 20, low_y), (mid_x - 120, low_y), (mid_x - 220, low_y)])
+        await slow_drag(page, [(mid_x - 240, low_y), (mid_x - 380, low_y), (mid_x - 520, low_y), (mid_x - 620, low_y)])
         await page.wait_for_timeout(1100)
         z4b = await hero_pos(page)
         drag_move = z4a and z4b and abs(z4b['x'] - z4a['x']) > 40
         log('Z4 行止区拖动引路跟随（>40px）', bool(drag_move),
             f"dx={abs(z4b['x'] - z4a['x']):.0f}" if z4a and z4b else '')
 
-        # Z6 分区线标签渲染
+        # Z6 分区线标签渲染（分屏改版后下行标签为「行止 · 划招移形」）
         zone_ui = await page.evaluate(
             """() => {
                 const t = document.body.innerText || '';
-                return t.includes('书符 · 画字施法') && t.includes('行止 · 点地移形');
+                return t.includes('书符 · 画字施法') && t.includes('行止 · 划招移形');
             }""")
         log('Z6 分区线双标签渲染', bool(zone_ui))
 
-        # Z7 字诀开启 → 分区线隐去
-        await page.get_by_role('button', name='字诀').click()
-        await page.wait_for_timeout(800)
-        zone_hidden = await page.evaluate(
-            "() => !document.body.innerText.includes('书符 · 画字施法')")
-        await page.get_by_role('button', name='字诀').click()
-        await page.wait_for_timeout(800)
-        zone_back = await page.evaluate(
+        # Z7 分屏改版后：分区线常显，无字诀模式开关（上区即纸，直接画字）
+        mode_btn_count = await page.get_by_role('button', name='字诀').count()
+        zone_persist = await page.evaluate(
             "() => document.body.innerText.includes('书符 · 画字施法')")
-        log('Z7 字诀模式分区线隐去/关闭恢复', bool(zone_hidden and zone_back))
+        log('Z7 分屏后分区线常显（无模式开关）', bool(zone_persist and mode_btn_count == 0),
+            f"mode_btn={mode_btn_count}")
 
-        # Z8 书符区横划照常出招（断水斩）
+        # Z8 分区隔离：书符区（上区）横划只写字不出招（分屏改版后快速招仅认行止区）
         await wait_hero_stable(page, quiet_ms=400, max_ms=6000)
         z8a = await hero_pos(page)
         await poly_stroke(page, [(mid_x - 170, top_y), (mid_x + 170, top_y)], steps_per_seg=4)
@@ -284,19 +280,19 @@ async def main():
         await page.wait_for_timeout(500)
         z8b = await hero_pos(page)
         cast_dx = (z8b['x'] - z8a['x']) if z8a and z8b else 0
-        log('Z8 书符区横划照常出招（突进位移>120px）', cast_dx > 120,
+        log('Z8 书符区横划不出招（分区隔离，突进位移<120px）', abs(cast_dx) <= 120,
             f"state={st8['state'] if st8 else '?'} dx={cast_dx:.0f}")
 
-        # Z9 出招清残留移动目标（点位取剑仙身后 130px，避开行进中的敌军）
+        # Z9 出招清残留移动目标（分屏改版后出招横划走行止区；点位取剑仙身后 130px 避开敌军）
         await wait_hero_stable(page, quiet_ms=450, max_ms=6000)
         hs = await hero_screen(page)
         behind_x = (box['x'] + hs['x'] - 130) if hs else (mid_x - 220)
         await tap(page, behind_x, low_y)             # 点地设移动目标
         tgt_a = await hero_target(page)
-        await poly_stroke(page, [(mid_x - 150, top_y), (mid_x + 150, top_y)], steps_per_seg=4)
+        await poly_stroke(page, [(mid_x - 150, low_y), (mid_x + 150, low_y)], steps_per_seg=4)
         await page.wait_for_timeout(60)
         tgt_b = await hero_target(page)
-        log('Z9 横划出招清残留移动目标', bool(tgt_a is not None and tgt_b is None),
+        log('Z9 行止区横划出招清残留移动目标', bool(tgt_a is not None and tgt_b is None),
             f"出招前={tgt_a} 出招后={tgt_b}")
 
         # ============ H 组：信息增强 ============
@@ -313,11 +309,12 @@ async def main():
         h1 = hud['wave'] and hud['foe'] and hud['gate'] and hud['camp'] and hud['clock']
         log('H1 战况行（波次/敌情/用时/墨阁%/敌营%）', bool(h1), str(hud))
 
-        # H2 画圆起盾 → 墨盾 chip
-        await poly_stroke(page, [(mid_x - 90, top_y), (mid_x - 62, top_y - 66),
-                                  (mid_x + 34, top_y - 78), (mid_x + 88, top_y + 6),
-                                  (mid_x + 12, top_y + 84), (mid_x - 86, top_y + 40),
-                                  (mid_x - 90, top_y)], steps_per_seg=5)
+        # H2 画圆起盾 → 墨盾 chip（分屏改版后快速招仅认行止区：圆心改画在下区 0.75H，避开底部按钮带）
+        cy2 = box['y'] + H * 0.75
+        await poly_stroke(page, [(mid_x - 90, cy2), (mid_x - 62, cy2 - 66),
+                                  (mid_x + 34, cy2 - 78), (mid_x + 88, cy2 + 6),
+                                  (mid_x + 12, cy2 + 84), (mid_x - 86, cy2 + 40),
+                                  (mid_x - 90, cy2)], steps_per_seg=5)
         await page.wait_for_timeout(700)
         shield_chip = await page.evaluate(
             """() => (document.body.innerText.match(/墨盾 (\\d+)/) || [])[1] || ''""")
@@ -337,11 +334,11 @@ async def main():
             }""")
         log('H3 技能冷却遮罩显示秒数', cd_mask == 'shown')
 
-        # H4 操控心诀含分区说明
+        # H4 操控心诀含分屏说明（分屏改版后文案为「上区画字施法 · 下区点地移形」）
         await page.locator('button[title="手势指南"]').click()
         await page.wait_for_timeout(500)
         guide_zone = await page.evaluate(
-            "() => document.body.innerText.includes('上下分区 · 各司其职')")
+            "() => document.body.innerText.includes('上区画字施法') && document.body.innerText.includes('下区点地移形')")
         await page.locator('button[title="手势指南"]').click()
         log('H4 操控心诀含分区说明', bool(guide_zone))
 

@@ -26,17 +26,35 @@ async def main():
             joystickDom: document.querySelectorAll('[class*="joystick" i]').length,
         })""")
 
-        # 进入战斗（菜单 → 启卷入战 → 选折页 → 启程试炼 → 战斗），确认技能键常驻 + 挥毫提示
+        # 进入战斗（菜单 → 启卷入战 → 关章前引子 → 选折页 → 启程试炼 → 战斗），确认技能键常驻 + 挥毫提示
         await page.get_by_text('启卷入战').click()
         await page.wait_for_timeout(1000)
+        # 零进度下首章引子自动弹出（storySeen 空）→ 先关再继续
+        try:
+            close_btn = page.locator("button:has-text('启 卷')").first
+            if await close_btn.is_visible():
+                await close_btn.click()
+                await page.wait_for_timeout(400)
+        except Exception:
+            pass
         await page.get_by_text('启程试炼').first.click()
         await page.wait_for_timeout(2500)
+        # 挥毫心诀在手势指南面板内（showGestureGuide 条件渲染）→ 先点开再快照
+        try:
+            guide_btn = page.locator('button[title="手势指南"]').first
+            if await guide_btn.is_visible():
+                await guide_btn.click()
+                await page.wait_for_timeout(400)
+        except Exception:
+            pass
         battle = await page.evaluate("""() => ({
             hasCanvas: !!document.querySelector('canvas'),
             charModeBtn: !![...document.querySelectorAll('button')].find(b => b.textContent.includes('字诀')),
+            charModeBtnGone: ![...document.querySelectorAll('button')].find(b => b.textContent.includes('字诀')),
+            castZoneLabel: [...document.querySelectorAll('span')].some(s => s.textContent.includes('书符 · 画字施法')),
             skillCluster: ['腾跃','断水','竹影','笔阵','落墨','临江仙'].every(t =>
                 [...document.querySelectorAll('button')].some(b => b.textContent.includes(t))),
-            gestureHint: [...document.querySelectorAll('div')].some(d => d.textContent.includes('挥毫手势')),
+            gestureHint: [...document.querySelectorAll('div')].some(d => d.textContent.includes('挥毫归一')),
             noDualText: ![...document.querySelectorAll('div')].some(d => d.textContent.includes('双区')),
         })""")
 
@@ -61,6 +79,7 @@ async def main():
     print(json.dumps(result, ensure_ascii=False, indent=2))
     ok = (sw['swRegistered'] and sw['manifest'] == 200 and legacy['modeSwitchBtns'] == 0
           and legacy['joystickDom'] == 0 and battle['skillCluster'] and battle['noDualText']
+          and battle['castZoneLabel'] and battle['charModeBtnGone']
           and gesture_ok and not errors)
     print('VERIFY', 'PASS' if ok else 'FAIL')
 

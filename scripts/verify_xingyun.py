@@ -3,13 +3,21 @@
 import asyncio, json
 from playwright.async_api import async_playwright
 
-URL = 'http://localhost:4173/'
+URL = 'http://localhost:4173/moyugang/'
 OUT = '/home/z/my-project/download'
 
 
 async def enter_battle(page):
     await page.get_by_text('启卷入战').click()
     await page.wait_for_timeout(900)
+    # 零进度下首章引子自动弹出（storySeen 空）→ 先关再继续
+    try:
+        intro_btn = page.locator("button:has-text('启 卷')").first
+        if await intro_btn.is_visible():
+            await intro_btn.click()
+            await page.wait_for_timeout(400)
+    except Exception:
+        pass
     await page.get_by_text('启程试炼').first.click()
     await page.wait_for_timeout(2400)
     try:
@@ -29,6 +37,11 @@ async def main():
         page.on('pageerror', lambda e: errors.append(str(e)))
         await page.goto(URL, wait_until='networkidle')
         await page.wait_for_timeout(1500)
+        # 预置画质档为 high：无头环境常被 detectLowEndDevice 判为低配（初始已开行云），
+        # 不预置则首次点击会落到 'high'，脚本断言全反
+        await page.evaluate("() => localStorage.setItem('ink_steel_quality', 'high')")
+        await page.reload(wait_until='networkidle')
+        await page.wait_for_timeout(1200)
         await enter_battle(page)
 
         # 1) 行云按钮存在（顶栏 title=行云模式）

@@ -88,7 +88,19 @@ with sync_playwright() as pw:
     # ===== B. 解锁态 =====
     goto_select(page, PRESET_UNLOCKED)
     check("B1. 周试炼卡可见", page.locator("text=周魁问锋").first.is_visible())
-    check("B2. 词境展示「流水落花」", page.locator("text=流水落花").count() > 0)
+    # 周词境按周键播种（周一零点换卷）→ 从源码动态复算本周词境名，消除日期脆弱
+    import subprocess, json as _json
+    _wk = subprocess.run(
+        ["npx", "tsx", "-e",
+         "import { getWeeklyTrialInfo } from './src/data/weeklyTrial';"
+         "const info = getWeeklyTrialInfo();"
+         "const cfg: any = { enemyAtkMult: 1, enemyHpMult: 1, initialInkMult: 1, waveIntervalMult: 1, playerBaseHpMult: 1 };"
+         "for (const m of info.modifiers) m.apply(cfg);"
+         "console.log(JSON.stringify({ title: info.sourceTitle, atk: cfg.enemyAtkMult, hp: cfg.enemyHpMult, mods: info.modifiers.map((m: any) => m.name) }));"],
+        capture_output=True, text=True, timeout=60, cwd=".")
+    WK = _json.loads(_wk.stdout.strip().splitlines()[-1]) if _wk.returncode == 0 else {"title": "", "atk": 1.0, "hp": 1.0}
+    check(f"B2. 词境展示「{WK['title']}」（本周播种）", WK["title"] and page.locator(f"text={WK['title']}").count() > 0,
+          f"本周词缀 {WK.get('mods')}")
     check("B3. 赏格 +420 灵玉", page.locator("text=420").count() > 0)
     carrier = page.locator("[data-weekly-level-id='997']")
     check("B4. 隐藏载体 data-weekly-level-id=997", carrier.count() == 1)
@@ -122,15 +134,17 @@ with sync_playwright() as pw:
             mults = swords
             break
         page.wait_for_timeout(600)
-    # 期望：SWORD attack 26×1.344=34.944→35；maxHp 240×1.12=268.8→269（容差±1）
+    # 期望：SWORD attack 26×atkMult；maxHp 240×hpMult（容差±1，词缀按周键播种动态复算）
     if mults:
         sample = mults[0]
-        atk_ok = abs(sample["attack"] - 35) <= 1
-        hp_ok = abs(sample["maxHp"] - 269) <= 1
-        check("E1. 敌军攻击带周词缀系数（26×1.344≈35）", atk_ok,
-              f"attack={sample['attack']}")
-        check("E2. 敌军气血带周词缀系数（240×1.12≈269）", hp_ok,
-              f"maxHp={sample['maxHp']}")
+        atk_exp = round(26 * WK["atk"])
+        hp_exp = round(240 * WK["hp"])
+        atk_ok = abs(sample["attack"] - atk_exp) <= 1
+        hp_ok = abs(sample["maxHp"] - hp_exp) <= 1
+        check(f"E1. 敌军攻击带周词缀系数（26×{WK['atk']}≈{atk_exp}）", atk_ok,
+              f"attack={sample["attack"]}")
+        check(f"E2. 敌军气血带周词缀系数（240×{WK['hp']}≈{hp_exp}）", hp_ok,
+              f"maxHp={sample["maxHp"]}")
     else:
         check("E1. 敌军攻击带周词缀系数", False, "40s 内无 SWORD 出现")
         check("E2. 敌军气血带周词缀系数", False, "40s 内无 SWORD 出现")
