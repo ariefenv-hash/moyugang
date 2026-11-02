@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { PlayerProgress } from '../types/game';
 import { STORY_CHAPTERS, CN_NUMS } from '../data/story';
+import { weekKey } from '../data/weeklyTrial';
 import bgInkMountains from '../assets/images/bg_ink_mountains_1791652099827.jpg';
 import {
   ChevronLeft,
@@ -13,7 +14,19 @@ import {
   Crown,
   CalendarHeart,
   Infinity as InfinityIcon,
+  Trophy,
+  Star,
+  Skull,
+  Swords,
 } from 'lucide-react';
+
+/** 战绩堂单项：图标 + 标签 + 等宽值 */
+const StatCell: React.FC<{ label: string; value: string; icon: React.ReactNode }> = ({ label, value, icon }) => (
+  <div className="min-w-0">
+    <p className="text-[10px] text-ink-light font-serif flex items-center gap-1 mb-0.5">{icon}{label}</p>
+    <p className="font-mono text-sm text-ink-strong truncate" title={value}>{value}</p>
+  </div>
+);
 
 interface PavilionArchiveProps {
   progress: PlayerProgress;
@@ -38,6 +51,40 @@ export const PavilionArchive: React.FC<PavilionArchiveProps> = ({ progress, onBa
   const [openChapterId, setOpenChapterId] = useState<number | null>(archivedIds[archivedIds.length - 1] ?? null);
   const hasAny = archivedIds.length > 0;
   const allTen = archivedIds.length >= 10;
+
+  /** 已发行且含折的大章（通关率分母只计正式主线） */
+  const releasedChapters = useMemo(
+    () => STORY_CHAPTERS.filter((c) => c.status === 'RELEASED' && c.levels?.length),
+    []
+  );
+  const totalFolds = useMemo(
+    () => releasedChapters.reduce((s, c) => s + c.levels!.length, 0),
+    [releasedChapters]
+  );
+  const doneFolds = useMemo(
+    () =>
+      releasedChapters.reduce(
+        (s, c) => s + c.levels!.filter((l) => progress.completedLevels.includes(l.id)).length,
+        0
+      ),
+    [releasedChapters, progress.completedLevels]
+  );
+  const storyRate = totalFolds > 0 ? Math.round((doneFolds / totalFolds) * 100) : 0;
+  /** 藏卷星数：仅计主线折星级（满分 3 星/折） */
+  const maxStars = totalFolds * 3;
+  const gotStars = useMemo(
+    () =>
+      releasedChapters.reduce(
+        (s, c) => s + c.levels!.reduce((t, l) => t + (progress.levelStars[l.id] ?? 0), 0),
+        0
+      ),
+    [releasedChapters, progress.levelStars]
+  );
+  /** 周试炼状态：与本周周键比对（周一零点换卷） */
+  const weeklyLabel = useMemo(() => {
+    if (progress.weeklyDone === weekKey()) return '本周已捷';
+    return progress.weeklyDone ? `首胜 ${progress.weeklyDone}` : '未曾问锋';
+  }, [progress.weeklyDone]);
 
   return (
     <div className="relative min-h-screen paper-grain text-ink flex flex-col font-sans select-none overflow-x-hidden">
@@ -79,7 +126,7 @@ export const PavilionArchive: React.FC<PavilionArchiveProps> = ({ progress, onBa
 
       {/* 殿身 */}
       <main className="relative z-10 flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-8 space-y-4">
-        {!hasAny ? (
+        {!hasAny && (
           <div className="panel-paper p-10 text-center">
             <span className="seal w-12 h-12 mx-auto flex items-center justify-center mb-4 opacity-80" aria-hidden="true">
               <span className="text-xl font-bold font-serif">藏</span>
@@ -91,16 +138,85 @@ export const PavilionArchive: React.FC<PavilionArchiveProps> = ({ progress, onBa
               先去破眼前之折吧，剑仙。
             </p>
           </div>
-        ) : (
-          <>
-            {/* 殿训 */}
-            <p className="text-center text-xs text-ink-light font-serif tracking-widest">
-              完卷之章皆入此殿 · 引子尾声卷首诗随时重温
-            </p>
+        )}
+        {hasAny && (
+          <p className="text-center text-xs text-ink-light font-serif tracking-widest">
+            完卷之章皆入此殿 · 引子尾声卷首诗随时重温
+          </p>
+        )}
 
-            {STORY_CHAPTERS.map((c) => {
+        {/* 战绩堂 · 文心殿通关率与本地统计 */}
+        <div className="panel-paper p-5" data-testid="stats-hall">
+          <p className="text-[10px] font-serif tracking-widest text-ink-light mb-3 flex items-center gap-1">
+            <Trophy className="w-3 h-3 text-tenghuang" />
+            战绩堂 · 文心殿通关率
+          </p>
+
+          {/* 通关率主行 */}
+          <div className="flex items-end justify-between gap-4 mb-2">
+            <div className="flex items-baseline gap-2 min-w-0">
+              <span className="font-mono text-3xl font-bold text-ink-strong leading-none" data-testid="story-rate">
+                {storyRate}%
+              </span>
+              <span className="text-xs text-ink-mid font-serif whitespace-nowrap">
+                主线 <span className="font-mono text-ink-strong">{doneFolds}</span> / {totalFolds} 折
+              </span>
+            </div>
+            <span className="text-[10px] text-ink-light font-serif whitespace-nowrap">
+              已藏 {archivedIds.length} 卷
+            </span>
+          </div>
+          <div
+            className="h-2 bg-ink-strong/10 rounded-full overflow-hidden mb-4"
+            aria-label="主线通关率进度条"
+            data-testid="story-rate-bar"
+          >
+            <div
+              className="h-full bg-gradient-to-r from-daiqing via-cinnabar/80 to-cinnabar rounded-full transition-all duration-700"
+              style={{ width: `${storyRate}%` }}
+            />
+          </div>
+
+          {/* 本地统计格 */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
+            <StatCell
+              label="藏卷星数"
+              value={`${gotStars} / ${maxStars}`}
+              icon={<Star className="w-3 h-3 text-tenghuang" />}
+            />
+            <StatCell
+              label="累计击破"
+              value={progress.totalKills.toLocaleString('zh-Hans-CN')}
+              icon={<Skull className="w-3 h-3 text-ink-mid" />}
+            />
+            <StatCell
+              label="无尽最佳"
+              value={`${progress.endlessBest} 波`}
+              icon={<InfinityIcon className="w-3 h-3 text-daiqing" />}
+            />
+            <StatCell
+              label="问战连捷"
+              value={`${progress.dailyStreak ?? 0} 天`}
+              icon={<CalendarHeart className="w-3 h-3 text-cinnabar" />}
+            />
+            <StatCell
+              label="周试炼"
+              value={weeklyLabel}
+              icon={<Swords className="w-3 h-3 text-ink-mid" />}
+            />
+            <StatCell
+              label="每日问战"
+              value={progress.dailyDone ?? '未曾应战'}
+              icon={<ScrollText className="w-3 h-3 text-ink-mid" />}
+            />
+          </div>
+        </div>
+
+        {STORY_CHAPTERS.map((c) => {
               const archived = archivedIds.includes(c.id);
               const open = openChapterId === c.id;
+              const foldTotal = c.levels?.length ?? 0;
+              const foldDone = (c.levels ?? []).filter((l) => progress.completedLevels.includes(l.id)).length;
               return (
                 <motion.div
                   key={c.id}
@@ -133,7 +249,11 @@ export const PavilionArchive: React.FC<PavilionArchiveProps> = ({ progress, onBa
                           《{c.anthology}·{c.name}》
                         </h3>
                         <p className="text-[11px] text-ink-light font-serif truncate">
-                          {archived ? '已入藏 · 可重温' : `${c.status === 'RELEASED' ? '未完卷' : '未启之卷'} · 完卷后入藏`}
+                          {archived
+                            ? `已入藏 · ${foldDone}/${foldTotal} 折 · 可重温`
+                            : c.status === 'RELEASED'
+                              ? `${foldDone > 0 ? `已破 ${foldDone}/${foldTotal} 折` : '未破一折'} · 完卷后入藏`
+                              : '未启之卷 · 完卷后入藏'}
                         </p>
                       </div>
                     </div>
@@ -145,6 +265,18 @@ export const PavilionArchive: React.FC<PavilionArchiveProps> = ({ progress, onBa
                       <Lock className="w-4 h-4 text-ink-light shrink-0" />
                     )}
                   </button>
+
+                  {/* 折数进度细条（已发行章皆显，未完卷亦见进度） */}
+                  {c.status === 'RELEASED' && foldTotal > 0 && (
+                    <div className="px-5 pb-3" data-testid={`fold-bar-ch${c.id}`}>
+                      <div className="h-[3px] bg-ink-strong/10 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-cinnabar/70 rounded-full transition-all duration-500"
+                          style={{ width: `${(foldDone / foldTotal) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {/* 卷宗展开 */}
                   {archived && open && (
@@ -188,34 +320,6 @@ export const PavilionArchive: React.FC<PavilionArchiveProps> = ({ progress, onBa
                 </motion.div>
               );
             })}
-
-            {/* 殿外附藏：日常战绩摘要 */}
-            {(progress.dailyDone || progress.endlessBest > 0) && (
-              <div className="panel-paper p-5 mt-2">
-                <p className="text-[10px] font-serif tracking-widest text-ink-light mb-2 flex items-center gap-1">
-                  <CalendarHeart className="w-3 h-3" />
-                  殿外附藏 · 日常战绩
-                </p>
-                <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-xs text-ink-mid font-serif">
-                  {progress.dailyDone && (
-                    <span>
-                      每日问战最后完卷：
-                      <span className="font-mono text-ink-strong">{progress.dailyDone}</span>
-                      {`（连捷 ${progress.dailyStreak ?? 0} 天）`}
-                    </span>
-                  )}
-                  {progress.endlessBest > 0 && (
-                    <span className="flex items-center gap-1">
-                      <InfinityIcon className="w-3 h-3 text-daiqing" />
-                      无尽最佳：
-                      <span className="font-mono text-ink-strong">{progress.endlessBest}</span> 波
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </>
-        )}
       </main>
 
       {/* 页脚 */}
