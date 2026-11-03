@@ -2793,6 +2793,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     dbg.__inkGestureDebug.spawnCorruptZone = (x: number, y: number, r?: number) =>
       spawnCorruptZone(x, y, r);
     dbg.__inkGestureDebug.particlePool = () => particlePool.stats();
+    // 次级池观测（Task 43）：剑气轨迹/特效环对象池统计快照
+    dbg.__inkGestureDebug.fxPool = () => rendererRef.current?.fxPoolStats();
     dbg.__inkGestureDebug.clearCorruptZones = () => {
       corruptZonesRef.current = [];
     };

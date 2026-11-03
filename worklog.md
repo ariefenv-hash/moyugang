@@ -805,3 +805,20 @@ Work Log:
 Stage Summary:
 - 藏卷室从「收藏陈列」升级为「战绩陈列」：通关率口径化、六格统计、每章朱砂细条三件套，补完动机可视化；远景池实装项就此清零，任务转入巡查+升级模式
 - 修改：src/components/PavilionArchive.tsx · scripts/verify_pavilion_stats.py（新增）· 9 个既有验证脚本（combo/gesture_smooth/weapon_chars/zone_fix/unified_and_pwa/xingyun/daily_trial_e2e/weekly_trial_e2e/pavilion_archive）· worklog.md（本条补录）
+
+---
+Task ID: 43
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查模式第六轮）
+Task: 次级对象池化——剑气轨迹/特效环生灭降本（候补池性能项，模式同 Task 41）
+
+Work Log:
+- 巡查认领（候补池「fxRings/swordTrail 次级池化」；池内其余候选明确划出：afterimages 为低频大对象（StickPose 全量）不入池、capePts/ribbonPts 为 verlet 持续模拟点非短命对象）
+- canvasRenderer.ts 池化改造：新增 SwordTrailSample/FxRing 接口 + 双空闲池（FX_FREE_CAP=64 内存有界）+ acquire/release 四方法 + fxPoolStats() 统计快照；五处生成点全量改道（addFxRing 公共缝/落地尘环/重坠五 puff/三式剑尖冲击波/剑气轨迹采样）；stepFX 死亡归还 + 两处溢出裁头归还
+- BattleView 无头缝：__inkGestureDebug.fxPool() 统计快照（与 Task 41 particlePool 缝同位）
+- 新增 scripts/verify_fx_pool.py 12 项（静态接线：值符号查 dev 转译源/类型接口查本地源——esbuild 剥离 type-only 符号的坑在录；动态生发/双池归还/复用/帽遵守/空闲池有界/零异常）
+- 回归：次级池 12/12 · 粒子池 9/9 · boss 二阶段 14/14 · 手势平滑 21/21；tsc 零错误 · vite build 通过（PWA 269 entries，PAGES_BASE=/moyugang/ 口径）
+- 实测复用率：八手突刺轨迹池 0.818（66 取 54 复用）、冲击环池 0.667（6 取 4 复用）
+
+Stage Summary:
+- 剑笔仙战斗特效（轨迹 60/s 采样、尘环/冲击环高频生灭）从「每帧新分配 + splice 丢弃」转为池化复用 + 归还，GC 压力与 Task 41 主粒子池同路收平；候补池性能项就此清零
+- 修改：src/utils/canvasRenderer.ts（接口+双池+五生成点改道+stepFX 归还）· src/components/BattleView.tsx（无头缝两行）· scripts/verify_fx_pool.py（新增）· worklog.md

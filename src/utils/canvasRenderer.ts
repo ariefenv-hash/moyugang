@@ -30,6 +30,28 @@ import {
   easeInOutQuad,
 } from './animationSystem';
 
+/** 剑气轨迹采样点（Task 43 次级池化对象） */
+export interface SwordTrailSample {
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+  life: number;
+}
+
+/** 特效冲击环（Task 43 次级池化对象） */
+export interface FxRing {
+  x: number;
+  y: number;
+  r0: number;
+  r1: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  lw: number;
+  flat: boolean;
+}
+
 /**
  * 低端设备侦测（性能自动分档）：
  * deviceMemory ≤ 4GB（Chrome/Android 真实暴露，Safari/桌面 Firefox 返回 undefined 跳过）
@@ -77,7 +99,7 @@ export class CanvasRenderer {
   private landSquash: number = 0;
   private prevTrailEmit: number = 0;
   private afterimageTimer: number = 0;
-  private swordTrail: { x: number; y: number; tx: number; ty: number; life: number }[] = [];
+  private swordTrail: SwordTrailSample[] = [];
   private afterimages: {
     x: number;
     gy: number;
@@ -86,20 +108,24 @@ export class CanvasRenderer {
     pose: StickPose;
     life: number;
   }[] = [];
-  private fxRings: {
-    x: number;
-    y: number;
-    r0: number;
-    r1: number;
-    life: number;
-    maxLife: number;
-    color: string;
-    lw: number;
-    flat: boolean;
-  }[] = [];
+  private fxRings: FxRing[] = [];
   private capePts: { x: number; y: number; px: number; py: number }[] = [];
   private ribbonPts: { x: number; y: number; px: number; py: number }[] = [];
   private unitFx: WeakMap<UnitInstance, { walkPhase: number }> = new WeakMap();
+
+  /* ===== 次级对象池（Task 43，模式同 Task 41 ParticlePool）===== */
+  /** 空闲实例上限：两池活跃帽各 40，余量留给溢出归还，内存有界 */
+  private static readonly FX_FREE_CAP = 64;
+  private swordTrailFree: SwordTrailSample[] = [];
+  private fxRingFree: FxRing[] = [];
+  private fxPoolCounters = {
+    trailAcq: 0,
+    trailReuse: 0,
+    trailRel: 0,
+    ringAcq: 0,
+    ringReuse: 0,
+    ringRel: 0,
+  };
 
   constructor(ctx: CanvasRenderingContext2D, width: number, height: number, bgImageSrc?: string) {
     this.ctx = ctx;
@@ -137,8 +163,74 @@ export class CanvasRenderer {
     lw = 3,
     flat = false
   ) {
-    this.fxRings.push({ x, y, r0, r1, life, maxLife: life, color, lw, flat });
-    if (this.fxRings.length > 40) this.fxRings.splice(0, this.fxRings.length - 40);
+    const r = this.acquireFxRing();
+    r.x = x;
+    r.y = y;
+    r.r0 = r0;
+    r.r1 = r1;
+    r.life = life;
+    r.maxLife = life;
+    r.color = color;
+    r.lw = lw;
+    r.flat = flat;
+    this.fxRings.push(r);
+    if (this.fxRings.length > 40) {
+      const cut = this.fxRings.splice(0, this.fxRings.length - 40);
+      for (const o of cut) this.releaseFxRing(o);
+    }
+  }
+
+  /** 池取：剑气轨迹样本（复用优先；必填字段由调用点字面量全量覆盖） */
+  private acquireSwordTrail(): SwordTrailSample {
+    this.fxPoolCounters.trailAcq++;
+    const s = this.swordTrailFree.pop();
+    if (s) {
+      this.fxPoolCounters.trailReuse++;
+      return s;
+    }
+    return { x: 0, y: 0, tx: 0, ty: 0, life: 0 };
+  }
+
+  /** 归还死亡轨迹样本；池满即弃（内存有界） */
+  private releaseSwordTrail(s: SwordTrailSample) {
+    this.fxPoolCounters.trailRel++;
+    if (this.swordTrailFree.length < CanvasRenderer.FX_FREE_CAP) this.swordTrailFree.push(s);
+  }
+
+  /** 池取：特效冲击环（复用优先；必填字段由调用点字面量全量覆盖） */
+  private acquireFxRing(): FxRing {
+    this.fxPoolCounters.ringAcq++;
+    const r = this.fxRingFree.pop();
+    if (r) {
+      this.fxPoolCounters.ringReuse++;
+      return r;
+    }
+    return { x: 0, y: 0, r0: 0, r1: 0, life: 0, maxLife: 1, color: '#ffffff', lw: 3, flat: false };
+  }
+
+  /** 归还死亡冲击环；池满即弃（内存有界） */
+  private releaseFxRing(r: FxRing) {
+    this.fxPoolCounters.ringRel++;
+    if (this.fxRingFree.length < CanvasRenderer.FX_FREE_CAP) this.fxRingFree.push(r);
+  }
+
+  /** 池统计快照（无头验证缝用，Task 43） */
+  public fxPoolStats() {
+    const c = this.fxPoolCounters;
+    return {
+      trailAcquired: c.trailAcq,
+      trailReused: c.trailReuse,
+      trailReleased: c.trailRel,
+      trailReuseRate: c.trailAcq > 0 ? c.trailReuse / c.trailAcq : 0,
+      ringAcquired: c.ringAcq,
+      ringReused: c.ringReuse,
+      ringReleased: c.ringRel,
+      ringReuseRate: c.ringAcq > 0 ? c.ringReuse / c.ringAcq : 0,
+      trailLive: this.swordTrail.length,
+      ringLive: this.fxRings.length,
+      trailFree: this.swordTrailFree.length,
+      ringFree: this.fxRingFree.length,
+    };
   }
 
   // 2.5D Coordinate to Screen position with perspective
@@ -3748,7 +3840,7 @@ export class CanvasRenderer {
     if (dt <= 0) return;
     for (let i = this.swordTrail.length - 1; i >= 0; i--) {
       this.swordTrail[i].life -= dt;
-      if (this.swordTrail[i].life <= 0) this.swordTrail.splice(i, 1);
+      if (this.swordTrail[i].life <= 0) this.releaseSwordTrail(this.swordTrail.splice(i, 1)[0]);
     }
     for (let i = this.afterimages.length - 1; i >= 0; i--) {
       this.afterimages[i].life -= dt;
@@ -3756,11 +3848,17 @@ export class CanvasRenderer {
     }
     for (let i = this.fxRings.length - 1; i >= 0; i--) {
       this.fxRings[i].life -= dt;
-      if (this.fxRings[i].life <= 0) this.fxRings.splice(i, 1);
+      if (this.fxRings[i].life <= 0) this.releaseFxRing(this.fxRings.splice(i, 1)[0]);
     }
-    if (this.swordTrail.length > 40) this.swordTrail.splice(0, this.swordTrail.length - 40);
+    if (this.swordTrail.length > 40) {
+      const cut = this.swordTrail.splice(0, this.swordTrail.length - 40);
+      for (const o of cut) this.releaseSwordTrail(o);
+    }
     if (this.afterimages.length > 26) this.afterimages.splice(0, this.afterimages.length - 26);
-    if (this.fxRings.length > 32) this.fxRings.splice(0, this.fxRings.length - 32);
+    if (this.fxRings.length > 32) {
+      const cut = this.fxRings.splice(0, this.fxRings.length - 32);
+      for (const o of cut) this.releaseFxRing(o);
+    }
   }
 
   /** 双骨肢体绘制（显式两段角度：根角 + 肘弯相对角），返回末端（手）坐标 */
@@ -4202,30 +4300,30 @@ export class CanvasRenderer {
       if (hero.isGrounded && !this.lastGrounded) {
         const fallV = Math.abs(this.lastFallV);
         this.landSquash = Math.min(0.26, 0.1 + fallV * 0.00045);
-        this.fxRings.push({
-          x: hero.x,
-          y: groundY,
-          r0: 5,
-          r1: 22 + fallV * 0.035,
-          life: 0.34,
-          maxLife: 0.34,
-          color: 'rgba(203, 213, 225, 0.75)',
-          lw: 2.6,
-          flat: true,
-        });
+        const dust = this.acquireFxRing();
+        dust.x = hero.x;
+        dust.y = groundY;
+        dust.r0 = 5;
+        dust.r1 = 22 + fallV * 0.035;
+        dust.life = 0.34;
+        dust.maxLife = 0.34;
+        dust.color = 'rgba(203, 213, 225, 0.75)';
+        dust.lw = 2.6;
+        dust.flat = true;
+        this.fxRings.push(dust);
         if (fallV > 320) {
           for (let i = 0; i < 5; i++) {
-            this.fxRings.push({
-              x: hero.x + Math.sin(i * 2.4) * 14,
-              y: groundY - 2,
-              r0: 2,
-              r1: 7 + (i % 3) * 4,
-              life: 0.3,
-              maxLife: 0.3,
-              color: 'rgba(71, 85, 105, 0.55)',
-              lw: 1.6,
-              flat: true,
-            });
+            const puff = this.acquireFxRing();
+            puff.x = hero.x + Math.sin(i * 2.4) * 14;
+            puff.y = groundY - 2;
+            puff.r0 = 2;
+            puff.r1 = 7 + (i % 3) * 4;
+            puff.life = 0.3;
+            puff.maxLife = 0.3;
+            puff.color = 'rgba(71, 85, 105, 0.55)';
+            puff.lw = 1.6;
+            puff.flat = true;
+            this.fxRings.push(puff);
           }
         }
       }
@@ -4260,17 +4358,17 @@ export class CanvasRenderer {
     // —— 三式重斩命中瞬间：剑尖冲击波 ——
     if (dt > 0) {
       if (this.prevTrailEmit < 0.85 && pose.trailEmit >= 0.85 && hero.state === 'ATTACK_3') {
-        this.fxRings.push({
-          x: hero.x + facing * 40,
-          y: groundY - 30,
-          r0: 4,
-          r1: 30,
-          life: 0.28,
-          maxLife: 0.28,
-          color: 'rgba(186, 230, 253, 0.9)',
-          lw: 3,
-          flat: false,
-        });
+        const shock = this.acquireFxRing();
+        shock.x = hero.x + facing * 40;
+        shock.y = groundY - 30;
+        shock.r0 = 4;
+        shock.r1 = 30;
+        shock.life = 0.28;
+        shock.maxLife = 0.28;
+        shock.color = 'rgba(186, 230, 253, 0.9)';
+        shock.lw = 3;
+        shock.flat = false;
+        this.fxRings.push(shock);
       }
       this.prevTrailEmit = pose.trailEmit;
     }
@@ -4292,7 +4390,13 @@ export class CanvasRenderer {
 
     // —— 剑气轨迹采样（行云模式跳过） ——
     if (dt > 0 && !this.qualityLow && pose.trailEmit > 0.08) {
-      this.swordTrail.push({ x: handWX, y: handWY, tx: tipWX, ty: tipWY, life: 0.2 });
+      const s = this.acquireSwordTrail();
+      s.x = handWX;
+      s.y = handWY;
+      s.tx = tipWX;
+      s.ty = tipWY;
+      s.life = 0.2;
+      this.swordTrail.push(s);
     }
 
     // —— 残影采样（重击挥砍 / 冲刺瞬移路径补插；行云模式跳过） ——
