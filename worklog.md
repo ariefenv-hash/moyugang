@@ -788,3 +788,20 @@ Work Log:
 Stage Summary:
 - 同屏至多 420 颗（行云 130）粒子的生灭从「每帧新分配 + O(n) splice」转为池化复用 + O(1) 换出，低端机 GC 停顿进一步压平；溢出/死亡双路径全量归还，内存峰值封顶
 - 修改：src/utils/particlePool.ts（新增）· src/components/BattleView.tsx（池接线+回收路径）· scripts/verify_particle_pool.py（新增）· worklog.md
+
+---
+Task ID: 42
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查模式第五轮）
+Task: 文心殿通关率展示——战绩堂面板+每章折数进度（远景池最后一项实装）
+
+Work Log:
+- 待办池认领（远景池最后实装项「文心殿通关率展示」；零数据模型变更，全部统计源自既有 PlayerProgress 字段，PavilionArchive.tsx 单组件交付）
+- 新增「战绩堂」面板（藏卷室顶部，空态亦显示）：主线通关率大字 +「主线 X / 50 折」口径（分母只计已发行章折数，未来加章自动扩容）+ 黛青→朱砂渐变进度条；六格统计——藏卷星数（仅计主线折星级，满 3 星/折）、累计击破（千分位）、无尽最佳波次、问战连捷天数、周试炼状态（与 weekKey() 实时比对：本周已捷/首胜 <周键>/未曾问锋）、每日问战最后完卷；旧「殿外附藏」面板收编入战绩堂，消除同屏重复
+- 每章折数进度：卷签副标题三态文案（已入藏 · n/m 折 · 可重温 / 已破 n/m 折 · 完卷后入藏 / 未破一折 · 完卷后入藏）+ 卷签行下 3px 朱砂细进度条，未完卷章节亦可见进度激励补完
+- 新增 scripts/verify_pavilion_stats.py：14 项（预置 7/50 折→通关率 14%、进度条宽度、星数 17/150、千分位击破、周键比对、章签文案、细条 40%/0% 比例、旧面板收编、零 console/page 错误）14/14 PASS；tsc 零错
+- 同轮全量回归暴露 14 项失败，逐项定因全部为脚本过时/环境脆弱（无一为游戏代码回归），分两类修复：A. 分屏手势改版（46cd8f4）语义适配 6 脚本——combo/gesture_smooth/weapon_chars 移除已废「字诀模式开关」点击改上区书符、gesture_smooth 拆写字(0.30H)/快速招(0.75H)双中心；zone_fix Z4 拖动路径左移避开技能键 pointer 拦截、Z8 改分区隔离断言；unified_and_pwa 补零进度引子关闭。B. 词缀日期脆弱根治——daily/weekly_trial_e2e 改 npx tsx -e 从仓库源码动态复算当日/当周词境名与攻血系数再断言（消除硬编码播种日跨日必挂）；xingyun 补 /moyugang/ base + 预置画质档（无头 detectLowEndDevice 恒低配）
+- 回归终态：31/31 脚本全绿（dev :3000 侧 27 + 4173 生产侧 4，含生产冒烟 5/5）；pavilion_stats 14/14 · pavilion_archive 7/7 · combo 20/20 · gesture_smooth 21/21 · zone_fix 22/22 · daily_e2e 8/8 · weekly_e2e 15/15
+
+Stage Summary:
+- 藏卷室从「收藏陈列」升级为「战绩陈列」：通关率口径化、六格统计、每章朱砂细条三件套，补完动机可视化；远景池实装项就此清零，任务转入巡查+升级模式
+- 修改：src/components/PavilionArchive.tsx · scripts/verify_pavilion_stats.py（新增）· 9 个既有验证脚本（combo/gesture_smooth/weapon_chars/zone_fix/unified_and_pwa/xingyun/daily_trial_e2e/weekly_trial_e2e/pavilion_archive）· worklog.md（本条补录）
