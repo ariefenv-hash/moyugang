@@ -841,3 +841,21 @@ Work Log:
 Stage Summary:
 - 墨阁升级树从四线（攻击/气血/冷却/共鸣）扩至六线：字诀精研把「上区书符」的评级威力接到成长线（九字诀一处乘成全覆盖），祝福气运把三处祝福抽取统一到加权内核且 luck=0 与旧行为逐比特等价（零 nerf 纪律）；待办池「墨阁升级树扩展」就此清偿
 - 修改：src/types/game.ts · src/App.tsx · src/utils/blessingPick.ts（新增）· src/components/BattleView.tsx · src/components/PavilionUpgrades.tsx · src/components/ChapterSelect.tsx · src/data/dailyTrial.ts · src/data/weeklyTrial.ts · scripts/verify_upgrade_tree.py（新增）· worklog.md
+
+---
+Task ID: 45
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查模式第八轮 · 池序小步认领）
+Task: 修行线成就扩展——10 枚新成就 + progress 驱动即时解锁检查器
+
+Work Log:
+- 池务重估：issue #1 正文待办池（11-01 快照）11 项经 worklog Task 26-34 逐项比对**全部清偿**，HUD DPR/canvas 分层/灵玉回收线/难度曲线 JSON 均在案（Task 32/33/34）——上轮回帖的池误判由此正本清源；本轮副项即正文重写
+- 主项认领：成就池扩展——ACHIEVEMENTS 27 方中 dailyStreak/totalKills/endlessBest/Task 44 双新线（runeLevel/blessingLuckLevel）四域**零成就消费**，补修行线 10 枚：三日之约/七日不辍（连捷 3/7 天）· 笔力初成/入木三分（字诀精研 3/6 重）· 墨运初显/鸿运当头（祝福气运 3/6 重）· 笔扫千军/荡涤墨浊（累计击破 5000/20000）· 长夜孤灯（无尽 40 波）· 墨阁鼎盛（六线皆 3 重，收编 Task 44 双新线）
+- 架构新增 checkProgressAchievements（App.tsx 纯函数）：progress 字段变化即查——墨阁购买/每日首胜/击破累计**不出战斗即时解锁**，与既有 checkAchievements（战斗结算路径）互不覆盖；触发挂 [progress] useEffect，newly 为空不 setState（has() 防重自然收敛，无循环）；零数据模型变更（全从既有 PlayerProgress 字段派生）
+- UI 零改动：AchievementsModal 遍历 ACHIEVEMENTS 自动扩至 37 方（文心宝箓计数 27→37）
+- 新增 scripts/verify_achievements_expanded.py 13 项（静态 6：37 方/十 id/函数/effect/鼎盛含双新线/三字段消费；e2e 7：高值预置 reload 即 10/10 全解锁+modal 37+名面可见 · 低值零误发 · **墨阁购买 Lv3 不出战斗 rune_adept 即时入档**（progress 驱动核心实证）+ 仅解锁一枚无批量误发）13/13 PASS
+- 归因排障在录：smoke 第 11 项（触摸点选）连挂两次，stash 双基线对照实证**基线同样挂**（非本 Task 引入）——根因为长跑 dev server 状态污染（gesture=None 进不了管道），重启 dev server 后 24/24 全绿；教训：无头验证前 dev server 跑超一轮次应重启
+- 回归：pavilion_stats 14/14 · smoke 24/24（重启后）；tsc 零错误 · vite build 272 entries
+
+Stage Summary:
+- 成就系统从「章回+战斗线」扩至修行线：四域零消费字段（连捷/击破/无尽/双新升级线）全部接入成就叙事；解锁时机从「只等战斗结算」升级为 progress 驱动即时解锁——墨阁买满三重即见印成，修行反馈闭环；文心宝箓 27→37 方
+- 修改：src/data/gameData.ts（+10 成就）· src/App.tsx（checkProgressAchievements+effect）· scripts/verify_achievements_expanded.py（新增）· worklog.md

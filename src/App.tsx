@@ -135,6 +135,42 @@ function checkAchievements(
   return newly;
 }
 
+/** 修行线成就检查（Task 45）：progress 字段变化即查——墨阁购买/每日首胜/累计击破即时解锁，
+ *  不再只等战斗结算。与 checkAchievements（战斗结算路径）互不覆盖，has() 防重保证收敛。 */
+function checkProgressAchievements(progress: PlayerProgress): AchievementDef[] {
+  const newly: AchievementDef[] = [];
+  const has = (id: string) => progress.achievements.includes(id);
+  const add = (id: string) => {
+    const def = ACHIEVEMENTS.find((a) => a.id === id);
+    if (def && !has(id)) newly.push(def);
+  };
+  const hu = progress.heroUpgrades;
+  const runeLv = hu.runeLevel ?? 0;
+  const luckLv = hu.blessingLuckLevel ?? 0;
+
+  if ((progress.dailyStreak ?? 0) >= 3) add('daily_streak_3');
+  if ((progress.dailyStreak ?? 0) >= 7) add('daily_streak_7');
+  if (runeLv >= 3) add('rune_adept');
+  if (runeLv >= 6) add('rune_master');
+  if (luckLv >= 3) add('blessing_charm');
+  if (luckLv >= 6) add('blessing_fortune');
+  if (progress.totalKills >= 5000) add('kills_5000');
+  if (progress.totalKills >= 20000) add('kills_20000');
+  if (progress.endlessBest >= 40) add('endless_40');
+  // 墨阁鼎盛：六线皆三重（冷却轨战斗侧生效上限 Lv5，计入即可）
+  if (
+    hu.attackLevel >= 3 &&
+    hu.hpLevel >= 3 &&
+    hu.cooldownLevel >= 3 &&
+    hu.resonanceLevel >= 3 &&
+    runeLv >= 3 &&
+    luckLv >= 3
+  )
+    add('upgrade_zenith');
+
+  return newly;
+}
+
 export default function App() {
   const [mode, setMode] = useState<GameMode>('MENU');
   const [currentLevel, setCurrentLevel] = useState<LevelConfig>(CHAPTER_LEVELS[0]);
@@ -165,6 +201,18 @@ export default function App() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
     } catch {}
+  }, [progress]);
+
+  // 修行线成就：progress 变化即查（墨阁购买/每日首胜/击破累计即时解锁）；
+  // newly 为空时不 setState，防循环（append 后再查 has() 全真自然收敛）
+  useEffect(() => {
+    const newly = checkProgressAchievements(progress);
+    if (newly.length > 0) {
+      setProgress((p) => ({
+        ...p,
+        achievements: [...p.achievements, ...newly.map((a) => a.id)],
+      }));
+    }
   }, [progress]);
 
   const handleStartBattle = (level: LevelConfig) => {

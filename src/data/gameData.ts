@@ -117,6 +117,16 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'perfect_defense', name: '磐石无移', description: '墨阁血量余七成以上通关任意一折', icon: 'SHIELD' },
   { id: 'endless_10', name: '无尽·十波', description: '无尽试炼中坚守过第 10 波', icon: 'INFINITE' },
   { id: 'endless_20', name: '无尽·廿波', description: '无尽试炼中坚守过第 20 波', icon: 'INFINITE' },
+  { id: 'daily_streak_3', name: '三日之约', description: '每日问战连捷三日，墨历为证', icon: 'STAR' },
+  { id: 'daily_streak_7', name: '七日不辍', description: '每日问战连捷七日，修行自成习惯', icon: 'STAR' },
+  { id: 'rune_adept', name: '笔力初成', description: '「字诀精研」修至三重', icon: 'FEATHER' },
+  { id: 'rune_master', name: '入木三分', description: '「字诀精研」修至六重，笔锋透背', icon: 'FEATHER' },
+  { id: 'blessing_charm', name: '墨运初显', description: '「祝福气运」修至三重', icon: 'STAR' },
+  { id: 'blessing_fortune', name: '鸿运当头', description: '「祝福气运」修至六重，稀世祝福纷至沓来', icon: 'STAR' },
+  { id: 'kills_5000', name: '笔扫千军', description: '累计击破五千墨浊', icon: 'SWORD' },
+  { id: 'kills_20000', name: '荡涤墨浊', description: '累计击破两万墨浊，文脉澄澈', icon: 'SWORD' },
+  { id: 'endless_40', name: '长夜孤灯', description: '无尽坚守至四十波', icon: 'INFINITE' },
+  { id: 'upgrade_zenith', name: '墨阁鼎盛', description: '墨阁主角心法六线皆修至三重', icon: 'CROWN' },
 ];
 
 export const HERO_SKILLS: HeroSkill[] = [
