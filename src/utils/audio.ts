@@ -76,6 +76,46 @@ class SoundEngine {
     } catch {}
   }
 
+  // 成就解锁印鉴双音（Task 47 浮提示配套）：五声音阶上行宫→徵，
+  // 古琴拨弦质感（与 playPluck 同族三角波+低通），web audio 时序调度免 setTimeout
+  public playAchievementChime() {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx || !this.master) return;
+    const ctx = this.ctx;
+    const master = this.master;
+
+    try {
+      const now = ctx.currentTime;
+      const notes = [523.25, 783.99]; // C5 → G5
+      notes.forEach((freq, i) => {
+        const t0 = now + i * 0.12;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, t0);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.985, t0 + 0.6);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(2000, t0);
+        filter.frequency.exponentialRampToValueAtTime(400, t0 + 0.6);
+
+        gain.gain.setValueAtTime(0.001, t0);
+        gain.gain.linearRampToValueAtTime(0.2, t0 + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(master);
+
+        osc.start(t0);
+        osc.stop(t0 + 0.6);
+      });
+    } catch {}
+  }
+
   // Crisp sword slash with ink swoosh
   public playSlash(isHeavy: boolean = false) {
     if (this.isMuted) return;

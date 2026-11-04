@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { GameMode, LevelConfig, PlayerProgress, BattleResultStats, AchievementDef } from './types/game';
 import { CHAPTER_LEVELS, ENDLESS_LEVEL, ACHIEVEMENTS, BLESSINGS } from './data/gameData';
@@ -25,6 +25,7 @@ import { PavilionArchive } from './components/PavilionArchive';
 import { VictoryDefeatModal } from './components/VictoryDefeatModal';
 import { LoreModal } from './components/LoreModal';
 import { AchievementsModal } from './components/AchievementsModal';
+import { AchievementToast } from './components/AchievementToast';
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
 import { sound } from './utils/audio';
 import bgInkMountains from './assets/images/bg_ink_mountains_1791652099827.jpg';
@@ -195,6 +196,12 @@ export default function App() {
   } | null>(null);
 
   const [isMuted, setIsMuted] = useState(sound.getMuted());
+  // Task 47：成就解锁浮提示队列（progress 驱动即时解锁的修行反馈）
+  const [achievementToasts, setAchievementToasts] = useState<AchievementDef[]>([]);
+  /** 队列出栈：按 id 移除（has() 防重保证 id 不重复，直接过滤即可） */
+  const handleToastExpire = useCallback((id: string) => {
+    setAchievementToasts((q) => q.filter((t) => t.id !== id));
+  }, []);
 
   // Save progress
   useEffect(() => {
@@ -205,13 +212,23 @@ export default function App() {
 
   // 修行线成就：progress 变化即查（墨阁购买/每日首胜/击破累计即时解锁）；
   // newly 为空时不 setState，防循环（append 后再查 has() 全真自然收敛）
+  // Task 47：首跑为存量补账（老玩家回归一次性入档），保持静默不打扰；
+  // 此后真实游玩中的即时解锁 → 浮提示 + 印鉴双音，补上修行反馈最后一跳。
+  // 战斗结算路径成就仍由 VictoryDefeatModal 展示，浮提示不与之重复。
+  const progressEffectFirstRun = useRef(true);
   useEffect(() => {
+    const firstRun = progressEffectFirstRun.current;
+    progressEffectFirstRun.current = false;
     const newly = checkProgressAchievements(progress);
     if (newly.length > 0) {
       setProgress((p) => ({
         ...p,
         achievements: [...p.achievements, ...newly.map((a) => a.id)],
       }));
+      if (!firstRun) {
+        sound.playAchievementChime();
+        setAchievementToasts((q) => [...q, ...newly].slice(0, 6));
+      }
     }
   }, [progress]);
 
@@ -428,6 +445,8 @@ export default function App() {
     <div className="w-full h-full min-h-screen bg-ink-strong text-paper font-sans selection:bg-cinnabar selection:text-paper-soft">
       {/* PWA 版本巡检与更新浮签（全视图常驻） */}
       <PwaUpdatePrompt />
+      {/* Task 47：成就解锁浮提示（右上墨韵签，全视图常驻） */}
+      <AchievementToast toasts={achievementToasts} onExpire={handleToastExpire} />
       {/* View Router */}
       {mode === 'MENU' && (
         <div className="relative min-h-screen flex flex-col justify-between overflow-hidden paper-grain text-ink">

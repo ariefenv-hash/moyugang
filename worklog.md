@@ -881,3 +881,20 @@ Work Log:
 Stage Summary:
 - 敌军图鉴第七员：锁纹墨傀把「写不写字」变成一道必答题——凡兵箭矢刀兵皆承甲而碎，唯九字真言透甲直击；甲碎六息重凝的窗口节奏逼玩家在字诀 CD 期间用走位与阵型换时间。蚀文咒师与墨傀一罚乱写一罚不写，机制对偶闭环；字诀精研升级线与字诀修行成就获得实战落点
 - 修改：src/types/game.ts · src/data/gameData.ts · src/utils/audio.ts · src/utils/canvasRenderer.ts · src/components/BattleView.tsx · scripts/verify_puppet_armor.py（新增）· worklog.md
+
+---
+Task ID: 47
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查+池序小步认领 · 22:00 轮）
+Task: 成就解锁浮提示——progress 驱动即时解锁的修行反馈最后一跳（池序⑥·错位认领）
+
+Work Log:
+- 池序错位认领（Task 46 交付回帖池②天气事件池留予并行会话，我方取池尾⑥；22:03 轮先发认领回帖 #issuecomment-6632650223 占坑防并行撞车）；选题理由：Task 45 progress 驱动解锁静默入档，修行反馈断在最后一跳，工作量小验收清晰适配小步节奏
+- 新增 src/components/AchievementToast.tsx：右上墨韵浮签（panel-paper-deep + 朱砂印底成就图标 + 「文心宝箓 · 参悟」签眉 + 名称/描述），motion/react AnimatePresence 右侧滑入滑出 0.32s；TOAST_TTL_MS=4500 单枚自退场、MAX_VISIBLE=3 同屏上限、App 侧队列 slice(0,6) 封顶；role=status + aria-live=polite 无障碍；data-achievement-toast={id} 验证缝；图标八型映射与 AchievementsModal 同源语义（TROPHY/STAR/FLAME/SWORD/SHIELD/INFINITE/CROWN/FEATHER）
+- App.tsx 接线：achievementToasts 队列 state + handleToastExpire useCallback 出栈（has() 防重保证 id 唯一，直接 filter）；progress 驱动 effect 增**首跑静默闸**（progressEffectFirstRun ref——挂载首跑为存量补账，老玩家回归一次性入档保持静默不刷屏；此后真实游玩中的即时解锁才入栈+音效）；战斗结算路径成就仍由 VictoryDefeatModal「参悟新成就」展示，浮提示不与之重复
+- audio.ts 新增 playAchievementChime：五声音阶上行宫→徵（C5→G5）双三角波+低通古琴拨弦质感，web audio 时序调度（t0+0.12s 第二音）免 setTimeout；isMuted 短路与既有音效同口径
+- 新增 scripts/verify_achievement_toast.py **17/17 PASS**：静态锚 7（组件/滑入滑出/TTL 与上限/接线/首跑静默闸/队列入栈/音效）+ e2e 10（B 高值存量补账 10/10 入档且全程零浮签 · C 墨阁购买 rune_adept 浮签 1.2s 内可见且即时入档 · D TTL 后自动退场 · E 两线各 Lv5→6 连购双浮签同屏（队列机制，预置成就隔离首跑变量）· F 390px 视口内完整可见 x=90 w=288）
+- 回归：verify_achievements_expanded **13/13**（Task 45 同 effect 零回归）· smoke **24/24**；tsc --noEmit 零错误 · vite build 通过（PWA 272 entries）
+
+Stage Summary:
+- 修行反馈闭环：墨阁购买/每日首胜/连捷/累计击破的即时解锁从「静默入档」升级为「浮签+印鉴双音」，与战斗结算弹窗、成就总录 modal 构成三面反馈；首跑静默闸保证老玩家回归补账不被十枚浮签刷屏，静默与反馈的边界=是否发生在真实游玩中
+- 修改：src/components/AchievementToast.tsx（新增）· src/App.tsx · src/utils/audio.ts · scripts/verify_achievement_toast.py（新增）· worklog.md
