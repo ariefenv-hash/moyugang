@@ -5210,6 +5210,80 @@ export class CanvasRenderer {
         }
         break;
       }
+      case 'PUPPET': {
+        // 锁纹墨傀（Task 46）：青铜方重心机关体——甲存续时旋转六段锁纹墨金环+甲值余量弧，破甲后胸核幽光裸露急闪
+        const bob = Math.sin(gameTime * 1.6 + (unit.limbPhase || 0)) * 2.2;
+        const armorMax = unit.runeArmorMax || 1;
+        const armorPct = Math.max(0, (unit.runeArmorHp ?? 0) / armorMax);
+        // 躯干（青铜梯形）
+        ctx.fillStyle = '#5c5340';
+        ctx.beginPath();
+        ctx.moveTo(-12, -36 + bob);
+        ctx.lineTo(12, -36 + bob);
+        ctx.lineTo(9, 8 + bob);
+        ctx.lineTo(-9, 8 + bob);
+        ctx.closePath();
+        ctx.fill();
+        // 锈斑三块
+        ctx.fillStyle = 'rgba(38, 32, 20, 0.5)';
+        [[-5, -26, 3.2], [4, -14, 2.6], [-2, 0, 3.6]].forEach((sp) => {
+          ctx.beginPath();
+          ctx.ellipse(sp[0], sp[1] + bob, sp[2], sp[2] * 0.7, 0.4, 0, TAU);
+          ctx.fill();
+        });
+        // 方首 + 单目幽紫瞳光
+        ctx.fillStyle = '#4a4234';
+        ctx.fillRect(-8, -52 + bob, 16, 14);
+        ctx.fillStyle = '#a78bfa';
+        ctx.beginPath();
+        ctx.arc(unit.facing * 3, -45 + bob, 2.2, 0, TAU);
+        ctx.fill();
+        // 肩铆
+        ctx.fillStyle = '#8a7a55';
+        ctx.beginPath();
+        ctx.arc(-11, -34 + bob, 2.6, 0, TAU);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(11, -34 + bob, 2.6, 0, TAU);
+        ctx.fill();
+        // 墨足（双短柱）
+        ctx.fillStyle = '#3f3829';
+        ctx.fillRect(-8, 8 + bob, 5, 9);
+        ctx.fillRect(3, 8 + bob, 5, 9);
+        if (armorPct > 0) {
+          // 存续甲：旋转六段锁纹环（墨金）
+          ctx.save();
+          ctx.translate(0, -22 + bob);
+          ctx.rotate(gameTime * 0.85);
+          ctx.strokeStyle = 'rgba(201, 168, 106, 0.9)';
+          ctx.lineWidth = 2.2;
+          for (let s = 0; s < 6; s++) {
+            const a0 = (s * Math.PI) / 3 + 0.14;
+            ctx.beginPath();
+            ctx.arc(0, 0, 24, a0, a0 + Math.PI / 3 - 0.28);
+            ctx.stroke();
+          }
+          ctx.restore();
+          // 甲值余量弧（幽紫，自顶顺时针按剩余比例）
+          ctx.strokeStyle = 'rgba(167, 139, 250, 0.95)';
+          ctx.lineWidth = 2.8;
+          ctx.beginPath();
+          ctx.arc(0, -22 + bob, 29, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * armorPct);
+          ctx.stroke();
+        } else {
+          // 破甲态：胸核幽光裸露急闪
+          const flicker = 0.45 + Math.sin(gameTime * 9.5) * 0.35;
+          ctx.fillStyle = `rgba(167, 139, 250, ${flicker.toFixed(3)})`;
+          ctx.beginPath();
+          ctx.moveTo(0, -30 + bob);
+          ctx.lineTo(6, -22 + bob);
+          ctx.lineTo(0, -14 + bob);
+          ctx.lineTo(-6, -22 + bob);
+          ctx.closePath();
+          ctx.fill();
+        }
+        break;
+      }
     }
 
     // 受击白闪（命中前几帧加性提亮，强化打击反馈）

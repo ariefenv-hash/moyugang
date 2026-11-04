@@ -2,7 +2,7 @@ export type GameMode = 'MENU' | 'LEVEL_SELECT' | 'BATTLE' | 'UPGRADES' | 'LORE' 
 
 export type ArmyCommand = 'DEFEND' | 'HOLD' | 'ATTACK' | 'FOLLOW_HERO';
 
-export type UnitType = 'SCRIBE' | 'SWORD' | 'ARCHER' | 'GUARDIAN' | 'HARPIST' | 'RUNECASTER';
+export type UnitType = 'SCRIBE' | 'SWORD' | 'ARCHER' | 'GUARDIAN' | 'HARPIST' | 'RUNECASTER' | 'PUPPET';
 
 export interface UnitConfig {
   type: UnitType;
@@ -59,6 +59,12 @@ export interface UnitInstance {
   enraged?: boolean;
   /** Boss 专属：无休狂战姿态（渲染暗红氛围） */
   isBoss?: boolean;
+  /** 墨傀专属（Task 46）：锁纹墨甲当前甲值（>0 时凡兵承甲，字诀透甲） */
+  runeArmorHp?: number;
+  /** 墨傀专属：锁纹墨甲甲值上限（重凝满值） */
+  runeArmorMax?: number;
+  /** 墨傀专属：凝甲冷却（甲碎后计时，归零重凝满值） */
+  runeArmorRegenCd?: number;
   /** Boss 专属：二阶段专属机制冷却（墨震八荒/弦召残响/影袭瞬步，狂暴期间循环释放） */
   bossSkillCd?: number;
 }
@@ -170,6 +176,8 @@ export interface Projectile {
   isEnemy: boolean;
   type: 'ARROW' | 'QUILL' | 'SOUNDWAVE' | 'DARK_ORB' | 'INK_BLADE';
   pierce?: boolean;
+  /** 伤害来源（Task 46 锁纹墨甲结算：凡兵承甲，字诀透甲——QUILL/INK_BLADE 为 ability） */
+  source?: 'melee' | 'projectile' | 'ability';
   duration: number;
   maxDuration: number;
 }

@@ -859,3 +859,25 @@ Work Log:
 Stage Summary:
 - 成就系统从「章回+战斗线」扩至修行线：四域零消费字段（连捷/击破/无尽/双新升级线）全部接入成就叙事；解锁时机从「只等战斗结算」升级为 progress 驱动即时解锁——墨阁买满三重即见印成，修行反馈闭环；文心宝箓 27→37 方
 - 修改：src/data/gameData.ts（+10 成就）· src/App.tsx（checkProgressAchievements+effect）· scripts/verify_achievements_expanded.py（新增）· worklog.md
+
+---
+Task ID: 46
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查模式第九轮 · 池序小步认领）
+Task: 第二个新敌兵种「锁纹墨傀」（PUPPET · 玄机遗铸）——凡兵承甲、字诀透甲
+
+Work Log:
+- 池序认领（正文重写版待办池第①项；20:05 轮先发认领回帖 #issuecomment-6630146457 占坑防并行撞车）；设计对偶：Task 39 蚀文咒师罚「乱写」（蚀痕剥级），墨傀罚「不写」（凡兵承甲）——机制上与 Task 44 字诀精研线、Task 45 字诀成就线正交咬合（破甲唯一通道=九字真言，升级线与成就反馈全部接到同一核心循环）
+- 兵种数据（gameData.ts UNIT_CONFIGS.PUPPET）：锁纹墨傀·玄机遗铸——380 血/30 攻/52 距/0.65 速/88 移速，敌军专属慢重步；叙事钩「玄机阁遗铸」与锁纹墨甲自洽
+- 数据模型（types/game.ts）：UnitInstance 增 runeArmorHp/runeArmorMax/runeArmorRegenCd 三可选字段；Projectile 增 source?: 'melee'|'projectile'|'ability' 伤害来源标记；UnitType 收编 'PUPPET'
+- 伤害管线（BattleView.tsx applyDamage）：签名加 dmgSource 缺省 'melee'（全部既有调用点零改动即兼容）；单位分支先于护盾结算墨甲——ability 透甲（甲即刻碎裂+伤害全额入体）/凡兵承甲（min(甲,伤) 吸收，溢出续行，全额承甲走「甲承」金棕伤数短路返回：不入气血、不触发击杀链与连墨计击）
+- 字诀标记六处：疾斩浪带（青罗伞变体同行）/山河绝技/墨爆新星/唤墨龙三处直调加参；星辉箭雨 QUILL、剑气逆寒 INK_BLADE、江河流波 INK_BLADE 三处弹体带 source:'ability'（星辉/逆寒/流波经通用弹体命中点透传）——九字诀中七个输出字诀全部破甲；莲华陷阱 DoT 沿既有直扣 hp 管线本就绕过护盾系（与竹影墨盾同口径），不破甲亦不承甲，行为在录
+- 入场/重凝/演出：spawnUnit 对 PUPPET 敌军覆甲 150×statScale（波次难度缩放）；单位 tick 增重凝块——甲碎六息后满甲重凝+墨金 FX 环+定格音；breakPuppetArmor 演出（「破」印 + triggerShake + 金砂 12 粒 + playArmorBreak 专属金石铮鸣双失谐三角波+高通噪声簇，audio.ts 新函数）
+- 入池与渲染：敌池 wave>=11（RUNECASTER 9 波后顺延，主线/无尽共用生成器自动生效）；canvasRenderer 增 PUPPET case——青铜梯形躯干+锈斑三块+方首幽紫单目+肩铆墨足，甲存续时旋转六段锁纹墨金环+甲值余量弧（幽紫按剩余比例），破甲态胸核幽光急闪；debug 缝 known 列表收编 PUPPET
+- 验证缝（DEV）：spawnPuppet（素体非 Boss）/puppetStrike(kind,dmg)（定向三源打击走真实 applyDamage 管线）/puppetState（甲态五元组读数）
+- 新增 scripts/verify_puppet_armor.py **22/22 PASS**：静态锚 13（类型/字段/配置/池序/管线/透传/标记×3/重凝/缝/case/音效/覆甲）+ e2e 8（B1 满甲入场 150/150/380 · B2 弹体承甲血不动 · B3 近战承甲血不动 · B4 字诀透甲甲碎+血-30+凝甲 6s · B5 六息重凝实测 6.1s · B6 甲承 150+溢出 849 斩落尸检 null · B7 spawnTestBoss 兼容 · C1 零异常）
+- 回归：verify_rune_caster **9/9**（第一新敌种零回归）· smoke **24/24**；tsc --noEmit 零错误 · vite build 通过（PWA 272 entries）
+- 工程坑在录：本沙箱本轮后台进程在工具调用间被回收（setsid nohup vite 亦难幸免），e2e 改「同调用生命周期」模式（启动→就绪轮询→脚本→收尾单命令内联）后稳定
+
+Stage Summary:
+- 敌军图鉴第七员：锁纹墨傀把「写不写字」变成一道必答题——凡兵箭矢刀兵皆承甲而碎，唯九字真言透甲直击；甲碎六息重凝的窗口节奏逼玩家在字诀 CD 期间用走位与阵型换时间。蚀文咒师与墨傀一罚乱写一罚不写，机制对偶闭环；字诀精研升级线与字诀修行成就获得实战落点
+- 修改：src/types/game.ts · src/data/gameData.ts · src/utils/audio.ts · src/utils/canvasRenderer.ts · src/components/BattleView.tsx · scripts/verify_puppet_armor.py（新增）· worklog.md

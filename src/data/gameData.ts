@@ -282,6 +282,19 @@ export const UNIT_CONFIGS: Record<string, UnitConfig> = {
     description: '执洗墨遗笔遥书蚀文咒：咒弹落处蚀痕升腾，笔迹过之朱印受蚀剥级；正字临痕可驱。仅现于玄墨军阵。',
     icon: 'Sparkles',
   },
+  PUPPET: {
+    type: 'PUPPET',
+    name: '锁纹墨傀',
+    title: '玄机遗铸',
+    cost: 260,
+    maxHp: 380,
+    attack: 30,
+    attackRange: 52,
+    attackSpeed: 0.65,
+    speed: 88,
+    description: '玄机阁遗铸的青铜墨傀，周身覆锁纹墨甲：箭矢音波刀兵皆承甲而碎，唯九字真言透甲直击——字诀临身，锁纹立断；甲碎六息，重凝如初。仅现于玄墨军阵。',
+    icon: 'Box',
+  },
 };
 
 /** 无尽试炼特殊关卡：波次无限，敌势逐波狂涨（id 取 999 区间，避开主线关卡 id） */

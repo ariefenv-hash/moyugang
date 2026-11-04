@@ -412,6 +412,50 @@ class SoundEngine {
     this.playPluck(587.33, 0.4);
   }
 
+  // 锁纹墨甲碎裂：金石铮鸣（双失谐三角波下滑 + 高通噪声簇，短促衰减——Task 46 锁纹墨傀）
+  public playArmorBreak() {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx || !this.master) return;
+    try {
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const bus = ctx.createGain();
+      bus.gain.setValueAtTime(0.3, now);
+      bus.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+      bus.connect(this.master);
+      [1244.5, 1862.7].forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, now);
+        osc.frequency.exponentialRampToValueAtTime(f * 0.42, now + 0.3);
+        const og = ctx.createGain();
+        og.gain.setValueAtTime(i === 0 ? 1 : 0.6, now);
+        og.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.connect(og);
+        og.connect(bus);
+        osc.start(now);
+        osc.stop(now + 0.34);
+      });
+      const len = Math.floor(ctx.sampleRate * 0.1);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2600;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.55, now);
+      ng.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      src.connect(hp);
+      hp.connect(ng);
+      ng.connect(bus);
+      src.start(now);
+    } catch {}
+  }
+
   // 击杀反馈：墨爆闷响 + 液体飞溅（区别于普通命中，强化"斩落"实感）
   public playSlay() {
     if (this.isMuted) return;

@@ -835,6 +835,14 @@ export const BattleView: React.FC<BattleViewProps> = ({
         flinchTimer: 0,
         isBoss,
         enraged: false,
+        ...(type === 'PUPPET' && isEnemy
+          ? {
+              // 锁纹墨甲（Task 46）：甲值随波次难度缩放，入场即覆甲
+              runeArmorMax: Math.round(150 * statScale),
+              runeArmorHp: Math.round(150 * statScale),
+              runeArmorRegenCd: 0,
+            }
+          : {}),
       };
 
       unitsRef.current.push(newUnit);
@@ -1267,12 +1275,39 @@ export const BattleView: React.FC<BattleViewProps> = ({
   };
 
   // Combat Damage Calculation with Hitstop, Screen Shake & Ink Splatters
+  // ===== 锁纹墨甲碎裂演出（Task 46）：金砂迸溅 + 「破」印 + 金石铮鸣 + 震屏 =====
+  const breakPuppetArmor = (u: UnitInstance) => {
+    u.runeArmorHp = 0;
+    u.runeArmorRegenCd = 6;
+    triggerSealStamp(u.x, u.y - 58, '破');
+    triggerShake(6, 0.22);
+    sound.playArmorBreak();
+    for (let i = 0; i < 12; i++) {
+      spawnParticle(particlesRef.current, {
+        id: `p_${Math.random()}`,
+        x: u.x,
+        y: u.y,
+        altitudeZ: u.altitudeZ + 28,
+        vx: (Math.random() - 0.5) * 220,
+        vy: (Math.random() - 0.5) * 90,
+        vz: Math.random() * 130 + 50,
+        color: '#c9a86a',
+        size: Math.random() * 3.5 + 2,
+        alpha: 1,
+        life: 0.7,
+        maxLife: 0.7,
+        type: 'INK',
+      });
+    }
+  };
+
   const applyDamage = (
     target: UnitInstance | 'HERO' | 'PLAYER_BASE' | 'ENEMY_BASE',
     dmg: number,
     isCritical = false,
     sourceX?: number,
-    sourceY?: number
+    sourceY?: number,
+    dmgSource: 'melee' | 'projectile' | 'ability' = 'melee'
   ) => {
     sound.playInkHit(isCritical || dmg > 80, isCritical);
 
@@ -1402,8 +1437,34 @@ export const BattleView: React.FC<BattleViewProps> = ({
     }
 
     const unit = target;
-    // 护盾先于气血承伤（P0-3 修复：竹影墨盾给部队的 200×共鸣护盾此前只加不扣，形同虚设）
     let finalDmg = dmg;
+    // ===== 锁纹墨甲（Task 46 墨傀专属）：凡兵承甲，字诀透甲（先于护盾结算） =====
+    if (unit.isEnemy && unit.type === 'PUPPET' && (unit.runeArmorHp ?? 0) > 0) {
+      if (dmgSource === 'ability') {
+        // 九字真言透甲：甲即刻碎裂，伤害全额入体
+        breakPuppetArmor(unit);
+      } else {
+        const absorbed = Math.min(unit.runeArmorHp!, finalDmg);
+        unit.runeArmorHp = unit.runeArmorHp! - absorbed;
+        finalDmg -= absorbed;
+        if ((unit.runeArmorHp ?? 0) <= 0) breakPuppetArmor(unit);
+        if (finalDmg <= 0) {
+          // 全额承甲：「甲承」反馈，不入气血、不触发击杀链/连墨计击
+          damageNumbersRef.current.push({
+            id: `dmg_${Math.random()}`,
+            x: unit.x,
+            y: unit.y - unit.altitudeZ - 55,
+            text: '甲承',
+            color: '#c9a86a',
+            alpha: 1,
+            scale: 1.0,
+            life: 0.7,
+          });
+          return;
+        }
+      }
+    }
+    // 护盾先于气血承伤（P0-3 修复：竹影墨盾给部队的 200×共鸣护盾此前只加不扣，形同虚设）
     if (unit.shieldHp > 0) {
       if (unit.shieldHp >= finalDmg) {
         unit.shieldHp -= finalDmg;
@@ -1826,7 +1887,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
           hero.attack * (isUmbrella ? 2.5 : 2.8) * powerMult * chainMult * getComboDmgMult(),
           true,
           hero.x,
-          hero.y
+          hero.y,
+          'ability'
         );
         if (isUmbrella) u.x += hero.facing * 26;
       }
@@ -1939,6 +2001,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           isEnemy: false,
           type: 'INK_BLADE',
           pierce: true,
+          source: 'ability',
           duration: 0,
           maxDuration: 1.5,
         });
@@ -2037,6 +2100,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           isEnemy: false,
           type: 'QUILL',
           pierce: true,
+          source: 'ability',
           duration: 0,
           maxDuration: 1.6,
         });
@@ -2120,7 +2184,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
     unitsRef.current.forEach((u) => {
       if (u.isEnemy && u.hp > 0) {
-        applyDamage(u, hero.attack * 4.8 * powerMult * ultDmgMult, true, hero.x, hero.y);
+        applyDamage(u, hero.attack * 4.8 * powerMult * ultDmgMult, true, hero.x, hero.y, 'ability');
         u.x += 50;
       }
     });
@@ -2212,6 +2276,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           isEnemy: false,
           type: 'INK_BLADE',
           pierce: true,
+          source: 'ability',
           duration: 0,
           maxDuration: 2.0,
         });
@@ -2322,7 +2387,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
     // 全屏敌军伤害 + 墨染击退
     unitsRef.current.forEach((u) => {
       if (u.isEnemy && u.hp > 0) {
-        applyDamage(u, hero.attack * 2.4 * novaDmg, true, hero.x, hero.y);
+        applyDamage(u, hero.attack * 2.4 * novaDmg, true, hero.x, hero.y, 'ability');
         u.x += Math.sign(u.x - hero.x || 1) * 38;
       }
     });
@@ -2818,10 +2883,32 @@ export const BattleView: React.FC<BattleViewProps> = ({
           bossSkillCd: u.bossSkillCd,
         }));
     dbg.__inkGestureDebug.spawnTestBoss = (type: string = 'GUARDIAN', x?: number) => {
-      const known: UnitType[] = ['GUARDIAN', 'HARPIST', 'SWORD', 'ARCHER', 'RUNECASTER'];
+      const known: UnitType[] = ['GUARDIAN', 'HARPIST', 'SWORD', 'ARCHER', 'RUNECASTER', 'PUPPET'];
       const t = known.includes(type as UnitType) ? (type as UnitType) : 'GUARDIAN';
       spawnUnit(t, true, x ?? WORLD_WIDTH - 200, undefined, true);
       return true;
+    };
+    // Task 46 锁纹墨傀验证缝：素体墨傀（非 Boss）/定向三源打击/甲态读数
+    dbg.__inkGestureDebug.spawnPuppet = (x?: number) => {
+      spawnUnit('PUPPET', true, x ?? WORLD_WIDTH - 200, undefined, false, 1);
+      return true;
+    };
+    dbg.__inkGestureDebug.puppetStrike = (kind: 'melee' | 'projectile' | 'ability', dmg: number) => {
+      const u = unitsRef.current.find((x) => x.isEnemy && x.type === 'PUPPET' && x.hp > 0);
+      if (!u) return false;
+      applyDamage(u, dmg, false, u.x, u.y, kind);
+      return true;
+    };
+    dbg.__inkGestureDebug.puppetState = () => {
+      const u = unitsRef.current.find((x) => x.isEnemy && x.type === 'PUPPET' && x.hp > 0);
+      if (!u) return null;
+      return {
+        hp: Math.round(u.hp),
+        maxHp: u.maxHp,
+        armor: Math.round(u.runeArmorHp ?? 0),
+        armorMax: u.runeArmorMax ?? 0,
+        regenCd: +(u.runeArmorRegenCd ?? 0).toFixed(2),
+      };
     };
     dbg.__inkGestureDebug.forceEnrageBoss = (type?: string) => {
       const b = unitsRef.current.find(
@@ -3492,6 +3579,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
         if (waveNo >= 5) pool.push('GUARDIAN');
         if (waveNo >= 7) pool.push('HARPIST');
         if (waveNo >= 9) pool.push('RUNECASTER');
+        if (waveNo >= 11) pool.push('PUPPET');
 
         for (let i = 0; i < count; i++) {
           const pick = pool[Math.floor(Math.random() * pool.length)];
@@ -3670,7 +3758,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
           Math.abs(u.y - dragon.y) < 55
         ) {
           dragon.hitIds.add(u.id);
-          applyDamage(u, hero.attack * (dragon.dmgMult ?? 2.2), true, dragon.x, dragon.y);
+          applyDamage(u, hero.attack * (dragon.dmgMult ?? 2.2), true, dragon.x, dragon.y, 'ability');
           u.x += Math.sign(dragon.vx) * (dragon.knockback ?? 45);
         }
       });
@@ -3706,6 +3794,16 @@ export const BattleView: React.FC<BattleViewProps> = ({
       if (unit.flinchTimer > 0) unit.flinchTimer -= dt;
       unit.stateTime += dt;
       if (unit.attackCooldown > 0) unit.attackCooldown -= dt;
+      // 锁纹墨甲重凝（Task 46）：甲碎六息后重凝满值，墨金环复现
+      if (unit.isEnemy && unit.type === 'PUPPET' && (unit.runeArmorRegenCd ?? 0) > 0) {
+        unit.runeArmorRegenCd = (unit.runeArmorRegenCd ?? 0) - dt;
+        if ((unit.runeArmorRegenCd ?? 0) <= 0) {
+          unit.runeArmorRegenCd = 0;
+          unit.runeArmorHp = unit.runeArmorMax ?? 150;
+          rendererRef.current?.addFxRing(unit.x, unit.y, 'rgba(201, 168, 106, 0.75)', 6, 46, 0.5, 4, true);
+          sound.playPluck(329.63, 0.35);
+        }
+      }
 
       if (unit.altitudeZ > 0 || unit.vz !== 0) {
         unit.vz -= 800 * dt;
@@ -4036,7 +4134,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
       units.forEach((u) => {
         if (u.isEnemy !== proj.isEnemy && u.hp > 0) {
           if (Math.abs(u.x - proj.x) < 26 && Math.abs(u.y - proj.y) < 32) {
-            applyDamage(u, proj.damage, false, proj.x, proj.y);
+            applyDamage(u, proj.damage, false, proj.x, proj.y, proj.source ?? 'projectile');
             hit = true;
           }
         }
