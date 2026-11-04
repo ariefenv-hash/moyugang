@@ -361,6 +361,10 @@ export interface PlayerProgress {
     hpLevel: number;
     cooldownLevel: number;
     resonanceLevel: number;
+    /** 字诀精研等级：九字诀招式威力每级 +10%（乘算，Task 44 墨阁升级树扩展） */
+    runeLevel: number;
+    /** 祝福气运等级：稀世（RARE/EPIC）祝福抽取权重每级 +18%（Task 44 墨阁升级树扩展） */
+    blessingLuckLevel: number;
   };
   unitUpgrades: {
     [key in UnitType]?: number;

@@ -822,3 +822,22 @@ Work Log:
 Stage Summary:
 - 剑笔仙战斗特效（轨迹 60/s 采样、尘环/冲击环高频生灭）从「每帧新分配 + splice 丢弃」转为池化复用 + 归还，GC 压力与 Task 41 主粒子池同路收平；候补池性能项就此清零
 - 修改：src/utils/canvasRenderer.ts（接口+双池+五生成点改道+stepFX 归还）· src/components/BattleView.tsx（无头缝两行）· scripts/verify_fx_pool.py（新增）· worklog.md
+
+---
+Task ID: 44
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查模式第七轮 · 池序小步认领）
+Task: 墨阁升级树扩展——字诀精研 + 祝福气运双新线（待办池「墨阁升级树扩展（字诀威力/祝福池权重）」实装）
+
+Work Log:
+- 池序认领（第 12 条评论点名余项；同轮复核确认池内其他项已由 Task 26-43 清偿：Boss 二阶段/蚀文咒师/波次里程碑/周试炼/次级池化均有在册验证脚本）
+- 新线 A「字诀精研」runeLevel：types/game.ts heroUpgrades 新字段（注释口径每级 +10%）→ BattleView castCharAbility 单点注入 `mult = (match.powerMult + chainBonus) * (1 + (runeLevel ?? 0) * 0.10)`——九字诀九 ability（dash_slash/bamboo_shield/starlight_barrage/lotus_trap/river_waves/heart_heal/ultimate_landscape/ink_nova/dragon_sweep）一处乘成全覆盖，文思连段语义保持（先加后乘）
+- 新线 B「祝福气运」blessingLuckLevel：新纯函数核 src/utils/blessingPick.ts（RARITY_BASE_WEIGHTS 三档同权 1.0 / BLESSING_LUCK_RARE_GAIN=0.18 / blessingWeight / pickBlessings 加权无放回抽取）——**零 nerf 设计**：luck=0 三档同权 ≡ 旧均匀 splice 行为（无放回抽样下稀世占比=池占比 0.25，实测 0.253 逐比特等价），气运等级只做增益抬升；三处消费统一改道（BattleView offerBlessings 局内 Math.random 语义 / dailyTrial getDailyTrialInfo(+blessingLuck 入参) / weeklyTrial getWeeklyTrialInfo 同法），每抽一张恰消耗一次 rng()——每日/周种子流同版本内同卷恒定契约保持
+- UI：PavilionUpgrades 主角心法区 md:grid-cols-4 → md:grid-cols-2 lg:grid-cols-3 六卡布局；两新卡仿既有卡式（Feather/Star 图标 + Lv 徽记 + 研习按钮走 upgradeHeroStat 通用购买链）；App.tsx INITIAL_PROGRESS 补两字段默认 0（migrateProgress 浅合并自动兜底旧档）
+- ChapterSelect 两调用点传 blessingLuck（useMemo 依赖升级）——每日/周问战开局祝福吃气运加成
+- 新增 scripts/verify_upgrade_tree.py 24 项（bun 直跑 TS 纯函数 8 项：权重锚/不重复/池尽/确定性/luck0 等价旧行为 0.253/luck8 ×1.25 温和单调/luck200 端点 0.393 逼近理论上界 0.40/RARE 同步；e2e 9 项：两卡在场/购买链 Lv+扣费 900→850→800/持久化落档/既有四卡在场；静态源锚 7 项；零异常）24/24 PASS
+- 设计坑在录（A5 首跑 FAIL 根因）：首版基础权重 RARE 0.55/EPIC 0.30 引入「隐性 nerf」——无放回抽取下旧均匀行为的稀世占比是池占比 25%，加权 0.30 反把 luck0 压到 11.4%；修正为三档同权基线 + luck 纯增益，并补「luck0 ≡ 0.25」等价断言防未来回归；另 R/E 同增益使 EPIC 率上界=2/5=40%（R/E 按张数比分摊增益流量），luck8 ×1.25 为数学正确的温和增益，端点断言锁机制方向
+- 回归：pavilion_stats 14/14 · daily_trial_e2e 8/8 · weekly_trial_e2e 15/15 · gesture_smooth 21/21（castCharAbility 最近邻域）；tsc 零错误 · vite build 通过（PWA 272 entries）
+
+Stage Summary:
+- 墨阁升级树从四线（攻击/气血/冷却/共鸣）扩至六线：字诀精研把「上区书符」的评级威力接到成长线（九字诀一处乘成全覆盖），祝福气运把三处祝福抽取统一到加权内核且 luck=0 与旧行为逐比特等价（零 nerf 纪律）；待办池「墨阁升级树扩展」就此清偿
+- 修改：src/types/game.ts · src/App.tsx · src/utils/blessingPick.ts（新增）· src/components/BattleView.tsx · src/components/PavilionUpgrades.tsx · src/components/ChapterSelect.tsx · src/data/dailyTrial.ts · src/data/weeklyTrial.ts · scripts/verify_upgrade_tree.py（新增）· worklog.md

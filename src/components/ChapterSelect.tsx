@@ -89,14 +89,20 @@ export const ChapterSelect: React.FC<ChapterSelectProps> = ({
   };
   // 每日试炼：任意一折通关即可开卷（同日答卷恒定，首胜独享灵玉）
   const dailyUnlocked = progress.completedLevels.length >= 1;
-  const dailyInfo = useMemo(() => getDailyTrialInfo(), []);
+  const dailyInfo = useMemo(
+    () => getDailyTrialInfo(undefined, progress.heroUpgrades.blessingLuckLevel ?? 0),
+    [progress.heroUpgrades.blessingLuckLevel]
+  );
   const dailyLevel = useMemo(() => getDailyTrialLevel(), []);
   const dailyDoneToday = progress.dailyDone === dailyInfo.dateStr;
   const dailyStreak = progress.dailyStreak ?? 0;
 
   // 周试炼：破过首领折（第一章终折）后开卷（同周答卷恒定，本周首胜独享灵玉）
   const weeklyUnlocked = progress.completedLevels.includes(5);
-  const weeklyInfo = useMemo(() => getWeeklyTrialInfo(), []);
+  const weeklyInfo = useMemo(
+    () => getWeeklyTrialInfo(undefined, progress.heroUpgrades.blessingLuckLevel ?? 0),
+    [progress.heroUpgrades.blessingLuckLevel]
+  );
   const weeklyLevel = useMemo(() => getWeeklyTrialLevel(), []);
   const weeklyDoneThisWeek = progress.weeklyDone === weeklyInfo.weekStr;
 

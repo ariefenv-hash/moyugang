@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { pickBlessings } from '../utils/blessingPick';
 import {
   LevelConfig,
   UnitInstance,
@@ -1136,8 +1137,10 @@ export const BattleView: React.FC<BattleViewProps> = ({
   const castCharAbility = (match: CharMatchResult, chainBonus: number = 0) => {
     const hero = heroRef.current;
     if (hero.state === 'DEAD') return;
-    // 文思连段加成叠加到字诀评级威力上
-    const mult = match.powerMult + chainBonus;
+    // 文思连段加成叠加到字诀评级威力上；「字诀精研」升级线每级再 +10%（乘算）
+    const mult =
+      (match.powerMult + chainBonus) *
+      (1 + (progress.heroUpgrades.runeLevel ?? 0) * 0.10);
     switch (match.ability) {
       case 'dash_slash':
         triggerSkillDashSlash(undefined, mult);
@@ -1520,12 +1523,13 @@ export const BattleView: React.FC<BattleViewProps> = ({
 
   // ===== 墨灵祝福：三选一 / 应用效果 =====
   const offerBlessings = () => {
-    const pool = [...BLESSINGS];
-    const picks: BlessingDef[] = [];
-    while (picks.length < 3 && pool.length > 0) {
-      const idx = Math.floor(Math.random() * pool.length);
-      picks.push(pool.splice(idx, 1)[0]);
-    }
+    // 加权三选一：「祝福气运」升级线抬升稀世（RARE/EPIC）权重（局内仍 Math.random 语义）
+    const picks = pickBlessings(
+      BLESSINGS,
+      3,
+      Math.random,
+      progress.heroUpgrades.blessingLuckLevel ?? 0
+    );
     if (picks.length === 0) return;
     isPausedRef.current = true; // 战场凝滞，静心抉择
     blessingOfferRef.current = picks;

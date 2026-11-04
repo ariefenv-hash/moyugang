@@ -53,6 +53,8 @@ const INITIAL_PROGRESS: PlayerProgress = {
     hpLevel: 0,
     cooldownLevel: 0,
     resonanceLevel: 0,
+    runeLevel: 0,
+    blessingLuckLevel: 0,
   },
   unitUpgrades: {
     SCRIBE: 0,

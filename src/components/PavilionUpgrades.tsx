@@ -13,6 +13,7 @@ import {
   Music,
   ArrowUp,
   Zap,
+  Star,
 } from 'lucide-react';
 
 interface PavilionUpgradesProps {
@@ -135,7 +136,7 @@ export const PavilionUpgrades: React.FC<PavilionUpgradesProps> = ({
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Attack */}
             <div className="p-4 panel-paper flex flex-col justify-between">
               <div>
@@ -247,6 +248,60 @@ export const PavilionUpgrades: React.FC<PavilionUpgradesProps> = ({
               >
                 <ArrowUp className="w-3.5 h-3.5" />
                 研习 ({getUpgradeCost(progress.heroUpgrades.resonanceLevel)} 灵玉)
+              </button>
+            </div>
+
+            {/* Rune Mastery（字诀精研 · Task 44） */}
+            <div className="p-4 panel-paper flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-xs text-ink-mid mb-2">
+                  <span className="flex items-center gap-1.5 font-serif text-ink-strong">
+                    <Feather className="w-4 h-4 text-cinnabar" />
+                    字诀精研
+                  </span>
+                  <span className="px-1.5 py-0.5 border border-daiqing/60 text-daiqing font-mono text-[10px]">
+                    Lv.{progress.heroUpgrades.runeLevel ?? 0}
+                  </span>
+                </div>
+                <p className="text-xs text-ink-mid leading-relaxed">
+                  笔力入木三分，上区书符九字诀的招式威力每级 +10%（当前总增幅 +{Math.round((progress.heroUpgrades.runeLevel ?? 0) * 10)}%）。
+                </p>
+              </div>
+
+              <button
+                onClick={() => upgradeHeroStat('runeLevel')}
+                disabled={progress.jadeSparks < getUpgradeCost(progress.heroUpgrades.runeLevel ?? 0)}
+                className="btn-seal mt-4 py-2 px-3 text-xs font-serif flex items-center justify-center gap-1.5"
+              >
+                <ArrowUp className="w-3.5 h-3.5" />
+                研习 ({getUpgradeCost(progress.heroUpgrades.runeLevel ?? 0)} 灵玉)
+              </button>
+            </div>
+
+            {/* Blessing Luck（祝福气运 · Task 44） */}
+            <div className="p-4 panel-paper flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-xs text-ink-mid mb-2">
+                  <span className="flex items-center gap-1.5 font-serif text-ink-strong">
+                    <Star className="w-4 h-4 text-tenghuang" />
+                    祝福气运
+                  </span>
+                  <span className="px-1.5 py-0.5 border border-daiqing/60 text-daiqing font-mono text-[10px]">
+                    Lv.{progress.heroUpgrades.blessingLuckLevel ?? 0}
+                  </span>
+                </div>
+                <p className="text-xs text-ink-mid leading-relaxed">
+                  墨运亨通，稀世（珍奇/传世）祝福出现权重每级 +18%（当前总增幅 +{Math.round((progress.heroUpgrades.blessingLuckLevel ?? 0) * 18)}%）。局内三选一、问战开局皆受益。
+                </p>
+              </div>
+
+              <button
+                onClick={() => upgradeHeroStat('blessingLuckLevel')}
+                disabled={progress.jadeSparks < getUpgradeCost(progress.heroUpgrades.blessingLuckLevel ?? 0)}
+                className="btn-seal mt-4 py-2 px-3 text-xs font-serif flex items-center justify-center gap-1.5"
+              >
+                <ArrowUp className="w-3.5 h-3.5" />
+                研习 ({getUpgradeCost(progress.heroUpgrades.blessingLuckLevel ?? 0)} 灵玉)
               </button>
             </div>
           </div>

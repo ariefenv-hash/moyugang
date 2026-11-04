@@ -1,6 +1,7 @@
 import { LevelConfig, BlessingDef } from '../types/game';
 import { RELEASED_LEVELS } from './story';
 import { BLESSINGS, ENDLESS_LEVEL } from './gameData';
+import { pickBlessings } from '../utils/blessingPick';
 
 // ============================================================
 // 每日试炼 · 墨历问战
@@ -122,7 +123,11 @@ export interface DailyTrialInfo {
 }
 
 /** 按日期解析今日试炼答卷（同一天恒定） */
-export function getDailyTrialInfo(dateStr: string = todayKey()): DailyTrialInfo {
+export function getDailyTrialInfo(
+  dateStr: string = todayKey(),
+  /** 「祝福气运」升级线等级（稀世祝福权重 +18%/级）；种子流确定性不受影响 */
+  blessingLuck: number = 0
+): DailyTrialInfo {
   const rnd = mulberry32(dateSeed(dateStr));
 
   // 词境：避开终折首领战（id % 5 === 0 的首领折与高难度首折均可选，无硬限制；
@@ -137,12 +142,8 @@ export function getDailyTrialInfo(dateStr: string = todayKey()): DailyTrialInfo 
     modifiers.push(modPool.splice(Math.floor(rnd() * modPool.length), 1)[0]);
   }
 
-  // 开局祝福 ×3（不重复，全稀有度可掷）
-  const blessPool = [...BLESSINGS];
-  const blessings: BlessingDef[] = [];
-  for (let i = 0; i < 3 && blessPool.length > 0; i++) {
-    blessings.push(blessPool.splice(Math.floor(rnd() * blessPool.length), 1)[0]);
-  }
+  // 开局祝福 ×3（不重复，全稀有度可掷；「祝福气运」升级线抬升稀世权重）
+  const blessings = pickBlessings(BLESSINGS, 3, rnd, blessingLuck);
 
   return {
     dateStr,

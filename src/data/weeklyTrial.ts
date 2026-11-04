@@ -1,6 +1,7 @@
 import { LevelConfig, BlessingDef } from '../types/game';
 import { RELEASED_LEVELS } from './story';
 import { BLESSINGS } from './gameData';
+import { pickBlessings } from '../utils/blessingPick';
 import { mulberry32, dateSeed, DailyModifier, DailyTrialConfig } from './dailyTrial';
 
 // ============================================================
@@ -92,7 +93,11 @@ export interface WeeklyTrialInfo {
 }
 
 /** 按周键解析本周试炼答卷（同一周恒定） */
-export function getWeeklyTrialInfo(weekStr: string = weekKey()): WeeklyTrialInfo {
+export function getWeeklyTrialInfo(
+  weekStr: string = weekKey(),
+  /** 「祝福气运」升级线等级（稀世祝福权重 +18%/级）；种子流确定性不受影响 */
+  blessingLuck: number = 0
+): WeeklyTrialInfo {
   const rnd = mulberry32(dateSeed('weekly-' + weekStr));
 
   // 周魁词境：仅取首领折（与每日试炼互补——每日专取非首领普通折）
@@ -106,12 +111,8 @@ export function getWeeklyTrialInfo(weekStr: string = weekKey()): WeeklyTrialInfo
     modifiers.push(modPool.splice(Math.floor(rnd() * modPool.length), 1)[0]);
   }
 
-  // 开局祝福 ×2（不重复，全稀有度可掷）
-  const blessPool = [...BLESSINGS];
-  const blessings: BlessingDef[] = [];
-  for (let i = 0; i < 2 && blessPool.length > 0; i++) {
-    blessings.push(blessPool.splice(Math.floor(rnd() * blessPool.length), 1)[0]);
-  }
+  // 开局祝福 ×2（不重复，全稀有度可掷；「祝福气运」升级线抬升稀世权重）
+  const blessings = pickBlessings(BLESSINGS, 2, rnd, blessingLuck);
 
   return {
     weekStr,
