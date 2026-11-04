@@ -918,3 +918,21 @@ Work Log:
 Stage Summary:
 - 天地图鉴六型闭环：墨雨催文运、清风助行军、月辉砺剑锋、蚀月纵敌疾、梅雨滞敌蹄、霜降钝敌锋——三利我/一助敌/两困敌，主线池 5 型无尽池 6 型；演出层从「只有 HUD 横幅」升级为全型专属战场 overlay，异象成为看得见听得到（六音泛音）的天象事件
 - 修改：src/types/game.ts · src/data/gameData.ts · src/components/BattleView.tsx · src/utils/canvasRenderer.ts · scripts/verify_weather_expansion.py（新增）· worklog.md
+
+---
+Task ID: 49
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查+池序小步认领 · 11-05 06:00 轮）
+Task: HUD 细描边第贰阶段——单边线（border-b/t/l/r）纳入 .hud-crisp 发丝折算（池序③）
+
+Work Log:
+- 池序认领（②天气事件池已由 Task 48 交付关闭，按其交付回帖邀请顺取③；认领回帖 #issuecomment-6643251241 占坑在案，申明避让规则——并行若已在实施即刻让位改取④）
+- index.css 细描边区扩为**五规则**：壹阶段 `.hud-crisp [class~='border']`（全边）保留，贰阶段追加 border-b/t/l/r 四条单边规则（`border-{side}-width: max(0.5px, calc(1px / var(--dpr)))`）；注释更新注明贰阶段与整词匹配语义（`[class~=]` 整词 token 匹配，border-b-2/border-t-4 等粗单边与 border-2/border-4 粗全边天然豁免；calc 老旧内核整条声明回退 Tailwind 1px 无破坏）
+- 受益面盘点：.hud-crisp（BattleView 根 4307）子树单边线 6 处——顶栏 `border-b border-stone-800`（4312 常驻主描边）、操控心诀浮层标题 border-b（4609）+ 分段 border-t ×3（4635/4639/4651）、引导面板 rule-ink border-t（5066）；子树内粗单边线 0 处（零破坏面）；其余组件（VictoryDefeatModal border-l-2 引文线等）不在子树不受影响
+- 新增 scripts/verify_hud_crisp2.py **16/16 PASS**：静态锚 6（四规则齐备/壹阶段保留/注释语义/顶条锚串/粗线零破坏面/整词计数 b≥2 t≥4）+ e2e 10（CSSOM 五规则在册含折算表达式 · 作用域命中矩阵——全边/四单边/粗单边六探针 matches 各命中己侧互不串扰 · 真实顶条/全边元素/浮层 border-t×3 全数命中 · --dpr 变量链可写读 · 零 console）
+- **验证方法学在录**（后续轮次沿用）：本沙箱 Chromium 对 border-width used value 无视 dsf 一律取整到整 CSS px（最小页面实测 0.5px→1px @dsf=1/1.5/2，内联/!important/物理渲染厚度三路均证）——computed 数值断言与亚像素渲染断言在此内核不可行；故 e2e 采用「CSSOM 规则在册 + 选择器作用域命中矩阵 + 表达式语义静态锚」三件套为折算生效的完备判据，真机高分屏（dsf=2+）渲染效果由 CSS 语义保证
+- 排障在录：CSSOM 扫描首版 walk 以 `if (r.cssRules)` 判容器——CSS Nesting 内核下 CSSStyleRule.cssRules 亦非空（空列表），普通规则全被 continue 吞掉致假阴性；改为「selectorText 先判 + cssRules.length 后递归」后 5/5 命中
+- 回归：smoke **24/24**（首跑 23/24 为账面在录第 11 项战局随机偶发，复跑即绿）· verify_ui_polish **7/7**；tsc --noEmit 零错误 · vite build 通过（PWA 272 entries）
+
+Stage Summary:
+- HUD 细描边收官：全边+单边线全面纳入 DPR 发丝折算，高分屏（1.25/1.5/2/2.625 缩放）顶栏底线、面板分段线、心诀浮层描边从「半像素发虚/整数屏粗重」统一为对齐设备像素网格的工笔发丝线；「天气事件池扩展」之后池序③清偿，余池：④结算页视觉精修 · ⑤canvas 分层第贰阶段 · ⑦export_difficulty_curve 产物 diff 提示
+- 修改：src/index.css · scripts/verify_hud_crisp2.py（新增）· worklog.md
