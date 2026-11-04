@@ -898,3 +898,23 @@ Work Log:
 Stage Summary:
 - 修行反馈闭环：墨阁购买/每日首胜/连捷/累计击破的即时解锁从「静默入档」升级为「浮签+印鉴双音」，与战斗结算弹窗、成就总录 modal 构成三面反馈；首跑静默闸保证老玩家回归补账不被十枚浮签刷屏，静默与反馈的边界=是否发生在真实游玩中
 - 修改：src/components/AchievementToast.tsx（新增）· src/App.tsx · src/utils/audio.ts · scripts/verify_achievement_toast.py（新增）· worklog.md
+
+---
+Task ID: 48
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查+池序小步认领 · 11-05 04:00 轮）
+Task: 天气事件池扩展——梅雨/霜降两新型 + 六型异象演出层一次补齐（池序②）
+
+Work Log:
+- 池序认领（Task 47 交付回帖池②留位，并行会话连续四轮未出坑，本池序取②；04:04 巡查补账回帖+认领在案 #issuecomment-6640749895 后续条）
+- **两新型（玩家侧零 nerf，与既有四型机制对偶）**：PLUM_RAIN 梅雨连绵——黄梅时节道路泥泞，敌军移速 -25%（unit speedMult 链加 0.75 分支，与 CRIMSON_ECLIPSE 敌加速 1.15 同通道成对偶）；FROST_DESCENT 霜降凝兵——霜气侵甲，敌军攻击 -15%（近战块 frostAtk 0.85 + 弹体命中分支双接线，**弹体 else 分支保留 Task 46 锚原串 `applyDamage(u, proj.damage, ..., proj.source ?? 'projectile')` 零位移**，回归首跑 A7 即证）
+- 触发池扩容：主线 3→5 型（CRIMSON_ECLIPSE 维持无尽专属），无尽 4→6 型；每 40s 触发节奏与 15s 持续不变
+- **六型异象演出层一次补齐**（canvasRenderer 新 drawWeatherEventOverlay，render 签名尾部追加 activeWeather 可选参零破坏）：INK_RAIN 浓墨雨丝斜织 / POETIC_BREEZE 横向流风淡痕+柳絮 / LUNAR_GLOW 顶部冷月华 vignette+闪烁月尘 / CRIMSON_ECLIPSE 绛色四边 vignette+暗尘上浮 / PLUM_RAIN 灰青细雨+三色梅瓣飘落 / FROST_DESCENT 底部霜白渐变+霜晶闪烁；入场 1.2s 淡入/退场 1.5s 淡出（纯 evt.timeRemaining 函数，暂停自然凝滞），qualityLow 裁剪重粒子段；与 11.5 章节氛围层分治互斥不叠加绘制
+- HUD 横幅图标补齐六型（MoonStar/CloudDrizzle/Snowflake 三新 import，蚀月此前无图标一并补）；异象入场所配古琴泛音按型分列（880/659.25/783.99/440/587.33/523.25 六音，Record<type,freq> 映射）
+- 验证缝四件套（DEV）：forceWeather（六型强制+未知型兜底 INK_RAIN）/weatherState（type+timeRemaining 读数）/clearWeather（清空回基线）
+- 新增 scripts/verify_weather_expansion.py **22/22 PASS**：静态锚 11（六型联合/六条文案/池 5+6/0.75/0.85 双接线/HUD 六图标/音高映射/缝四件套/演出层六分支+调用点）+ e2e 11（六型 roundtrip 读数 12~15s · 未知型兜底 · clearWeather · HUD 六横幅可见 · **暂停冻结帧协议**——战局暂歇后 dt=0 帧级确定性（噪声 0/786k 像素），全分辨率页内差分：梅雨 5543 / 霜降 78993 / 梅雨vs墨雨 5344 / 梅雨vs霜降 78631 全部超阈 300）
+- 排障在录：像素差分首版 1/4 降采样把 1px 雨丝稀释至阈值下（plum=364≈噪声）→ 改暂停冻结+全分辨率协议后 5543；工程坑：Task 46 锚串被 frostDmg 改名破坏（首跑 A7 FAIL）→ 弹体改 if/else 分支保留原调用形状，旧锚零位移
+- 回归：verify_puppet_armor **22/22** · verify_rune_caster **9/9** · smoke **24/24**；tsc --noEmit 零错误 · vite build 通过（PWA 272 entries）
+
+Stage Summary:
+- 天地图鉴六型闭环：墨雨催文运、清风助行军、月辉砺剑锋、蚀月纵敌疾、梅雨滞敌蹄、霜降钝敌锋——三利我/一助敌/两困敌，主线池 5 型无尽池 6 型；演出层从「只有 HUD 横幅」升级为全型专属战场 overlay，异象成为看得见听得到（六音泛音）的天象事件
+- 修改：src/types/game.ts · src/data/gameData.ts · src/components/BattleView.tsx · src/utils/canvasRenderer.ts · scripts/verify_weather_expansion.py（新增）· worklog.md

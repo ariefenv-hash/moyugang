@@ -143,7 +143,13 @@ export interface CalligraphyCombo {
 }
 
 export interface WeatherEvent {
-  type: 'INK_RAIN' | 'POETIC_BREEZE' | 'LUNAR_GLOW' | 'CRIMSON_ECLIPSE';
+  type:
+    | 'INK_RAIN'
+    | 'POETIC_BREEZE'
+    | 'LUNAR_GLOW'
+    | 'CRIMSON_ECLIPSE'
+    | 'PLUM_RAIN'
+    | 'FROST_DESCENT';
   name: string;
   description: string;
   duration: number;

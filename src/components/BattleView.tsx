@@ -62,6 +62,9 @@ import {
   ArrowUp,
   Flame,
   CloudRain,
+  CloudDrizzle,
+  Snowflake,
+  MoonStar,
   Wind,
   Moon,
   PenTool,
@@ -2910,6 +2913,36 @@ export const BattleView: React.FC<BattleViewProps> = ({
         regenCd: +(u.runeArmorRegenCd ?? 0).toFixed(2),
       };
     };
+    dbg.__inkGestureDebug.forceWeather = (type: string) => {
+      const known: WeatherEvent['type'][] = [
+        'INK_RAIN', 'POETIC_BREEZE', 'LUNAR_GLOW',
+        'CRIMSON_ECLIPSE', 'PLUM_RAIN', 'FROST_DESCENT',
+      ];
+      const t = known.includes(type as WeatherEvent['type'])
+        ? (type as WeatherEvent['type'])
+        : 'INK_RAIN';
+      weatherRef.current = {
+        type: t,
+        name: WEATHER_EFFECTS[t].name,
+        description: WEATHER_EFFECTS[t].desc,
+        duration: 15,
+        timeRemaining: 15,
+      };
+      setActiveWeather(weatherRef.current);
+      return true;
+    };
+    dbg.__inkGestureDebug.weatherState = () =>
+      weatherRef.current
+        ? {
+            type: weatherRef.current.type,
+            timeRemaining: +weatherRef.current.timeRemaining.toFixed(2),
+          }
+        : null;
+    dbg.__inkGestureDebug.clearWeather = () => {
+      weatherRef.current = null;
+      setActiveWeather(null);
+      return true;
+    };
     dbg.__inkGestureDebug.forceEnrageBoss = (type?: string) => {
       const b = unitsRef.current.find(
         (u) => u.isBoss && u.hp > 0 && (!type || u.type === type)
@@ -3138,7 +3171,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
           inkSplatsRef.current,
           corruptZonesRef.current,
           comboRef.current.tier,
-          comboRef.current.count
+          comboRef.current.count,
+          weatherRef.current
         );
 
         // Render Real-time Calligraphy Brush Trail on screen
@@ -3304,8 +3338,8 @@ export const BattleView: React.FC<BattleViewProps> = ({
     if (now >= nextWeatherEventTimeRef.current) {
       nextWeatherEventTimeRef.current = now + 40;
       const weatherTypes: WeatherEvent['type'][] = lv.endless
-        ? ['INK_RAIN', 'POETIC_BREEZE', 'LUNAR_GLOW', 'CRIMSON_ECLIPSE']
-        : ['INK_RAIN', 'POETIC_BREEZE', 'LUNAR_GLOW'];
+        ? ['INK_RAIN', 'POETIC_BREEZE', 'LUNAR_GLOW', 'CRIMSON_ECLIPSE', 'PLUM_RAIN', 'FROST_DESCENT']
+        : ['INK_RAIN', 'POETIC_BREEZE', 'LUNAR_GLOW', 'PLUM_RAIN', 'FROST_DESCENT'];
       const pick = weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
 
       weatherRef.current = {
@@ -3316,7 +3350,16 @@ export const BattleView: React.FC<BattleViewProps> = ({
         timeRemaining: 15,
       };
       setActiveWeather(weatherRef.current);
-      sound.playPluck(880, 1.2);
+      // Task 48：异象入场所配古琴泛音按型分列（墨雨高泠/梅雨湿润/霜降清越）
+      const weatherPitch: Record<WeatherEvent['type'], number> = {
+        INK_RAIN: 880,
+        POETIC_BREEZE: 659.25,
+        LUNAR_GLOW: 783.99,
+        CRIMSON_ECLIPSE: 440,
+        PLUM_RAIN: 587.33,
+        FROST_DESCENT: 523.25,
+      };
+      sound.playPluck(weatherPitch[pick], 1.2);
     }
 
     if (weatherRef.current) {
@@ -3825,6 +3868,7 @@ export const BattleView: React.FC<BattleViewProps> = ({
         (isBuffedByHero ? 1.25 : 1.0) *
         (weatherRef.current?.type === 'POETIC_BREEZE' && !unit.isEnemy ? 1.35 : 1.0) *
         (weatherRef.current?.type === 'CRIMSON_ECLIPSE' && unit.isEnemy ? 1.15 : 1.0) *
+        (weatherRef.current?.type === 'PLUM_RAIN' && unit.isEnemy ? 0.75 : 1.0) *
         (inSlowZone ? 0.55 : 1.0);
       const effectiveSpeed = unit.speed * speedMult;
 
@@ -4092,12 +4136,17 @@ export const BattleView: React.FC<BattleViewProps> = ({
             });
           } else {
             sound.playSlash(false);
+            // 霜降凝兵：霜气侵甲，敌军近战攻击 -15%（Task 48 天气扩展）
+            const frostAtk =
+              weatherRef.current?.type === 'FROST_DESCENT' && unit.isEnemy
+                ? Math.round(unit.attack * 0.85)
+                : unit.attack;
             if (nearestTarget === 'BASE') {
-              applyDamage(unit.isEnemy ? 'PLAYER_BASE' : 'ENEMY_BASE', unit.attack);
+              applyDamage(unit.isEnemy ? 'PLAYER_BASE' : 'ENEMY_BASE', frostAtk);
             } else if (nearestTarget === 'HERO') {
-              applyDamage('HERO', unit.attack, false, unit.x, unit.y);
+              applyDamage('HERO', frostAtk, false, unit.x, unit.y);
             } else {
-              applyDamage(nearestTarget, unit.attack, false, unit.x, unit.y);
+              applyDamage(nearestTarget, frostAtk, false, unit.x, unit.y);
             }
           }
         }
@@ -4134,7 +4183,12 @@ export const BattleView: React.FC<BattleViewProps> = ({
       units.forEach((u) => {
         if (u.isEnemy !== proj.isEnemy && u.hp > 0) {
           if (Math.abs(u.x - proj.x) < 26 && Math.abs(u.y - proj.y) < 32) {
-            applyDamage(u, proj.damage, false, proj.x, proj.y, proj.source ?? 'projectile');
+            if (weatherRef.current?.type === 'FROST_DESCENT' && proj.isEnemy) {
+              // 霜降凝兵：敌军弹体攻击 -15%（Task 48 天气扩展）
+              applyDamage(u, Math.round(proj.damage * 0.85), false, proj.x, proj.y, proj.source ?? 'projectile');
+            } else {
+              applyDamage(u, proj.damage, false, proj.x, proj.y, proj.source ?? 'projectile');
+            }
             hit = true;
           }
         }
@@ -4645,6 +4699,9 @@ export const BattleView: React.FC<BattleViewProps> = ({
           {activeWeather.type === 'INK_RAIN' && <CloudRain className="w-4 h-4 text-cyan-400" />}
           {activeWeather.type === 'POETIC_BREEZE' && <Wind className="w-4 h-4 text-emerald-400" />}
           {activeWeather.type === 'LUNAR_GLOW' && <Moon className="w-4 h-4 text-amber-300" />}
+          {activeWeather.type === 'CRIMSON_ECLIPSE' && <MoonStar className="w-4 h-4 text-rose-400" />}
+          {activeWeather.type === 'PLUM_RAIN' && <CloudDrizzle className="w-4 h-4 text-pink-300" />}
+          {activeWeather.type === 'FROST_DESCENT' && <Snowflake className="w-4 h-4 text-sky-200" />}
           <div>
             <p className="text-xs font-serif font-bold text-stone-100">
               异象 · {activeWeather.name}

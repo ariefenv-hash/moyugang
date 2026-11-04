@@ -11,6 +11,7 @@ import {
   InkTreasure,
   InkSplat,
   InkCorruptZone,
+  WeatherEvent,
 } from '../types/game';
 import { UNIT_CONFIGS } from '../data/gameData';
 import { drawVectorWeapon, getWeaponReach, getActiveWeaponId } from './weaponSystem';
@@ -267,7 +268,8 @@ export class CanvasRenderer {
     inkSplats: InkSplat[] = [],
     corruptZones: InkCorruptZone[] = [],
     comboTier: string = 'NONE',
-    comboCount: number = 0
+    comboCount: number = 0,
+    activeWeather: WeatherEvent | null = null
   ) {
     const ctx = this.ctx;
 
@@ -382,6 +384,9 @@ export class CanvasRenderer {
 
     // 11.5 大气天气层（章节氛围：雾带/霜叶/雷雨/墨尘，覆于单位层之上）
     this.drawAmbientWeather(level, gameTime, laneMinY);
+
+    // 11.6 战斗异象演出层（Task 48：六型动态天气事件专属 overlay）
+    this.drawWeatherEventOverlay(activeWeather, gameTime);
 
     ctx.restore();
 
@@ -1991,6 +1996,156 @@ export class CanvasRenderer {
     ctx.lineTo(this.width, laneMinY);
     ctx.closePath();
     ctx.fill();
+    ctx.restore();
+  }
+
+  /** 战斗异象演出层（Task 48 天气扩展）：六型动态天气事件专属 overlay。
+   *  与章节氛围（ambientType）分治：此层仅随 weatherRef 异象事件出现，
+   *  入场 1.2s 淡入 / 退场 1.5s 淡出，屏层空间不随镜头；qualityLow 跳过重粒子段。 */
+  private drawWeatherEventOverlay(evt: WeatherEvent | null, t: number) {
+    if (!evt) return;
+    const ctx = this.ctx;
+    const W = this.width;
+    const H = this.height;
+    const fadeIn = Math.min(1, (evt.duration - evt.timeRemaining) / 1.2);
+    const fadeOut = Math.min(1, evt.timeRemaining / 1.5);
+    const a = Math.min(fadeIn, fadeOut);
+    if (a <= 0.02) return;
+
+    ctx.save();
+    if (evt.type === 'INK_RAIN') {
+      // 天降墨雨：浓墨雨丝斜织
+      if (!this.qualityLow) {
+        ctx.strokeStyle = `rgba(28, 30, 38, ${0.3 * a})`;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        for (let i = 0; i < 64; i++) {
+          const seed = i * 91.7;
+          const rx = ((seed * 71 + t * 470) % (W + 60)) - 30;
+          const ry = ((seed * 47 + t * 720) % (H + 90)) - 45;
+          ctx.moveTo(rx, ry);
+          ctx.lineTo(rx - 4, ry + 17);
+        }
+        ctx.stroke();
+      }
+    } else if (evt.type === 'POETIC_BREEZE') {
+      // 清风徐来：横向流风淡痕 + 柳絮浮点
+      ctx.strokeStyle = `rgba(196, 214, 196, ${0.15 * a})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      for (let i = 0; i < 14; i++) {
+        const seed = i * 137.3;
+        const ry = 40 + ((seed * 43) % Math.max(1, H - 160));
+        const drift = ((t * (60 + i * 9) + seed * 31) % (W + 300)) - 150;
+        ctx.moveTo(drift, ry + Math.sin(t * 0.9 + seed) * 6);
+        ctx.lineTo(drift + 120, ry + Math.sin(t * 0.9 + seed + 1.2) * 6);
+      }
+      ctx.stroke();
+      if (!this.qualityLow) {
+        ctx.fillStyle = `rgba(222, 234, 214, ${0.5 * a})`;
+        for (let i = 0; i < 16; i++) {
+          const seed = i * 211.9;
+          const cx = ((seed * 67 + t * 90) % (W + 40)) - 20;
+          const cy = ((seed * 53 + t * 42) % (H + 40)) - 20;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    } else if (evt.type === 'LUNAR_GLOW') {
+      // 残月生辉：顶部冷月华 vignette + 闪烁月尘
+      const g = ctx.createRadialGradient(W * 0.78, 40, 10, W * 0.78, 40, H * 0.85);
+      g.addColorStop(0, `rgba(226, 234, 246, ${0.2 * a})`);
+      g.addColorStop(1, 'rgba(226, 234, 246, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      if (!this.qualityLow) {
+        ctx.fillStyle = `rgba(238, 244, 252, ${0.6 * a})`;
+        for (let i = 0; i < 20; i++) {
+          const seed = i * 173.1;
+          const cx = (seed * 79) % W;
+          const cy = ((seed * 59) % (H * 0.7));
+          const tw = 0.5 + 0.5 * Math.sin(t * 2.4 + seed);
+          ctx.globalAlpha = a * tw;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 1.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    } else if (evt.type === 'CRIMSON_ECLIPSE') {
+      // 玄墨蚀月：绛色四边 vignette + 暗尘上浮
+      const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.85);
+      g.addColorStop(0, 'rgba(96, 18, 22, 0)');
+      g.addColorStop(1, `rgba(96, 18, 22, ${0.34 * a})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      if (!this.qualityLow) {
+        ctx.fillStyle = `rgba(58, 14, 18, ${0.55 * a})`;
+        for (let i = 0; i < 18; i++) {
+          const seed = i * 191.3;
+          const cx = (seed * 83) % W;
+          const cy = H - ((seed * 47 + t * 60) % (H + 40));
+          ctx.beginPath();
+          ctx.arc(cx, cy, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    } else if (evt.type === 'PLUM_RAIN') {
+      // 梅雨连绵（Task 48 新型）：灰青细雨斜织 + 梅瓣飘落
+      if (!this.qualityLow) {
+        ctx.strokeStyle = `rgba(148, 168, 178, ${0.26 * a})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 52; i++) {
+          const seed = i * 107.9;
+          const rx = ((seed * 61 + t * 300) % (W + 50)) - 25;
+          const ry = ((seed * 41 + t * 540) % (H + 80)) - 40;
+          ctx.moveTo(rx, ry);
+          ctx.lineTo(rx - 2.2, ry + 9);
+        }
+        ctx.stroke();
+      }
+      if (!this.qualityLow) {
+        const petals = ['#e8b7c6', '#dda4b7', '#f2cdd8'];
+        for (let i = 0; i < 12; i++) {
+          const seed = i * 149.7;
+          const px = ((seed * 71 + t * 46 + Math.sin(t * 0.7 + seed) * 34) % (W + 60)) - 30;
+          const py = ((seed * 89 + t * 110) % (H + 60)) - 30;
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(t * 1.4 + seed);
+          ctx.globalAlpha = 0.75 * a;
+          ctx.fillStyle = petals[i % petals.length];
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 4.6, 2.1, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+        ctx.globalAlpha = 1;
+      }
+    } else if (evt.type === 'FROST_DESCENT') {
+      // 霜降凝兵（Task 48 新型）：底部霜白渐变 + 霜晶闪烁
+      const g = ctx.createLinearGradient(0, H * 0.55, 0, H);
+      g.addColorStop(0, 'rgba(214, 232, 240, 0)');
+      g.addColorStop(1, `rgba(214, 232, 240, ${0.22 * a})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, H * 0.55, W, H * 0.45);
+      if (!this.qualityLow) {
+        ctx.fillStyle = `rgba(234, 246, 252, ${0.7 * a})`;
+        for (let i = 0; i < 22; i++) {
+          const seed = i * 157.7;
+          const cx = (seed * 73) % W;
+          const cy = H * 0.5 + ((seed * 97) % (H * 0.5));
+          const tw = 0.5 + 0.5 * Math.cos(t * 3.1 + seed);
+          ctx.globalAlpha = a * tw;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
     ctx.restore();
   }
 

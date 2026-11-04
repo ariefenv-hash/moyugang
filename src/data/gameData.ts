@@ -18,6 +18,8 @@ export const WEATHER_EFFECTS: Record<WeatherEvent['type'], { name: string; desc:
   POETIC_BREEZE: { name: '清风徐来', desc: '全军轻身如燕，移动速度提升 35%' },
   LUNAR_GLOW: { name: '残月生辉', desc: '月华如水，剑仙暴击几率大幅提升' },
   CRIMSON_ECLIPSE: { name: '玄墨蚀月', desc: '暗影躁动，敌军步伐狂乱加快' },
+  PLUM_RAIN: { name: '梅雨连绵', desc: '黄梅时节，道路泥泞——敌军移速降低 25%' },
+  FROST_DESCENT: { name: '霜降凝兵', desc: '霜气侵甲，寒意蚀骨——敌军攻击降低 15%' },
 };
 
 /** 墨灵祝福全集（战斗内 Roguelike 三选一，可叠加） */
