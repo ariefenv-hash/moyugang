@@ -326,3 +326,65 @@ body,
 .hud-crisp [class~='border-r'] {
   border-right-width: max(0.5px, calc(1px / var(--dpr)));
 }
+
+/* ===== 结算页视觉精修（Task 50）：叙事渐入 + 星印弹出 + 面板发丝折算 ===== */
+/* 结算弹层由 App 层渲染，不在 BattleView 的 .hud-crisp 树内；且 panel-paper /
+   panel-paper-deep 的描边是类内 border 属性，[class~=] token 规则天然罩不到。
+   弹层根挂 hud-crisp-vd（复用 :root --dpr 变量链），面板类描边在此专列折算：
+   dpr=1 → 1px / dpr=1.5 → 0.67px / dpr=2 → 0.5px 发丝，与战斗 HUD 同一网格。
+   calc 不支持的老旧内核整条声明回退面板类自身的 1px，无破坏性。 */
+.hud-crisp-vd .panel-paper,
+.hud-crisp-vd .panel-paper-deep {
+  border-width: max(0.5px, calc(1px / var(--dpr)));
+}
+
+/* 叙事渐入：钤印落定（seal-stamp 0-0.42s）后，卷面内容依序浮现——
+   标题 → 折名 → 星印/波次 → 战报 → 题跋 → 尾声/成就 → 灵玉 → 按钮组。
+   时序阶梯由组件内联 animationDelay 编排（0.16s 起每拍 +60~80ms）。 */
+@keyframes vd-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 星印弹出：仅点亮星（fill-tenghuang）逐颗入场，空星静态不扰。
+   0.62 处过冲 1.18 倍 + 回正 4° 摆角，与 seal-stamp 的钤印回弹同一手感。 */
+@keyframes vd-star-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-18deg);
+  }
+  62% {
+    opacity: 1;
+    transform: scale(1.18) rotate(4deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@utility animate-vd-rise {
+  animation: vd-rise 0.34s ease-out both;
+}
+
+@utility animate-vd-star-pop {
+  animation: vd-star-pop 0.44s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+/* 无障碍降级：偏好减弱动态效果时，结算页新动画全部退场为静置终态
+  （both 填充随之失效，元素回到自然样式）。既有 fade-in/seal-stamp 全局
+   降级另行统一处理，此处仅覆盖 Task 50 新增动画。 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-vd-rise,
+  .animate-vd-star-pop {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

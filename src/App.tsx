@@ -203,6 +203,57 @@ export default function App() {
     setAchievementToasts((q) => q.filter((t) => t.id !== id));
   }, []);
 
+  // Task 50：结算页 DEV 预览缝（仅 DEV 构建暴露，生产构建常量折叠剔除）——
+  // 验证脚本以 __vdDebug.preview(kind) 可控触发 大捷 / 折戟 / 长夜负 三形态。
+  // 直接 setBattleResult 不走 handleVictory/handleDefeat，零进度/成就持久化副作用；
+  // mock 数据按真实 BattleResultStats 字段构造，victoryEpilogue 等下游 useMemo 自然生效。
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (window as unknown as Record<string, any>).__vdDebug = {
+      preview: (kind: 'VICTORY' | 'DEFEAT' | 'ENDLESS_DEFEAT') => {
+        const base = {
+          stars: 0,
+          jadeEarned: 0,
+          kills: 0,
+          maxCombo: 0,
+          durationSec: 0,
+          baseHpPct: 1,
+        };
+        const stats: BattleResultStats =
+          kind === 'VICTORY'
+            ? {
+                ...base,
+                stars: 3,
+                jadeEarned: 260,
+                kills: 87,
+                maxCombo: 12,
+                durationSec: 214,
+                baseHpPct: 0.86,
+              }
+            : kind === 'ENDLESS_DEFEAT'
+              ? {
+                  ...base,
+                  kills: 41,
+                  maxCombo: 6,
+                  durationSec: 328,
+                  baseHpPct: 0.24,
+                  endlessWave: 23,
+                }
+              : { ...base, kills: 31, maxCombo: 5, durationSec: 96, baseHpPct: 0.12 };
+        setBattleResult({
+          status: kind === 'VICTORY' ? 'VICTORY' : 'DEFEAT',
+          stats,
+          newAchievements:
+            kind === 'VICTORY' && ACHIEVEMENTS.length > 0 ? [ACHIEVEMENTS[0]] : [],
+          isEndless: kind === 'ENDLESS_DEFEAT',
+        });
+      },
+    };
+    return () => {
+      delete (window as unknown as Record<string, any>).__vdDebug;
+    };
+  }, []);
+
   // Save progress
   useEffect(() => {
     try {

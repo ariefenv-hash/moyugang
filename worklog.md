@@ -936,3 +936,24 @@ Work Log:
 Stage Summary:
 - HUD 细描边收官：全边+单边线全面纳入 DPR 发丝折算，高分屏（1.25/1.5/2/2.625 缩放）顶栏底线、面板分段线、心诀浮层描边从「半像素发虚/整数屏粗重」统一为对齐设备像素网格的工笔发丝线；「天气事件池扩展」之后池序③清偿，余池：④结算页视觉精修 · ⑤canvas 分层第贰阶段 · ⑦export_difficulty_curve 产物 diff 提示
 - 修改：src/index.css · scripts/verify_hud_crisp2.py（新增）· worklog.md
+
+---
+Task ID: 50
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查+池序小步认领 · 11-05 14:00 轮）
+Task: 结算页视觉精修——VictoryDefeatModal 纳入发丝折算体系 + 叙事节拍入场编排（池序④）
+
+Work Log:
+- 池序认领（③已由 Task 49 交付关闭；08:00/12:00 两轮沙箱宕机降级纯巡查，14:00 恢复后双 PAT 补验 200×2、克隆核实 HEAD=3024626、issue #1 尾条确认为 Task 49 交付回帖后即占坑④，认领+补账回帖 #issuecomment-6651043350 在案）
+- **发丝折算盲区补齐**：结算弹层由 App 层渲染（App.tsx :733），不在 BattleView 的 .hud-crisp 树内；且 panel-paper/panel-paper-deep 描边为类内 border 属性，[class~=] token 规则天然罩不到——新增 `.hud-crisp-vd .panel-paper, .hud-crisp-vd .panel-paper-deep { border-width: max(0.5px, calc(1px / var(--dpr))) }`，弹层根挂 hud-crisp-vd 专用作用域（复用 :root --dpr 变量链，影响面严格限定结算弹层，战斗 HUD 零回归面）；calc 不支持内核整条声明回退面板类自身 1px 无破坏
+- **叙事节拍入场**：钤印 seal-stamp（0-0.42s，既有）落定中卷面依序浮现——标题 0.16s → 折名 0.22s → 星区/波次条 0.28s → 战报 0.36s → 题跋 0.44s → 尾声/成就 0.50s → 灵玉 0.56s → 按钮组 0.62s（animate-vd-rise 新 keyframes translateY(12px) 渐入，内联 animationDelay 阶梯；负局条件渲染自动缩短序列）
+- **星印逐颗弹出**：点亮星（fill-tenghuang）animate-vd-star-pop（0.62 处过冲 1.18 倍+回正 4° 摆角，与钤印回弹同手感），delay 写死字面量数组 ['0.34s','0.47s','0.60s']（免 0.34+0.26 浮点陷阱）；空星 text-paper-edge 静态不扰
+- **无障碍首例**：prefers-reduced-motion: reduce 媒体查询下 vd-rise/vd-star-pop 全部静置降级（animation:none + 终态回位）；既有 fade-in/seal-stamp 全局降级另列池序不混本项
+- 设计粗线零破坏：题跋/尾声 border-l-2 两处保留（整词匹配豁免实证于 B3）
+- **DEV 预览缝**：App 层 __vdDebug.preview(kind)（仅 import.meta.env.DEV 暴露，生产常量折叠剔除）——可控触发 大捷/折戟/长夜负 三形态，直接 setBattleResult 零进度副作用，mock 按真实 BattleResultStats 构造（Task 39 __inkGestureDebug 同法先例）
+- 新增 scripts/verify_settlement_polish.py **18/18 PASS**：静态锚 7（双 keyframes/双 utility/折算规则含表达式/降级块/根作用域+rise=10+星豁免+delay 阶梯精确/缝三形态/粗线=2）+ e2e 11（缝暴露 · 大捷标题+根在 DOM · CSSOM 三件套在册 · 命中矩阵 chip/panel 命中+题跋豁免实证 · 三星 0.34/0.47/0.60 严格阶梯 · rise 链 8 区块序列精确 · 灵玉行 · 长夜负波次条 · 折戟负零星区 · **reduced-motion computed animationName='none'** · 零 console）
+- 排障在录：SVG 元素（lucide Star）className 为 SVGAnimatedString 非 string，includes 判空炸——classList.contains 才是正解；A 段子串计数三坑（border-bottom-width 不含 border-width 子串/互斥区块源码各一/注释撞词）
+- 回归：smoke **24/24** · verify_ui_polish **7/7**；tsc --noEmit 零错误 · vite build 通过（PWA 272 entries 与基线一致）
+
+Stage Summary:
+- 结算页收官：胜/负/无尽负三形态统一工笔发丝面板 + 钤印-标题-星印-战报-题跋-按钮的卷轴叙事节拍 + 三星逐颗过冲弹出 + 减弱动态偏好静置降级；「HUD 细描边第贰阶段」之后池序④清偿，余池：⑤canvas 分层第贰阶段（动态层每帧分配审计）· ⑦export_difficulty_curve 产物 diff 提示
+- 修改：src/index.css · src/components/VictoryDefeatModal.tsx · src/App.tsx（DEV 缝）· scripts/verify_settlement_polish.py（新增）· worklog.md
