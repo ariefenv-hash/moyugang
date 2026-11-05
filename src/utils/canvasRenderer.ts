@@ -14,6 +14,16 @@ import {
   WeatherEvent,
 } from '../types/game';
 import { UNIT_CONFIGS } from '../data/gameData';
+
+/* ===== Task 51 动态层每帧分配审计：深度排序槽位池（模块级常量） =====
+   render 帧主链每帧新建 renderList 数组 + N 个 {type,y,data} 对象字面量
+   + 排序闭包，是渲染层最大结构性 GC 源；改为实例槽位复用（稳态零分配，
+   n 回落由 length 截断释放引用、回升差额重分配）+ 模块级比较器（每帧闭包 → 0）。 */
+type RenderItem =
+  | { type: 'HERO'; y: number; data: HeroInstance }
+  | { type: 'UNIT'; y: number; data: UnitInstance };
+
+const compareRenderY = (a: RenderItem, b: RenderItem) => a.y - b.y;
 import { drawVectorWeapon, getWeaponReach, getActiveWeaponId } from './weaponSystem';
 import {
   StickPose,
@@ -81,6 +91,8 @@ export class CanvasRenderer {
   private bgImage: HTMLImageElement | null = null;
   /** 行云性能模式：低载设备开启后跳过剑气轨迹/残影采样，渲染负载大减 */
   private qualityLow: boolean = false;
+  /** Task 51：深度排序槽位池——每帧复用 {type,y,data} 对象与数组本体，稳态零分配 */
+  private renderList: RenderItem[] = [];
 
   /* ===== 程序化动作引擎内部状态（v3） ===== */
   private frameDt: number = 1 / 60;
@@ -302,19 +314,19 @@ export class CanvasRenderer {
     this.drawCorruptZones(corruptZones, cameraX, gameTime);
 
     // 3. Ground Lotus Traps / Runes
-    lotusTraps.forEach((trap) => {
-      this.drawInkLotus(trap, cameraX, laneMinY, laneMaxY, gameTime);
-    });
+    for (let i = 0; i < lotusTraps.length; i++) {
+      this.drawInkLotus(lotusTraps[i], cameraX, laneMinY, laneMaxY, gameTime);
+    }
 
     // 3.5 文房四宝掉落物（地面发光物）
-    treasures.forEach((t) => {
-      this.drawInkTreasure(t, cameraX, gameTime);
-    });
+    for (let i = 0; i < treasures.length; i++) {
+      this.drawInkTreasure(treasures[i], cameraX, gameTime);
+    }
 
     // 4. Ink Wells
-    wells.forEach((well) => {
-      this.drawInkWell(well.x - cameraX, well.y, laneMinY, laneMaxY, well.inkRemaining, gameTime);
-    });
+    for (let i = 0; i < wells.length; i++) {
+      this.drawInkWell(wells[i].x - cameraX, wells[i].y, laneMinY, laneMaxY, wells[i].inkRemaining, gameTime);
+    }
 
     // 5. Bases / Citadels
     const baseMidY = (laneMinY + laneMaxY) * 0.5;
@@ -334,53 +346,63 @@ export class CanvasRenderer {
     }
 
     // 7. 2.5D Y-Depth Sorting for Characters and Drops
-    type RenderItem =
-      | { type: 'HERO'; y: number; data: HeroInstance }
-      | { type: 'UNIT'; y: number; data: UnitInstance };
-
-    const renderList: RenderItem[] = [];
+    // Task 51：槽位复用——稳态帧 rl[i] ?? 分支不触发（零分配）；n 回落由
+    // length 截断释放多余槽位引用，单位数回升时差额重分配（波动幅度小，
+    // 复用率远高于每帧全量新建）。排序比较器为模块级 compareRenderY。
+    const rl = this.renderList;
+    let rlLen = 0;
     if (hero.state !== 'DEAD') {
-      renderList.push({ type: 'HERO', y: hero.y, data: hero });
+      const it = rl[rlLen] ?? (rl[rlLen] = { type: 'HERO', y: 0, data: hero });
+      it.type = 'HERO';
+      it.y = hero.y;
+      it.data = hero;
+      rlLen++;
     }
-    units.forEach((u) => {
-      renderList.push({ type: 'UNIT', y: u.y, data: u });
-    });
-
-    renderList.sort((a, b) => a.y - b.y);
+    for (let i = 0; i < units.length; i++) {
+      const u = units[i];
+      const it = rl[rlLen] ?? (rl[rlLen] = { type: 'UNIT', y: 0, data: u });
+      it.type = 'UNIT';
+      it.y = u.y;
+      it.data = u;
+      rlLen++;
+    }
+    rl.length = rlLen;
+    rl.sort(compareRenderY);
 
     // Render sorted entities with skeletal animation
-    renderList.forEach((item) => {
+    for (let i = 0; i < rl.length; i++) {
+      const item = rl[i];
       if (item.type === 'HERO') {
         this.drawSkeletalHero(item.data, cameraX, laneMinY, laneMaxY, gameTime);
       } else {
         this.drawSkeletalUnit(item.data, cameraX, laneMinY, laneMaxY, gameTime);
       }
-    });
+    }
 
     // 7.5 墨龙卷（高连击奖励，飞在最上层）
-    inkDragons.forEach((dragon) => {
-      this.drawInkDragon(dragon, cameraX, laneMinY, laneMaxY, gameTime);
-    });
+    for (let i = 0; i < inkDragons.length; i++) {
+      this.drawInkDragon(inkDragons[i], cameraX, laneMinY, laneMaxY, gameTime);
+    }
 
     // 8. Projectiles in 2.5D space
-    projectiles.forEach((proj) => {
-      this.drawProjectile(proj, cameraX, laneMinY, laneMaxY);
-    });
+    for (let i = 0; i < projectiles.length; i++) {
+      this.drawProjectile(projectiles[i], cameraX, laneMinY, laneMaxY);
+    }
 
     // 9. Particles
-    particles.forEach((p) => {
-      this.drawParticle(p, cameraX);
-    });
+    for (let i = 0; i < particles.length; i++) {
+      this.drawParticle(particles[i], cameraX);
+    }
 
     // 10. Seal Stamps (Red Calligraphy Stamps)
-    sealStamps.forEach((stamp) => {
-      this.drawSealStamp(stamp, cameraX);
-    });
+    for (let i = 0; i < sealStamps.length; i++) {
+      this.drawSealStamp(sealStamps[i], cameraX);
+    }
 
     // 11. Floating Damage Numbers
-    damageNumbers.forEach((d) => {
-      this.drawDamageNumber(d, cameraX);
-    });
+    for (let i = 0; i < damageNumbers.length; i++) {
+      this.drawDamageNumber(damageNumbers[i], cameraX);
+    }
 
     // 11.5 大气天气层（章节氛围：雾带/霜叶/雷雨/墨尘，覆于单位层之上）
     this.drawAmbientWeather(level, gameTime, laneMinY);

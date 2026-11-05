@@ -957,3 +957,21 @@ Work Log:
 Stage Summary:
 - 结算页收官：胜/负/无尽负三形态统一工笔发丝面板 + 钤印-标题-星印-战报-题跋-按钮的卷轴叙事节拍 + 三星逐颗过冲弹出 + 减弱动态偏好静置降级；「HUD 细描边第贰阶段」之后池序④清偿，余池：⑤canvas 分层第贰阶段（动态层每帧分配审计）· ⑦export_difficulty_curve 产物 diff 提示
 - 修改：src/index.css · src/components/VictoryDefeatModal.tsx · src/App.tsx（DEV 缝）· scripts/verify_settlement_polish.py（新增）· worklog.md
+
+---
+Task ID: 51
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查+池序小步认领 · 11-05 16:00 轮）
+Task: canvas 分层第贰阶段——动态层每帧分配审计与结构性修复（池序⑤）
+
+Work Log:
+- 池序认领（④已由 Task 50 交付关闭；核实 HEAD=e1bd04d、issue #1 尾条无新评论后占坑⑤，回帖 #issuecomment-6652883462 在案）
+- **审计报告**：canvasRenderer.ts（5947 行）扫描 40+ create*Gradient 调用点与主链分配——结构性大头锁定 render 主链：①每帧 renderList 数组 + N 个 {type,y,data} 对象字面量 + 排序闭包（单位数 N 波动，主力 GC 源）；②主链 8 处 forEach 每帧 10 个闭包。视觉等价约束下保留的分配源在录（模板字符串 rgba——消除需改绘制风格；天体/特效渐变——位置每帧变不可缓存；天空/地面主渐变 Task 32 已离屏化）
+- **renderList 槽位复用**：实例字段池 + `rl[rlLen] ?? (rl[rlLen] = {...})` 槽位懒建 + 字段覆写（稳态帧零分配）；n 回落由 `rl.length = rlLen` 截断释放引用、回升差额重分配；排序比较器提为模块级 `compareRenderY` 常量；判别 union 类型形态保持（item.type 窄化绘制零改动）；函数内旧 type RenderItem 上移模块级唯一真源
+- **主链 forEach → 索引 for**：lotusTraps/treasures/wells/inkDragons/projectiles/particles/sealStamps/damageNumbers 八处（每帧闭包 → 0，同序遍历语义零变化）
+- 新增 scripts/verify_canvas_alloc.py **9/9 PASS**：静态锚 5（模块级常量/池字段/槽位三锚/主链 forEach 清零/旧定义移除）+ e2e 4（暂停冻结帧差分协议 Task 48 在录：首次冻结噪声 14 ≤20 帧级确定性实证；**运行扰动后槽位轮转再冻结噪声 4**——单位 y 变化触发 sort 重排+复用写入后依然帧确定，复用池跨帧正确性直接实证；零 console）
+- 回归：smoke **24/24** · verify_ui_polish **7/7** · verify_story_ch5 **33/33**（像素采样链路零回归）· tsc --noEmit 零错误 · vite build 通过（PWA 272 entries）
+- 排障在录：首跑 B 段挂于章前引子 fixed 遮罩拦截（脚本缺 PRESET 预置）——补 localStorage 预置 + reload 后全通
+
+Stage Summary:
+- 渲染主链每帧分配从「N 对象 + 1 数组 + 2 闭包（renderList）+ 10 闭包（forEach）」降至稳态 ≈0——低配机长战 GC 停顿显著收敛；视觉输出逐像素零回归（冻结帧双冻结实证 + ch5 像素链路 33/33）；「结算页视觉精修」之后池序⑤清偿，余池：⑦export_difficulty_curve 产物 diff 提示
+- 修改：src/utils/canvasRenderer.ts · scripts/verify_canvas_alloc.py（新增）· worklog.md
