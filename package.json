@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --port=3000 --host=0.0.0.0",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "check:curve": "bun scripts/export_difficulty_curve.mjs --check"
   },
   "dependencies": {
     "@fontsource/liu-jian-mao-cao": "^5.3.0",

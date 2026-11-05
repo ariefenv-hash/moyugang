@@ -10,9 +10,12 @@
  *
  * 运行：bun scripts/export_difficulty_curve.mjs
  * 输出：docs/difficulty-curve.json（调参后重跑本脚本即可刷新回归表）
+ * 核对：bun scripts/export_difficulty_curve.mjs --check（或 bun run check:curve）
+ *       不写盘，与入库产物深比对——story.ts 调参后回归表过时即逐路径报 diff、退出码 1
+ *       （池序⑦：export_difficulty_curve.mjs 产物 diff 提示，调参提交前先 check 后刷新）
  */
 import { STORY_CHAPTERS } from '../src/data/story.ts';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -142,6 +145,98 @@ const out = {
   jadeEconomy,
 };
 
+// ---------- 比对模式（--check）：不写盘，与入库产物深比对 ----------
+const CHECK_MODE = process.argv.includes('--check');
+
+/** 深比对：逐路径收集 expected（story.ts 现算）与 actual（入库 JSON）的不一致点 */
+function diffPaths(expected, actual, path = '', report = []) {
+  if (report.length >= 200) return report; // 上限防失控（正常调参远达不到）
+  const aIsObj = expected !== null && typeof expected === 'object';
+  const bIsObj = actual !== null && typeof actual === 'object';
+  if (!aIsObj || !bIsObj) {
+    if (expected !== actual) report.push({ path: path || '(root)', expected, actual });
+    return report;
+  }
+  if (Array.isArray(expected) !== Array.isArray(actual)) {
+    report.push({
+      path: path || '(root)',
+      expected: Array.isArray(expected) ? 'array' : 'object',
+      actual: Array.isArray(actual) ? 'array' : 'object',
+    });
+    return report;
+  }
+  if (Array.isArray(expected)) {
+    const n = Math.max(expected.length, actual.length);
+    for (let i = 0; i < n; i++) {
+      const p = `${path}[${i}]`;
+      if (i >= expected.length || i >= actual.length) {
+        report.push({
+          path: p,
+          expected: i < expected.length ? '(present)' : '(missing)',
+          actual: i < actual.length ? '(present)' : '(missing)',
+        });
+      } else {
+        diffPaths(expected[i], actual[i], p, report);
+      }
+    }
+    return report;
+  }
+  const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+  for (const k of [...keys].sort()) {
+    const p = path ? `${path}.${k}` : k;
+    if (!(k in expected) || !(k in actual)) {
+      report.push({
+        path: p,
+        expected: k in expected ? '(present)' : '(missing)',
+        actual: k in actual ? '(present)' : '(missing)',
+      });
+    } else {
+      diffPaths(expected[k], actual[k], p, report);
+    }
+  }
+  return report;
+}
+
+if (CHECK_MODE) {
+  let currentRaw;
+  try {
+    currentRaw = readFileSync(OUT, 'utf-8');
+  } catch {
+    console.error(`✗ 未找到入库产物 ${OUT}`);
+    console.error('  请先运行 bun scripts/export_difficulty_curve.mjs 生成难度曲线回归表');
+    process.exit(1);
+  }
+  let current;
+  try {
+    current = JSON.parse(currentRaw);
+  } catch (e) {
+    console.error(`✗ 入库产物 ${OUT} 解析失败：${e.message}`);
+    console.error('  文件可能已损坏，请重跑 bun scripts/export_difficulty_curve.mjs 重新生成');
+    process.exit(1);
+  }
+  const report = diffPaths(out, current);
+  if (report.length === 0) {
+    console.log(
+      `✓ 难度曲线回归表与 story.ts 现值一致（${out.meta.chapterCount} 章 ${out.meta.foldCount} 折）`
+    );
+    process.exit(0);
+  }
+  console.error(
+    `✗ story.ts 与入库产物存在 ${report.length} 处不一致（story.ts 已调参而回归表未刷新）：`
+  );
+  for (const d of report.slice(0, 20)) {
+    console.error(`  ${d.path}`);
+    console.error(`    期望（story.ts 现算）: ${JSON.stringify(d.expected)}`);
+    console.error(`    实际（difficulty-curve.json）: ${JSON.stringify(d.actual)}`);
+  }
+  if (report.length > 20) console.error(`  …其余 ${report.length - 20} 处从略`);
+  console.error(
+    '  请运行 bun scripts/export_difficulty_curve.mjs 刷新 docs/difficulty-curve.json 后再提交'
+  );
+  process.exit(1);
+}
+
+// ---------- 生成模式（默认，Task 33 原行为）----------
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(out, null, 2) + '\n', 'utf-8');
 

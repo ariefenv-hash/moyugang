@@ -975,3 +975,20 @@ Work Log:
 Stage Summary:
 - 渲染主链每帧分配从「N 对象 + 1 数组 + 2 闭包（renderList）+ 10 闭包（forEach）」降至稳态 ≈0——低配机长战 GC 停顿显著收敛；视觉输出逐像素零回归（冻结帧双冻结实证 + ch5 像素链路 33/33）；「结算页视觉精修」之后池序⑤清偿，余池：⑦export_difficulty_curve 产物 diff 提示
 - 修改：src/utils/canvasRenderer.ts · scripts/verify_canvas_alloc.py（新增）· worklog.md
+
+Task ID: 52
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查+池序小步认领 · 11-05 22:00 轮）
+Task: export_difficulty_curve.mjs 产物 diff 提示——调参后回归表过时自动比对（池序⑦）
+
+Work Log:
+- 池序认领（18:00/20:00 两轮沙箱宕机降级纯巡查——核实并行会话 Task 51 交付池序⑤ `11781f6` 且其交付帖余池未占⑦；22:00 恢复后双 PAT 补验 200×2、tarball 快照重建副本（基线 11781f6）、带认证 curl 核 issue #1 尾条（#6653107266）确认⑦无人占坑，回帖占坑）
+- **实装 scripts/export_difficulty_curve.mjs --check 模式**（生成模式原行为逐字节不变）：`process.argv.includes('--check')` 分支——不写盘，与 docs/difficulty-curve.json 入库产物**深比对**（内联 diffPaths 递归：对象键并集遍历/数组逐位含 (present)/(missing)/类型形态判定，路径记法 difficultyCurve.chapters[0].folds[0].enemyBaseHp，200 条上限防失控）；一致 → `✓ 与 story.ts 现值一致（10 章 50 折）` exit 0；不一致 → 逐路径「期望（story.ts 现算）/实际（difficulty-curve.json）」diff 报告（前 20 条 + 从略计数）+ 刷新提示，exit 1；产物缺失/损坏两容错态各 exit 1 带指引
+- **接线**：package.json scripts 新增 `"check:curve": "bun scripts/export_difficulty_curve.mjs --check"`——调参提交前 `bun run check:curve` 即核对回归表新鲜度（Issue/Task 34 流程「调参后重跑导出」补上防过时闸门）；头部 docstring 补「核对」段注明池序⑦出处
+- **基线自洽预验证**：重跑导出与入库产物 diff 为空（story.ts 自 Task 34 后难度参数未动，Task 46-51 改动零曲线影响）；bun 裸跑 .mjs+import .ts 无需 node_modules（零第三方依赖）
+- 新增 scripts/verify_curve_check.py **17/17 PASS**：A 段静态锚 8（--check 语义/diffPaths+200 上限/readFileSync/exit 三态+一致态/刷新提示语/package 接线/docstring/生成模式原行为保留）+ B 段实跑 9（自洽 exit 0/零副作用 sha256 前后一致/**篡改单值 exit 1 + 精确路径 diff**（enemyBaseHp 1000 vs 1001）/check 不写盘篡改值持久/产物缺失态 exit 1/产物损坏态 exit 1 解析失败提示/生成恢复闭环+与基线逐字节一致/bun run check:curve 通路）
+- 回归：bun install --frozen-lockfile（**bun.lock 逐字节未变**，Task 50 锁重写坑的根治用法）· smoke **23/24**（第 11 项触摸点选战局随机偶发——四跑一绿在录模式 gesture=TAP/ATTACK_2/target=null 复现正确，非本项回归：本项零产品代码改动面）· verify_ui_polish **7/7** · tsc --noEmit 零错误 · vite build 通过（PWA 272 entries）
+- 沙箱恢复流程在录：18:00/20:00 连续两轮宕机（WebFetch 绕缓存巡查，comments 分页端点缓存劫持第叁次实锤——升序/倒序/换参全中招，可靠通道=issue 本体+commits+commit 详情端点带随机参数；恢复后一律带认证 curl）
+
+Stage Summary:
+- 难度曲线回归表（Task 34 沉淀）从「手动重跑易漂移」升级为「调参提交前可机检」——--check 一键核对入库产物与 story.ts 现值，过时即逐路径 diff 提示刷新；生成模式行为逐字节不变（默认路径零风险面）；「canvas 分层第贰阶段」之后池序⑦清偿，**11-04 16:00 全池七项全数清偿完毕**（Task 46-52 连续七轮），余池待重写：粒子对象池化（Task 51 审计报告指认的下一结构性大头候选）· 无障碍第贰例（全局 fade-in/seal-stamp 降级）等候选
+- 修改：scripts/export_difficulty_curve.mjs · package.json · scripts/verify_curve_check.py（新增）· worklog.md
