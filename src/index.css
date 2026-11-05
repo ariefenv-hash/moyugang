@@ -379,12 +379,24 @@ body,
 
 /* 无障碍降级：偏好减弱动态效果时，结算页新动画全部退场为静置终态
   （both 填充随之失效，元素回到自然样式）。既有 fade-in/seal-stamp 全局
-   降级另行统一处理，此处仅覆盖 Task 50 新增动画。 */
+   降级已由 Task 54 在下方统一覆盖，此处仅覆盖 Task 50 新增动画。 */
 @media (prefers-reduced-motion: reduce) {
   .animate-vd-rise,
   .animate-vd-star-pop {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+}
+
+/* 无障碍降级第贰例（Task 54）：全局 fade-in / seal-stamp 静置——
+   两动画的「both 填充终态」与自然样式逐字段等价（fade-in 终态 = opacity 1 /
+   transform 无；seal-stamp 终态 = .seal 基类 transform: rotate(-2deg)），
+   故 animation: none 即自然回落到设计静置态；不做 transform 覆写
+   （覆写反而会抹平 .seal 基类的钤印歪斜）。验证见 verify_reduced_motion_global.py。 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-seal-stamp {
+    animation: none;
   }
 }

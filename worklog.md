@@ -1010,3 +1010,19 @@ Stage Summary:
 - canvasRenderer.ts 粒子类短命对象分配源**全数池化收口**（41 战斗粒子 → 43 轨迹+冲击环 → 51 renderList 槽位 → 53 残影+内嵌 pose）：突刺/突步高频路径容器与 pose 双零分配，GC 压力进一步趋平；绘制链路只读 pose 字段语义逐字段等价
 - 巡查在录：md3 R93-R95 三窗三连（v10.03 #117 关单/v10.04 #94 一期/v10.05 #94 二期关单，池 47→43，R95 加餐 #147 对账+#105 a11y 审计帖）健康推进只巡查不改；3d-tower-defense 30cfe51 十连静默继续监控
 - 修改：src/utils/canvasRenderer.ts · src/utils/animationSystem.ts · scripts/verify_afterimage_pool.py（新增）· worklog.md
+
+Task ID: 54
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查+池序小步认领 · 11-06 04:00 轮）
+Task: 无障碍第贰例——全局 fade-in/seal-stamp 静置降级（Task 50 预留方向兑现）
+
+Work Log:
+- 池序认领（02:00 沙箱宕机轮降级纯巡查在录：三仓 HEAD 核验 + issue #1 尾帖无人占坑；04:00 恢复后双 PAT 复验 200×2，tarball 副本本体存活与远端 edd8d6a 六文件逐字节 MATCH，bun install --frozen-lockfile 重装 bun.lock 前后 sha1 一致；回帖占坑）
+- **审计定位**：全库 4 组 keyframes 中 Task 50 已降级 vd-rise/vd-star-pop（结算页块），fade-in（L71，全库 20+ 处入场动画）与 seal-stamp（L82，钤印落定三面）裸奔无降级——Task 50 注释预留「另行统一处理」
+- **实装（src/index.css 纯 CSS，零 TS/TSX 改动）**：第贰例降级块置于 Task 50 块之后（护其 A4 split[1] 断言语义），`.animate-fade-in, .animate-seal-stamp { animation: none; }`——**静置终态等价性**：fade-in 终态（opacity 1/translateY 0）≡ 自然样式；seal-stamp 终态（scale 1/rotate -2°）≡ .seal 基类 transform: rotate(-2deg)（L157 真源），故 animation: none 即自然回落设计静置态，**不做 transform 覆写**（覆写反而抹平基类钤印歪斜）；Task 50 预留注释更新为已兑现
+- 新增 scripts/verify_reduced_motion_global.py **13/13 PASS**：A 段静态锚 5（双 keyframes/双 utility/第贰例块含 segs[2] 分段断言/Task 50 首块原样/.seal 真源）+ e2e 8——**双模式矩阵 × 双观测面**：主菜单 LoreModal 默认 'fade-in' → **同页 emulate reduce live 切换 'none'**（不重载实证媒体查询即开关）→ 切回复活；战场暂停遮罩默认 root='fade-in' 且 seal='seal-stamp' → reduce 双双 'none'；**静置终态等价 e2e**：reduce 下 seal computed transform 仍含 rotate(-2°) 矩阵分量 -0.0348995 且与默认模式播放终态逐位一致（.seal 基类回落实证）
+- 回归：tsc --noEmit 零错误 · vite build 通过 · verify_settlement_polish **18/18**（Task 50 A4/B8 断言语义零回归）· verify_ui_polish **7/7** · smoke **24/24** · verify_canvas_alloc **9/9** · verify_afterimage_pool **10/10** · verify_fx_pool **12/12** · verify_curve_check **17/17**
+
+Stage Summary:
+- 全库 4 组 keyframes 无障碍降级**全覆盖收口**（Task 50 结算页双动画 + Task 54 全局 fade-in/seal-stamp）——prefers-reduced-motion 下所有入场/钤印动画静置为设计终态，零位移零闪现；「降级=机检断言」方法学（computed animationName + live 媒体切换 + 静置终态矩阵比对）沉淀为可复用验证脚本
+- 巡查在录：02:00 宕机轮 WebFetch 绕缓存核验三仓零损耗；md3 R96 加餐（#178 数据源审计帖 + #181 关单，池 43→41）健康推进只巡查不改；3dtd 30cfe51 十一连静默继续监控
+- 修改：src/index.css · scripts/verify_reduced_motion_global.py（新增）· worklog.md
