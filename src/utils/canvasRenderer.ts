@@ -29,7 +29,7 @@ import {
   StickPose,
   makeDefaultPose,
   lerpPose,
-  clonePose,
+  copyPose,
   computeHeroPose,
   computeWalkStep,
   solveIK2,
@@ -47,6 +47,16 @@ export interface SwordTrailSample {
   y: number;
   tx: number;
   ty: number;
+  life: number;
+}
+
+/** 残影（Task 53 粒子池化对象：容器 + 内嵌 pose 一体随池复用） */
+export interface Afterimage {
+  x: number;
+  gy: number;
+  altZ: number;
+  facing: 1 | -1;
+  pose: StickPose;
   life: number;
 }
 
@@ -113,14 +123,7 @@ export class CanvasRenderer {
   private prevTrailEmit: number = 0;
   private afterimageTimer: number = 0;
   private swordTrail: SwordTrailSample[] = [];
-  private afterimages: {
-    x: number;
-    gy: number;
-    altZ: number;
-    facing: 1 | -1;
-    pose: StickPose;
-    life: number;
-  }[] = [];
+  private afterimages: Afterimage[] = [];
   private fxRings: FxRing[] = [];
   private capePts: { x: number; y: number; px: number; py: number }[] = [];
   private ribbonPts: { x: number; y: number; px: number; py: number }[] = [];
@@ -129,8 +132,11 @@ export class CanvasRenderer {
   /* ===== 次级对象池（Task 43，模式同 Task 41 ParticlePool）===== */
   /** 空闲实例上限：两池活跃帽各 40，余量留给溢出归还，内存有界 */
   private static readonly FX_FREE_CAP = 64;
+  /** 残影空闲实例上限：活跃帽 26 留余量，内存有界（Task 53） */
+  private static readonly AFTERIMAGE_FREE_CAP = 40;
   private swordTrailFree: SwordTrailSample[] = [];
   private fxRingFree: FxRing[] = [];
+  private afterimageFree: Afterimage[] = [];
   private fxPoolCounters = {
     trailAcq: 0,
     trailReuse: 0,
@@ -138,6 +144,9 @@ export class CanvasRenderer {
     ringAcq: 0,
     ringReuse: 0,
     ringRel: 0,
+    ghostAcq: 0,
+    ghostReuse: 0,
+    ghostRel: 0,
   };
 
   constructor(ctx: CanvasRenderingContext2D, width: number, height: number, bgImageSrc?: string) {
@@ -227,6 +236,24 @@ export class CanvasRenderer {
     if (this.fxRingFree.length < CanvasRenderer.FX_FREE_CAP) this.fxRingFree.push(r);
   }
 
+  /** 池取：残影（复用优先；pose 随容器一体复用，调用点 copyPose 原位覆写，Task 53） */
+  private acquireAfterimage(): Afterimage {
+    this.fxPoolCounters.ghostAcq++;
+    const g = this.afterimageFree.pop();
+    if (g) {
+      this.fxPoolCounters.ghostReuse++;
+      return g;
+    }
+    return { x: 0, gy: 0, altZ: 0, facing: 1, pose: makeDefaultPose(), life: 0 };
+  }
+
+  /** 归还死亡残影；池满即弃（内存有界，pose 随容器一体归还） */
+  private releaseAfterimage(g: Afterimage) {
+    this.fxPoolCounters.ghostRel++;
+    if (this.afterimageFree.length < CanvasRenderer.AFTERIMAGE_FREE_CAP)
+      this.afterimageFree.push(g);
+  }
+
   /** 池统计快照（无头验证缝用，Task 43） */
   public fxPoolStats() {
     const c = this.fxPoolCounters;
@@ -239,10 +266,16 @@ export class CanvasRenderer {
       ringReused: c.ringReuse,
       ringReleased: c.ringRel,
       ringReuseRate: c.ringAcq > 0 ? c.ringReuse / c.ringAcq : 0,
+      ghostAcquired: c.ghostAcq,
+      ghostReused: c.ghostReuse,
+      ghostReleased: c.ghostRel,
+      ghostReuseRate: c.ghostAcq > 0 ? c.ghostReuse / c.ghostAcq : 0,
       trailLive: this.swordTrail.length,
       ringLive: this.fxRings.length,
+      ghostLive: this.afterimages.length,
       trailFree: this.swordTrailFree.length,
       ringFree: this.fxRingFree.length,
+      ghostFree: this.afterimageFree.length,
     };
   }
 
@@ -4021,7 +4054,8 @@ export class CanvasRenderer {
     }
     for (let i = this.afterimages.length - 1; i >= 0; i--) {
       this.afterimages[i].life -= dt;
-      if (this.afterimages[i].life <= 0) this.afterimages.splice(i, 1);
+      if (this.afterimages[i].life <= 0)
+        this.releaseAfterimage(this.afterimages.splice(i, 1)[0]);
     }
     for (let i = this.fxRings.length - 1; i >= 0; i--) {
       this.fxRings[i].life -= dt;
@@ -4031,7 +4065,10 @@ export class CanvasRenderer {
       const cut = this.swordTrail.splice(0, this.swordTrail.length - 40);
       for (const o of cut) this.releaseSwordTrail(o);
     }
-    if (this.afterimages.length > 26) this.afterimages.splice(0, this.afterimages.length - 26);
+    if (this.afterimages.length > 26) {
+      const cut = this.afterimages.splice(0, this.afterimages.length - 26);
+      for (const o of cut) this.releaseAfterimage(o);
+    }
     if (this.fxRings.length > 32) {
       const cut = this.fxRings.splice(0, this.fxRings.length - 32);
       for (const o of cut) this.releaseFxRing(o);
@@ -4585,24 +4622,24 @@ export class CanvasRenderer {
         if (hero.state === 'SKILL_DASH' && jumped > 40) {
           const steps = Math.min(5, Math.max(2, Math.round(jumped / 55)));
           for (let i = 1; i <= steps; i++) {
-            this.afterimages.push({
-              x: lerp(this.lastGhostX, hero.x, i / (steps + 1)),
-              gy: groundY,
-              altZ: altitudeZ,
-              facing,
-              pose: clonePose(pose),
-              life: 0.26,
-            });
+            const g = this.acquireAfterimage();
+            copyPose(g.pose, pose);
+            g.x = lerp(this.lastGhostX, hero.x, i / (steps + 1));
+            g.gy = groundY;
+            g.altZ = altitudeZ;
+            g.facing = facing;
+            g.life = 0.26;
+            this.afterimages.push(g);
           }
         } else {
-          this.afterimages.push({
-            x: hero.x,
-            gy: groundY,
-            altZ: altitudeZ,
-            facing,
-            pose: clonePose(pose),
-            life: 0.26,
-          });
+          const g = this.acquireAfterimage();
+          copyPose(g.pose, pose);
+          g.x = hero.x;
+          g.gy = groundY;
+          g.altZ = altitudeZ;
+          g.facing = facing;
+          g.life = 0.26;
+          this.afterimages.push(g);
         }
       }
     }

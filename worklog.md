@@ -992,3 +992,21 @@ Work Log:
 Stage Summary:
 - 难度曲线回归表（Task 34 沉淀）从「手动重跑易漂移」升级为「调参提交前可机检」——--check 一键核对入库产物与 story.ts 现值，过时即逐路径 diff 提示刷新；生成模式行为逐字节不变（默认路径零风险面）；「canvas 分层第贰阶段」之后池序⑦清偿，**11-04 16:00 全池七项全数清偿完毕**（Task 46-52 连续七轮），余池待重写：粒子对象池化（Task 51 审计报告指认的下一结构性大头候选）· 无障碍第贰例（全局 fade-in/seal-stamp 降级）等候选
 - 修改：scripts/export_difficulty_curve.mjs · package.json · scripts/verify_curve_check.py（新增）· worklog.md
+
+Task ID: 53
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查+池序小步认领 · 11-06 00:00 轮）
+Task: 粒子对象池化——残影 afterimages 池化收口（Task 39 池项，Task 51 审计指认的下一结构性大头）
+
+Work Log:
+- 池序认领（22:00 轮 Task 52 交付帖余池重写后的池序第壹项；00:00 恢复轮带认证 curl 核 issue #1 尾条（#6660238800 交付帖）确认无人占坑，回帖占坑）
+- **审计定位**：Task 41 战斗粒子池 → Task 43 剑气轨迹+冲击环池 → Task 51 renderList 槽位复用之后，canvasRenderer.ts 内最后壹处未池化的粒子类短命对象 = 残影（afterimages）——突步/突刺每 0.048s `push({...})` 字面量直推（SKILL_DASH 一次至多 5 连推），死亡/溢出 `splice` 直弃无归还；且每颗残影内嵌 `clonePose(pose)` 二十余字段对象再分配
+- **实装（src/utils/canvasRenderer.ts）**：内联残影类型上移模块级 `export interface Afterimage` 唯一真源（Task 51 RenderItem 同法）；`afterimageFree` 空闲链 + `AFTERIMAGE_FREE_CAP = 40`（活跃帽 26 留余量）+ `acquireAfterimage()/releaseAfterimage()`（模式同 Task 43）；计数器并入 fxPoolCounters（ghostAcq/ghostReuse/ghostRel）；`fxPoolStats()` 增 ghost 组（Acquired/Reused/Released/ReuseRate/Live/Free），BattleView `__inkGestureDebug.fxPool` 无头缝自动透出
+- **pose 子对象随池原位复用**：animationSystem 增 `copyPose(out, p)`（POSE_KEYS 全字段原位覆写，零分配）；生成点 `copyPose(g.pose, pose)` 替代逐次 `clonePose(pose)` 分配——容器与内嵌 pose 一体随池复用；clonePose 保留（animationSystem 内部在用）
+- **接线**：两生成点改道池取（字段覆写语义与原字面量逐字段等价）；stepFX 死亡归还 `releaseAfterimage(splice(i,1)[0])` + 溢出归还 `for (const o of cut) releaseAfterimage(o)`
+- 新增 scripts/verify_afterimage_pool.py **10/10 PASS**：静态锚 5（池在册/生成点直推归零+copyPose 两处/死亡溢出归还接线/copyPose 原位覆写本地源/无头缝在册）+ e2e 5（战场已入/生发 ghostAcquired=29/**复用实证 ghostReused=21 复用率 0.724**（残影 life 0.26s < 手势间隔 1.15s 首批死亡即复用）/帽遵守 ghostLive≤26 且 ghostFree≤40/无 console 错误）
+- 回归：tsc --noEmit 零错误 · vite build 通过（PWA 272 entries 与基线一致）· verify_fx_pool **12/12**（Task 43 双池零回归）· verify_canvas_alloc **9/9**（Task 51 renderList 冻结帧差分零回归）· smoke **24/24** · verify_ui_polish **7/7** · verify_curve_check **17/17**（Task 52 工具链零回归）
+
+Stage Summary:
+- canvasRenderer.ts 粒子类短命对象分配源**全数池化收口**（41 战斗粒子 → 43 轨迹+冲击环 → 51 renderList 槽位 → 53 残影+内嵌 pose）：突刺/突步高频路径容器与 pose 双零分配，GC 压力进一步趋平；绘制链路只读 pose 字段语义逐字段等价
+- 巡查在录：md3 R93-R95 三窗三连（v10.03 #117 关单/v10.04 #94 一期/v10.05 #94 二期关单，池 47→43，R95 加餐 #147 对账+#105 a11y 审计帖）健康推进只巡查不改；3d-tower-defense 30cfe51 十连静默继续监控
+- 修改：src/utils/canvasRenderer.ts · src/utils/animationSystem.ts · scripts/verify_afterimage_pool.py（新增）· worklog.md

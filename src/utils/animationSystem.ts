@@ -170,6 +170,14 @@ export function clonePose(p: StickPose): StickPose {
   return { ...p };
 }
 
+/** 姿势原位覆写（Task 53 池化复用通道：把 p 全字段写入 out，零分配；返回 out） */
+export function copyPose(out: StickPose, p: StickPose): StickPose {
+  for (const k of POSE_KEYS) {
+    out[k] = p[k];
+  }
+  return out;
+}
+
 /* ============================== 行走循环工具 ============================== */
 
 export interface WalkStep {
