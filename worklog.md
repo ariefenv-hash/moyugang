@@ -1026,3 +1026,20 @@ Stage Summary:
 - 全库 4 组 keyframes 无障碍降级**全覆盖收口**（Task 50 结算页双动画 + Task 54 全局 fade-in/seal-stamp）——prefers-reduced-motion 下所有入场/钤印动画静置为设计终态，零位移零闪现；「降级=机检断言」方法学（computed animationName + live 媒体切换 + 静置终态矩阵比对）沉淀为可复用验证脚本
 - 巡查在录：02:00 宕机轮 WebFetch 绕缓存核验三仓零损耗；md3 R96 加餐（#178 数据源审计帖 + #181 关单，池 43→41）健康推进只巡查不改；3dtd 30cfe51 十一连静默继续监控
 - 修改：src/index.css · scripts/verify_reduced_motion_global.py（新增）· worklog.md
+
+Task ID: 55
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查+池序小步认领 · 11-06 06:00 轮）
+Task: 天气层粒子池化归并审计——Task 41/43/51/53 四层池化一致性收口 + 天气层每帧分配盘点清偿
+
+Work Log:
+- 池序认领（04:00 轮 Task 54 交付帖余池第壹项；带认证 curl 核 issue #1 尾帖确认无人占坑，回帖占坑）
+- **审计盘点（canvasRenderer.ts 天气两层全量扫描）**：drawWeatherEventOverlay（六型异象 overlay）+ drawAmbientWeather（~19 型章节氛围巨函，L2073-3845）逐分支核每帧分配源——①**数组字面量 12 处随帧重建**（PLUM_RAIN 梅瓣/AUTUMN 霜叶/LOTUS 兰瓣/GOOSE 红藕/CHRYS 菊瓣/GLOOM 梧叶/DESERT 沙粒调色/WITHER 绒絮/ORCHID 兰瓣/RIVULET 落英/PEACHDAWN 桃瓣/QUJIANG 杏瓣，每活跃分支每帧 1 次分配）；②渐变 5 处调用点（MIST×1 位随帧移不可缓存 + 另一分支同型×1 + LUNAR/CRIMSON/FROST×3 几何仅随 resize 而停靠色随入场/退场淡变每帧新值）沿 Task 51「天体/特效渐变」分类保留在录；③模板 rgba 字符串沿 Task 51 分类保留；④闭包/回调分配零（索引 for 化已由 Task 51 收口）
+- **实装（src/utils/canvasRenderer.ts）**：12 组调色板提升模块级常量（值逐字节不变）+ 12 分支改道常量别名（`const petals = PLUM_RAIN_PETAL_COLORS` 形式，别名绑定零分配）——每活跃分支每帧数组分配归零；绘制语义零变化
+- **四层池化一致性收口结论**：Task 41 ParticlePool 类（FREE_CAP 480/战斗粒子帽 420，独立 stats 缝）+ Task 43 内联空闲链（FX_FREE_CAP 64/双帽 40，fxPoolStats）+ Task 51 renderList 槽位池（rlLen 截断复用）+ Task 53 残影池（AFTERIMAGE_FREE_CAP 40/帽 26，并入 fxPoolCounters）——**形态分治合理**（41 跨组件生命周期用类、43/53 渲染器内联短命对象、51 渲染列表槽位），统计缝已统一透出（particlePool + fxPool 双无头缝，ghost 组自动并入），无重复无冲突，不强行归并
+- 新增 scripts/verify_weather_alloc.py **8/8 PASS**：静态锚 5（12 常量值逐字节/函数体内联归零/12 别名改道/渐变保留分类锚/四层池帽+统计缝+双缝）+ e2e 3（战场已入/暂停冻结帧确定性 diff=2——canvas_alloc 协议同口径 |Δ|>10 阈，与其历史噪声底 4/14 同量级 = 渲染路径零扰动/无 console 错误）
+- 回归：tsc --noEmit 零错误 · vite build 通过 · verify_canvas_alloc **9/9**（冻结帧差分协议全绿）· verify_afterimage_pool **10/10** · verify_fx_pool **12/12** · smoke **24/24** · verify_ui_polish **7/7** · verify_reduced_motion_global **13/13** · verify_settlement_polish **18/18** · verify_curve_check **17/17**
+
+Stage Summary:
+- 天气两层（六型异象 overlay + ~19 型章节氛围）每帧数组分配**全数清偿**（12 处提升模块常量）；渐变/rgba 模板串按 Task 51 分类在录保留（位置随帧变/停靠色随淡变，消除需改绘制风格）；四层池化形态分治结论落账——canvasRenderer.ts 短命对象分配源盘点至此**全类目收口**（粒子/轨迹/环/残影/renderList/调色板）
+- 排障在录：首版常量块误插类体内（TS1248 ×12）——上移模块级修复；PLUM_RAIN 处替换曾误置 fillStyle 于循环外（循环内 petals 引用悬空）——回归 const 别名形式修复；自写冻结指纹用逐位相等口径放大噪声（196）——改用 canvas_alloc 在录协议（防守军令+|Δ|>10 容差+400ms 采样间隔）后 diff=2 同量级过阈
+- 修改：src/utils/canvasRenderer.ts · scripts/verify_weather_alloc.py（新增）· worklog.md

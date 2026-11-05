@@ -24,6 +24,22 @@ type RenderItem =
   | { type: 'UNIT'; y: number; data: UnitInstance };
 
 const compareRenderY = (a: RenderItem, b: RenderItem) => a.y - b.y;
+
+/* ===== 天气/氛围层调色板常量（Task 55 审计收口）=====
+ * 原各分支内联数组字面量随帧重建（每活跃分支每帧 1 次分配），
+ * 提升为模块级常量零分配；值逐字节不变，绘制语义零变化。 */
+const PLUM_RAIN_PETAL_COLORS = ['#e8b7c6', '#dda4b7', '#f2cdd8'];
+const AUTUMN_LEAF_PALETTE = ['#b45824', '#8a2f1d', '#d97b3f', '#a83a2a', '#c9552e'];
+const LOTUS_PETAL_COLORS = ['#f2c4cd', '#e8a7b7', '#f7dde2'];
+const GOOSE_PETAL_COLORS = ['#a34a52', '#8a3a44', '#c4707a'];
+const CHRYS_PETAL_COLORS = ['#e8b84a', '#d8a428', '#f0d070', '#c4922a'];
+const GLOOM_LEAF_COLORS = ['#3d4a34', '#4a5540', '#2e3a28'];
+const DESERT_SAND_COLORS = ['#d8b070', '#c49a52', '#e8cc90'];
+const WITHER_FUZZ_COLORS = ['rgba(196, 198, 176, 0.55)', 'rgba(168, 172, 148, 0.5)', 'rgba(214, 214, 194, 0.45)'];
+const ORCHID_PETAL_COLORS = ['#a8b8d8', '#8a9ac8', '#c4cee4'];
+const RIVULET_PETAL_COLORS = ['#f4b4c8', '#e894ac', '#f8d0da'];
+const PEACHDAWN_PETAL_COLORS = ['#f4a8bc', '#e88aa4', '#f8ccd6', '#d8708e'];
+const QUJIANG_PETAL_COLORS = ['#f8d4d0', '#f0b0b4', '#fce8e0'];
 import { drawVectorWeapon, getWeaponReach, getActiveWeaponId } from './weaponSystem';
 import {
   StickPose,
@@ -2162,7 +2178,7 @@ export class CanvasRenderer {
         ctx.stroke();
       }
       if (!this.qualityLow) {
-        const petals = ['#e8b7c6', '#dda4b7', '#f2cdd8'];
+        const petals = PLUM_RAIN_PETAL_COLORS;
         for (let i = 0; i < 12; i++) {
           const seed = i * 149.7;
           const px = ((seed * 71 + t * 46 + Math.sin(t * 0.7 + seed) * 34) % (W + 60)) - 30;
@@ -2244,7 +2260,7 @@ export class CanvasRenderer {
       // 枫林晚渡：飘旋霜叶
       if (this.qualityLow) return;
       ctx.save();
-      const palette = ['#b45824', '#8a2f1d', '#d97b3f', '#a83a2a', '#c9552e'];
+      const palette = AUTUMN_LEAF_PALETTE;
       for (let i = 0; i < 14; i++) {
         const seed = i * 131.7;
         const bx = ((seed * 53) % (W + 80)) - 40;
@@ -2334,7 +2350,7 @@ export class CanvasRenderer {
         }
       }
       if (!this.qualityLow) {
-        const petalColors = ['#f2c4cd', '#e8a7b7', '#f7dde2'];
+        const petalColors = LOTUS_PETAL_COLORS;
         for (let i = 0; i < 10; i++) {
           const seed = i * 157.3;
           const px = ((seed * 47) % (W + 60)) - 30 + Math.sin(t * 0.7 + seed) * 30;
@@ -2388,7 +2404,7 @@ export class CanvasRenderer {
       }
       if (!this.qualityLow) {
         ctx.save();
-        const cols = ['#a34a52', '#8a3a44', '#c4707a'];
+        const cols = GOOSE_PETAL_COLORS;
         for (let i = 0; i < 12; i++) {
           const seed = i * 167.9;
           const px = ((seed * 53) % (W + 60)) - 30 + Math.sin(t * 0.6 + seed) * 26;
@@ -2420,7 +2436,7 @@ export class CanvasRenderer {
         ctx.lineTo(wx + 46 + (seed % 30), wy + 2);
       }
       ctx.stroke();
-      const cols = ['#e8b84a', '#d8a428', '#f0d070', '#c4922a'];
+      const cols = CHRYS_PETAL_COLORS;
       for (let i = 0; i < 14; i++) {
         const seed = i * 143.7;
         const px = ((seed * 41) % (W + 60)) - 30 + Math.sin(t * 1.1 + seed) * 52;
@@ -2453,7 +2469,7 @@ export class CanvasRenderer {
         ctx.stroke();
       }
       if (!this.qualityLow) {
-        const cols = ['#3d4a34', '#4a5540', '#2e3a28'];
+        const cols = GLOOM_LEAF_COLORS;
         for (let i = 0; i < 9; i++) {
           const seed = i * 191.3;
           const lx = ((seed * 43) % (W + 60)) - 30 + Math.sin(t * 0.5 + seed) * 44;
@@ -2546,7 +2562,7 @@ export class CanvasRenderer {
         }
         ctx.stroke();
         // 沙粒打旋
-        const sandCols = ['#d8b070', '#c49a52', '#e8cc90'];
+        const sandCols = DESERT_SAND_COLORS;
         for (let i = 0; i < 12; i++) {
           const seed = i * 167.3;
           const px = ((seed * 47) % (W + 60)) - 30 + Math.sin(t * 1.3 + seed) * 30;
@@ -2619,7 +2635,7 @@ export class CanvasRenderer {
         }
         ctx.stroke();
       }
-      const fuzzCols = ['rgba(196, 198, 176, 0.55)', 'rgba(168, 172, 148, 0.5)', 'rgba(214, 214, 194, 0.45)'];
+      const fuzzCols = WITHER_FUZZ_COLORS;
       for (let i = 0; i < 16; i++) {
         const seed = i * 127.7;
         const fx = ((seed * 67) % (W + 60)) - 30 + Math.sin(t * 1.1 + seed) * 44;
@@ -2722,7 +2738,7 @@ export class CanvasRenderer {
       }
       // 兰瓣（紫青细长瓣，旋坠）
       if (!this.qualityLow) {
-        const orchidCols = ['#a8b8d8', '#8a9ac8', '#c4cee4'];
+        const orchidCols = ORCHID_PETAL_COLORS;
         for (let i = 0; i < 12; i++) {
           const seed = i * 149.3;
           const px = ((seed * 47) % (W + 60)) - 30 + Math.sin(t * 0.75 + seed) * 34;
@@ -2872,7 +2888,7 @@ export class CanvasRenderer {
       }
       // 落英随水（粉瓣顺流斜落）
       if (!this.qualityLow) {
-        const cols = ['#f4b4c8', '#e894ac', '#f8d0da'];
+        const cols = RIVULET_PETAL_COLORS;
         for (let i = 0; i < 11; i++) {
           const seed = i * 157.3;
           const px = ((seed * 53) % (W + 60)) - 30 + Math.sin(t * 0.65 + seed) * 26;
@@ -2921,7 +2937,7 @@ export class CanvasRenderer {
           ctx.stroke();
         }
         // 桃瓣密雨
-        const cols = ['#f4a8bc', '#e88aa4', '#f8ccd6', '#d8708e'];
+        const cols = PEACHDAWN_PETAL_COLORS;
         for (let i = 0; i < 18; i++) {
           const seed = i * 137.9;
           const px = ((seed * 47) % (W + 60)) - 30 + Math.sin(t * 0.9 + seed) * 40;
@@ -3137,7 +3153,7 @@ export class CanvasRenderer {
       }
       // 杏瓣飘岸（粉白花瓣密而柔）
       if (!this.qualityLow) {
-        const cols = ['#f8d4d0', '#f0b0b4', '#fce8e0'];
+        const cols = QUJIANG_PETAL_COLORS;
         for (let i = 0; i < 13; i++) {
           const seed = i * 157.9;
           const px = ((seed * 53) % (W + 60)) - 30 + Math.sin(t * 0.7 + seed) * 32;
