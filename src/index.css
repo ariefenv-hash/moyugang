@@ -400,3 +400,27 @@ body,
     animation: none;
   }
 }
+
+/* 无障碍降级第叁例（Task 56）：transition 时长归零——
+   全库 transition 分配面盘点：作者类四处（.btn-seal / .btn-ink /
+   .btn-ink-quiet / .btn-night）+ TSX 侧 Tailwind utility 四变体
+   （transition / transition-colors / transition-all / transition-transform，
+   共 12 组件 56 处；duration-* 12 处随行被本块覆盖归零，delay-* 零处，
+   无未列变体）。归零后 hover / 按压 / 血条等状态切换瞬时抵达设计终态，
+   语义零损失仅去平滑；全库无 transitionend 依赖，无时序逻辑风险。
+   motion/react JS 动画面（六组件，App/ChapterSelect/BlessingModal/
+   PavilionArchive/StoryIntroModal/AchievementToast）不在 CSS transition
+   面内，另列第肆例候选。验证见 verify_reduced_motion_transition.py。 */
+@media (prefers-reduced-motion: reduce) {
+  .btn-seal,
+  .btn-ink,
+  .btn-ink-quiet,
+  .btn-night,
+  .transition,
+  .transition-colors,
+  .transition-all,
+  .transition-transform {
+    transition-duration: 0s;
+    transition-delay: 0s;
+  }
+}

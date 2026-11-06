@@ -1043,3 +1043,20 @@ Stage Summary:
 - 天气两层（六型异象 overlay + ~19 型章节氛围）每帧数组分配**全数清偿**（12 处提升模块常量）；渐变/rgba 模板串按 Task 51 分类在录保留（位置随帧变/停靠色随淡变，消除需改绘制风格）；四层池化形态分治结论落账——canvasRenderer.ts 短命对象分配源盘点至此**全类目收口**（粒子/轨迹/环/残影/renderList/调色板）
 - 排障在录：首版常量块误插类体内（TS1248 ×12）——上移模块级修复；PLUM_RAIN 处替换曾误置 fillStyle 于循环外（循环内 petals 引用悬空）——回归 const 别名形式修复；自写冻结指纹用逐位相等口径放大噪声（196）——改用 canvas_alloc 在录协议（防守军令+|Δ|>10 容差+400ms 采样间隔）后 diff=2 同量级过阈
 - 修改：src/utils/canvasRenderer.ts · scripts/verify_weather_alloc.py（新增）· worklog.md
+
+Task ID: 56
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查+池序小步认领 · 11-06 08:00 轮）
+Task: 无障碍第叁例——全库 transition 时长归零核查（reduced-motion 第三降级块）
+
+Work Log:
+- 池序认领（Task 55 交付帖余池第壹项；08:00 沙箱重启恢复在录：双 PAT 重建 200×2、bun install --frozen-lockfile 重装、**全量 tree 125 blob 逐文件比对**发现副本局部回退——index.css 停留 edd8d6a 版缺 Task 54 第贰例块 + verify_reduced_motion_global.py 整文件缺失 + 2 截图字节漂移，从远端 1574a15 补齐后复验全一致；带认证 curl 核 issue #1 尾帖无人占坑，回帖占坑 #6672817336）
+- **审计盘点（全库 transition 分配面）**：作者类四处（.btn-seal background-color .15s+transform .12s / .btn-ink / .btn-ink-quiet / .btn-night 各双色 .15s）+ TSX 侧 Tailwind utility 四变体 12 组件 56 处（transition-colors 29 / transition-all 15 / transition-transform 2 / 裸 transition class 零使用）+ duration-* 12 处（75~700ms）/ delay-* 零处 / 无 transition-opacity·shadow 等未列变体；**全库零 transitionend 依赖**（归零无时序逻辑风险）；.btn-night 系 dead CSS（零 TSX 使用，保留在册观察）
+- **实装（src/index.css 纯 CSS，零 TS/TSX 改动，+25 行）**：第叁例降级块置于第贰例块后——八选择器（四作者类 + 四 utility 变体）`transition-duration: 0s; transition-delay: 0s;`；Tailwind 4 utilities 居 @layer utilities、本块未分层天然胜出（与 Task 50/54 无 !important 风格一致）；归零后 hover/按压/血条等状态切换**瞬时抵达设计终态**，语义零损失仅去平滑（transition 语义与动画不同：无「静置终态再设计」面，天然等价）
+- 新增 scripts/verify_reduced_motion_transition.py **14/14 PASS**：A 段静态锚 5（四作者类源行在册/segs[3] 分段断言八选择器+双归零/前两块原样守卫/**TSX 变体闭包 ⊆ 已列集**防新增变体漏列/transitionend 零依赖）+ e2e 9——主菜单四元素（btn-seal '0.15s, 0.12s'→'0s, 0s' / btn-ink / btn-ink-quiet / transition-colors 导航链）双模式矩阵 + **live 媒体切换往返实证**（reduce 归零→切回复原→再证幂等）+ 战场 HUD `[class*="transition-"]` 全扫 18 元素 reduce 下全零（transition-all·duration-* 随行归零）+ 切回恢复 18/18 + 无 console 错误
+- 回归：tsc --noEmit 零错误 · vite build 通过 · check:curve 闸门过 · verify_settlement_polish **18/18**（segs[1] 断言零回归）· verify_ui_polish **7/7** · smoke **24/24**（首轮 23/24 第 11 项触摸滑移偶发，复跑即绿在录）· verify_canvas_alloc **9/9** · verify_afterimage_pool **10/10** · verify_fx_pool **12/12** · verify_weather_alloc **8/8** · verify_reduced_motion_global **13/13**
+
+Stage Summary:
+- 无障碍降级三例收口：Task 50 结算页双动画（segs[1]）+ Task 54 全局 fade-in/seal-stamp（segs[2]）+ Task 56 全库 transition 时长（segs[3]）——prefers-reduced-motion 下动画静置为设计终态、状态切换瞬时抵达，CSS 动效面降级**全类目覆盖**
+- **第肆例候选在录（本轮审计新发现）**：motion/react JS 动画面（App 主菜单入场/ChapterSelect/BlessingModal/PavilionArchive/StoryIntroModal/AchievementToast 六组件 `transition={{...}}` props）未接 prefers-reduced-motion——候选方案 `<MotionConfig reducedMotion="user">` 包裹（motion v12 原生支持，transform/layout 自动降级、opacity 保持），留待下轮池序认领
+- 排障在录：verify 脚本 transitionend 扫描首版含 .css 误命中第叁例块注释自述字面量（假阳性）——收窄至 .ts/.tsx JS 面修复
+- 修改：src/index.css · scripts/verify_reduced_motion_transition.py（新增）· worklog.md
