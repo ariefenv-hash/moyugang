@@ -1060,3 +1060,21 @@ Stage Summary:
 - **第肆例候选在录（本轮审计新发现）**：motion/react JS 动画面（App 主菜单入场/ChapterSelect/BlessingModal/PavilionArchive/StoryIntroModal/AchievementToast 六组件 `transition={{...}}` props）未接 prefers-reduced-motion——候选方案 `<MotionConfig reducedMotion="user">` 包裹（motion v12 原生支持，transform/layout 自动降级、opacity 保持），留待下轮池序认领
 - 排障在录：verify 脚本 transitionend 扫描首版含 .css 误命中第叁例块注释自述字面量（假阳性）——收窄至 .ts/.tsx JS 面修复
 - 修改：src/index.css · scripts/verify_reduced_motion_transition.py（新增）· worklog.md
+
+Task ID: 57
+Agent: 定时任务 Agent（每 2 小时轮次 · 巡查+池序小步认领 · 11-06 10:00 轮）
+Task: 无障碍第肆例——motion/react JS 动画面 reduced-motion 接入（MotionConfig reducedMotion="user"）
+
+Work Log:
+- 池序认领（Task 56 交付帖余池第壹项 · Task 56 审计新发现；10:00 沙箱未重启零恢复成本：双令牌 200×2、副本全量 126 blob 比对一致、远端 c3e1be8 无接力，占坑回帖 #6674845407）
+- **源码级语义核验（motion-dom/framer-motion 实源）**：MotionConfig reducedMotion="user" → VisualElement.shouldReduceMotion = matchMedia 偏好 → 消费点 visual-element-target.mjs `shouldReduceMotion && positionalKeys.has(key) ? {type:false} : valueTransition`——**位置键（x/y/scale/rotate transform 面与 layout）瞬时到位、非位置键（opacity 淡入）保持动画**（去位移、留淡入）；ErrorBoundary 无 motion 依赖，包裹于其内无覆盖缺口
+- **实装（src/main.tsx，+17/-1）**：App 根外层 `<MotionConfig reducedMotion="user">` 包裹（挂载点一行包裹、Context 全树生效零重排）——覆盖六组件 motion 使用面（App 主菜单入场/ChapterSelect/BlessingModal/PavilionArchive/StoryIntroModal/AchievementToast）；设计注释在录（含 live 切换不追溯语义）
+- **live 切换语义实测（在录）**：VisualElement 构造期定终身——新挂载元素即时响应媒体切换，在途/已完成动画不追溯（首版注释「listener 支持 live 切换」 overstated，据实修正）
+- 新增 scripts/verify_reduced_motion_motion.py **9/9 PASS**：A 段静态锚 3（包裹在册/语义注释/六组件使用面闭包）+ e2e 6——**时窗对照黑盒**：默认模式入场中（opacity<1 采样锁）h1 transform 非恒等 vs **reduce 挂载期 tf=none 且 op=0.093**（连 initial 位移都直接以终态呈现 + 淡入仍 9% 在途——去位移/留淡入双实证）+ 入场播完后 live 切 reduce 不回退（不追溯语义）+ 无 console 错误；采样点 150ms 落 h1 delay(0.08s) 后/duration(0.55s) 窗口内（区分窗口设计）
+- 回归：tsc --noEmit 零错误 · vite build 通过 · curve 闸门 · verify_settlement_polish **18/18** · verify_ui_polish **7/7** · smoke **24/24** · verify_canvas_alloc **9/9** · verify_afterimage_pool **10/10** · verify_fx_pool **12/12** · verify_weather_alloc **8/8**（首轮 7/8 为 6b 冻结帧差分阈值边沿偶发，复跑即绿在录——与上轮 smoke 第 11 项同类）· verify_reduced_motion_global **13/13** · verify_reduced_motion_transition **14/14**
+
+Stage Summary:
+- 无障碍降级四例收口：CSS keyframes 面（Task 50 结算页 + Task 54 全局 fade-in/seal-stamp）+ CSS transition 面（Task 56 时长归零）+ **JS 动画面（Task 57 motion/react 库层）**——prefers-reduced-motion 下 CSS 与 JS 两族动效降级**全类目覆盖**，库层经 motion 官方 reducedMotion 通道（transform 瞬时/opacity 保留），语义与 CSS 面一致
+- 修改面极小化：main.tsx 一处包裹（挂载点架构位）+ 新验证脚本，App/六组件零改动
+- 排障在录：verify 首版三败——①五组件路径缺 components/ 子目录；②采样锁首帧即采捕到挂载初值 y=18（早于 motion 首个动画 tick，reduce 跳变未发生）→ 采样点后移 150ms 入区分窗口；③live 切换断言误设「在播中切换」前提（入场未播完即采样）→ 改为先轮询播完再切换
+- 修改：src/main.tsx · scripts/verify_reduced_motion_motion.py（新增）· worklog.md
